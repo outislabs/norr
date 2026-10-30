@@ -1,7 +1,7 @@
 import { checkShield, EQUITY_DISCLAIMER, sumToday, unitsToNumber, type RiskResult } from "@norr/core";
 import { TradeInput, type Decision, type TradeRequest } from "@norr/shared";
 import { Hono } from "hono";
-import { valuePortfolio } from "./portfolio";
+import { valueLayers } from "./portfolio";
 import { safeEqual, type AgentTokens } from "./tokens";
 import { executeTrade, planTrade, reconcile, type TradeDeps } from "./trade";
 
@@ -96,6 +96,7 @@ export function createApp({ deps, tokens, mock, adminToken }: AppOptions): Hono<
       estimatedOut: unitsToNumber(plan.quote.amountOut, out.decimals),
       minimumOut: unitsToNumber(plan.quote.minAmountOut, out.decimals),
       outAsset: out.symbol,
+      venue: plan.venue,
     });
   });
 
@@ -108,9 +109,12 @@ export function createApp({ deps, tokens, mock, adminToken }: AppOptions): Hono<
 
   app.get("/v1/portfolio", async (c) => {
     const vault = deps.vaults.get(c.get("vaultId"))!;
-    if (!deps.balances) return c.json({ error: "balances unavailable" }, 503);
     try {
-      return c.json(valuePortfolio(await deps.balances.holdings(vault.walletAccount), deps.registry));
+      const layers = {
+        public: deps.balances ? await deps.balances.holdings(vault.walletAccount) : undefined,
+        confidential: await vault.custody.confidentialHoldings(),
+      };
+      return c.json(valueLayers(layers, deps.registry));
     } catch {
       return c.json({ error: "balances unavailable" }, 503);
     }
@@ -132,6 +136,7 @@ export function createApp({ deps, tokens, mock, adminToken }: AppOptions): Hono<
       cooldownSec: p.cooldownSec,
       allowMediumRisk: p.allowMediumRisk,
       equitiesEnabled: p.nonUsConfirmed,
+      privacy: p.privacy,
       paused: p.paused,
     });
   });

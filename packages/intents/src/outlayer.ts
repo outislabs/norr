@@ -1,6 +1,6 @@
 import { requireSwapBounds, type SwapBounds } from "@norr/core";
 import { obj, requestJson, str, type FetchLike } from "./http";
-import type { Custody, SwapState, SwapStatus } from "./types";
+import type { Custody, SwapState, SwapStatus, Venue, WithdrawParams } from "./types";
 
 export interface OutLayerOptions {
   baseUrl?: string;
@@ -23,8 +23,9 @@ export function mapState(raw: string | undefined): SwapState {
 
 /**
  * OutLayer Agent Custody for one vault. Limits are set by the owner in OutLayer's dashboard.
- * Known (docs/FINDINGS.md): its swap endpoint accepts `min_amount_out` but does not enforce it,
+ * Known (docs/FINDINGS.md): its swap endpoints accept `min_amount_out` but do not enforce it,
  * and the gateway, not its TEE, builds the route, so callers must verify after execution.
+ * The confidential layer cannot be audited independently (1Click's status endpoint does not know it).
  */
 export class OutLayerCustody implements Custody {
   private readonly baseUrl: string;
@@ -41,20 +42,22 @@ export class OutLayerCustody implements Custody {
     return this.o.accountId;
   }
 
-  async swap(bounds: SwapBounds): Promise<SwapStatus> {
-    // Hard rule: no swap leaves without a minimum output, even if a caller forgot the check.
-    const b = requireSwapBounds(bounds);
-    const res = obj(
-      await requestJson(
-        this.f,
-        `${this.baseUrl}/wallet/v1/intents/swap`,
-        { method: "POST", headers: this.headers, body: JSON.stringify({ token_in: b.tokenIn, token_out: b.tokenOut, amount_in: b.amountIn, min_amount_out: b.minAmountOut }) },
-        "OutLayer swap",
-      ),
-    );
+  private post(path: string, body: unknown, label: string): Promise<unknown> {
+    return requestJson(this.f, `${this.baseUrl}${path}`, { method: "POST", headers: this.headers, body: JSON.stringify(body) }, label);
+  }
+
+  private started(res: Record<string, unknown>): SwapStatus {
     const requestId = str(res.request_id);
     if (!requestId) return { state: "failed", requestId: "", detail: "OutLayer returned no request id" };
     return { state: mapState(str(res.status)), requestId };
+  }
+
+  async swap(bounds: SwapBounds, venue: Venue = "public"): Promise<SwapStatus> {
+    // Hard rule: no swap leaves without a minimum output, even if a caller forgot the check.
+    const b = requireSwapBounds(bounds);
+    const path = venue === "confidential" ? "/wallet/v1/confidential/swap" : "/wallet/v1/intents/swap";
+    const res = obj(await this.post(path, { token_in: b.tokenIn, token_out: b.tokenOut, amount_in: b.amountIn, min_amount_out: b.minAmountOut }, `OutLayer ${venue} swap`));
+    return this.started(res);
   }
 
   async status(requestId: string): Promise<SwapStatus> {
@@ -62,12 +65,38 @@ export class OutLayerCustody implements Custody {
       await requestJson(this.f, `${this.baseUrl}/wallet/v1/requests/${encodeURIComponent(requestId)}`, { headers: this.headers }, "OutLayer request"),
     );
     const result = obj(res.result);
+    const details = obj(result.swap_details);
     const state = mapState(str(res.status));
+    const amountIn = str(details.amountIn) ?? str(result.amount);
+    const amountOut = str(details.amountOut) ?? str(result.amount_out);
     return {
       state,
       requestId,
       depositAddress: str(result.deposit_address),
       detail: state === "failed" ? str(result.error) ?? str(res.status) : undefined,
+      reported: amountIn !== undefined || amountOut !== undefined ? { amountIn, amountOut } : undefined,
     };
+  }
+
+  async confidentialHoldings(): Promise<Record<string, string>> {
+    const res = obj(await requestJson(this.f, `${this.baseUrl}/wallet/v1/confidential/balance`, { headers: this.headers }, "OutLayer confidential balance"));
+    const out: Record<string, string> = {};
+    if (!Array.isArray(res.balances)) throw new Error("OutLayer confidential balance: unexpected response");
+    for (const row of res.balances) {
+      const r = obj(row);
+      const token = str(r.token);
+      const balance = str(r.balance);
+      if (token && balance && balance !== "0") out[token] = balance;
+    }
+    return out;
+  }
+
+  async shield(token: string, amount: string): Promise<SwapStatus> {
+    return this.started(obj(await this.post("/wallet/v1/confidential/shield", { token, amount }, "OutLayer shield")));
+  }
+
+  async withdraw(w: WithdrawParams): Promise<SwapStatus> {
+    const path = w.venue === "confidential" ? "/wallet/v1/confidential/withdraw" : "/wallet/v1/intents/withdraw";
+    return this.started(obj(await this.post(path, { to: w.to, amount: w.amount, token: w.token, chain: w.chain }, `OutLayer ${w.venue} withdraw`)));
   }
 }

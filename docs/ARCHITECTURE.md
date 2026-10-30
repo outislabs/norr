@@ -29,6 +29,9 @@ agent token → Norr: resolve asset → Shield feed → risk or eligibility → 
 ## Autonomous mode (demo)
 Swaps skip approval within tight limits; `intents_withdraw` stays approval-gated and whitelisted to the owner. Details and the checks still to run are in `CLAUDE.md` §11.
 
+## Venues: confidential by default
+Each vault has a `privacy` mode (`public`, `prefer` (default), `require`). Trades run in the confidential layer whenever the vault holds the funds there, and the Decision says which `venue` was used and how it was `verification`-checked. Public swaps are verified against 1Click's independent status; confidential swaps can only be checked against balances read before and after plus the custody provider's own report, which is weaker and labelled `custody-reported`. Shield, unshield and withdraw are owner-level actions in the custody adapter and are not exposed to agents. See `docs/PRIVACY.md` for what each layer hides and from whom.
+
 ## Shield modes
 Default and the only production behavior: if the Shield incident feed cannot be read, trading is blocked (fail closed). A dev-only bypass (`SHIELD_MODE=dev-bypass`) exists for trying live trades while a SHIELD key is pending. It requires an explicit `NORR_ENV=dev` (unset counts as production), the service refuses to start with it under any other environment or in mock/demo mode, it covers only an unreachable feed (a reported incident still blocks), and it logs a warning on every evaluation and notes it in the ledger entry. Remove it from any demo or production config.
 

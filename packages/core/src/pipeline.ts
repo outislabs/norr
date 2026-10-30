@@ -81,6 +81,10 @@ export async function preTradeChecks(i: PreTradeInput): Promise<PreTradePass | B
 
 export const isBlock = (r: PreTradePass | Block): r is Block => r.ok === false;
 
+/** Confidential trading was required (or the only option) and is not possible right now. */
+export const privacyUnavailable = (detail: string): Block =>
+  block("PRIVACY_UNAVAILABLE", `This vault trades confidentially only, and that is not possible right now: ${detail}`);
+
 /** No candidate returned a quote. */
 export const noLiquidity = (): Block =>
   block("NO_LIQUIDITY", "No liquidity is available for this trade right now. Smaller trades in tokenized stocks can fail; try a larger amount or another asset.");

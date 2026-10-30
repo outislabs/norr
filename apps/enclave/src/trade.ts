@@ -6,11 +6,14 @@ import {
   sumToday,
   noLiquidity,
   preTradeChecks,
+  privacyUnavailable,
   requireSwapBounds,
   selectBestQuote,
   unitsToNumber,
   usdToUnits,
+  verifyConfidentialSwap,
   verifyExecution,
+  type Holdings,
   type IntendedSwap,
   type Registry,
   type RegistryEntry,
@@ -18,10 +21,10 @@ import {
   type ShieldFeed,
   type SwapBounds,
 } from "@norr/core";
-import { IntentsApiError, type BalanceReader, type ExecutionAuditor, type Quote, type Quoter, type SwapStatus } from "@norr/intents";
+import { IntentsApiError, type BalanceReader, type ExecutionAuditor, type Quote, type Quoter, type SwapStatus, type Venue } from "@norr/intents";
 import type { Decision, TradeRequest } from "@norr/shared";
 import { KeyedMutex } from "./mutex";
-import { valuePortfolio } from "./portfolio";
+import { valueLayers } from "./portfolio";
 import type { Ledger, Vault, VaultStore } from "./state";
 
 export interface TradeDeps {
@@ -37,7 +40,7 @@ export interface TradeDeps {
   auditor: ExecutionAuditor;
   vaults: VaultStore;
   ledger: Ledger;
-  /** Reads the vault's Intents balances. Without it, portfolio values in the vault state are used as is. */
+  /** Reads the vault's public-layer Intents balances. Without it, portfolio values in the vault state are used as is. */
   balances?: BalanceReader;
   /** The asset vault cash is held in (USDC). Buys spend it, sells return it. */
   quoteAsset: RegistryEntry;
@@ -60,6 +63,10 @@ export interface PendingSettlement {
   side: "buy" | "sell";
   /** The buy reserved against the daily spend cap, given back if the swap is known not to have run. */
   spend?: { day: string; usd: number };
+  /** The layer the swap runs in. */
+  venue: Venue;
+  /** Confidential balances read just before a confidential swap, to check it against afterwards. */
+  confidentialBefore?: Holdings;
 }
 
 /** A trade that passed every check and has a quote, ready to send (or just to show as a preview). */
@@ -69,24 +76,34 @@ export interface TradePlan {
   bounds: SwapBounds;
   intended: IntendedSwap;
   side: "buy" | "sell";
+  /** The layer chosen: confidential whenever the vault's policy allows it and the funds are there. */
+  venue: Venue;
+  confidentialBefore?: Holdings;
 }
 
 const blocked = (code: Extract<Decision, { status: "blocked" }>["code"], message: string): Decision => ({ status: "blocked", code, message });
 const failed = (message: string): Decision => ({ status: "failed", message });
 
-/** Bring the vault's state up to date: today's realized loss and, when readable, balances. */
-export async function refreshState(deps: TradeDeps, vault: Vault): Promise<void> {
+/** What a vault holds in each layer, where it could be read. */
+export interface Layers {
+  public?: Holdings;
+  confidential?: Holdings;
+}
+
+/** Bring the vault's state up to date: today's realized loss, spend, and balances in both layers. */
+export async function refreshState(deps: TradeDeps, vault: Vault): Promise<Layers> {
   const patch: Parameters<VaultStore["refresh"]>[1] = { realizedLossTodayUsd: lossToday(vault.pnl, deps.now()), spentTodayUsd: sumToday(vault.spend, deps.now()) };
-  if (deps.balances) {
-    try {
-      const p = valuePortfolio(await deps.balances.holdings(vault.walletAccount), deps.registry);
-      patch.portfolioValueUsd = p.totalUsd;
-      patch.equityValueUsd = p.byClass.equity;
-    } catch {
-      // Balances unreadable: keep the last known values rather than guess.
-    }
+  const layers: Layers = {};
+  if (deps.balances) layers.public = await deps.balances.holdings(vault.walletAccount).catch(() => undefined);
+  layers.confidential = await vault.custody.confidentialHoldings().catch(() => undefined);
+  // Update the totals only when every layer was readable; otherwise keep the last known values rather than guess.
+  if ((!deps.balances || layers.public) && layers.confidential) {
+    const p = valueLayers(layers, deps.registry);
+    patch.portfolioValueUsd = p.totalUsd;
+    patch.equityValueUsd = p.byClass.equity;
   }
   deps.vaults.refresh(vault.id, patch);
+  return layers;
 }
 
 /**
@@ -99,7 +116,7 @@ export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeReq
     return { decision: blocked("PAUSED", "This vault is paused by its owner. No trades are allowed until it is resumed."), shieldBypassed: false };
   }
 
-  await refreshState(deps, vault);
+  const layers = await refreshState(deps, vault);
   const feed = await deps.shield().catch(() => null);
   // The bypass applies only when the feed is unreachable. An incident the feed reports still blocks.
   const shieldBypassed = feed === null && deps.shieldOnUnavailable === "allow";
@@ -116,30 +133,62 @@ export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeReq
   });
   if (isBlock(pre)) return { decision: blocked(pre.code, pre.message), shieldBypassed };
 
-  // Norr requests its own quote for every candidate issuer and picks the best.
+  // Norr requests its own quote for every candidate issuer and picks the best. Venues are tried in the
+  // order the vault's privacy mode allows: confidential first (the default), public only as a fallback.
   const buy = request.side === "buy";
   const cash = deps.quoteAsset;
+  const mode = vault.policy.privacy;
+  const order: Venue[] = mode === "public" ? ["public"] : mode === "require" ? ["confidential"] : ["confidential", "public"];
   // A thrown error is a service fault, not "no liquidity" (which is a null quote); keep them apart.
   let quoteFault: string | undefined;
-  const options = (
-    await Promise.all(
-      pre.candidates.map(async (c) => {
-        if (c.priceUsd === null) return null;
-        const tokenIn = buy ? cash.id : c.id;
-        const tokenOut = buy ? c.id : cash.id;
-        const amountIn = buy ? usdToUnits(request.amountUsd, cash.priceUsd ?? 1, cash.decimals) : usdToUnits(request.amountUsd, c.priceUsd, c.decimals);
-        const quote = await deps.quoter.quote({ tokenIn, tokenOut, amountIn, recipient: vault.walletAccount }).catch((e: unknown) => {
-          quoteFault = e instanceof Error ? e.message : String(e);
-          return null;
-        });
-        return quote ? { candidate: c, tokenIn, tokenOut, amountIn, quote } : null;
-      }),
-    )
-  ).filter((o): o is NonNullable<typeof o> => o !== null);
+  let shortfall: string | undefined;
+  let attempted = false; // a quote was requested somewhere, so a shortfall elsewhere is not the whole story
+  let unreadable = false;
+  let chosen: { candidate: RegistryEntry; tokenIn: string; tokenOut: string; amountIn: string; quote: Quote; venue: Venue } | undefined;
+  for (const venue of order) {
+    const holdings = layers[venue];
+    if (!holdings && venue === "confidential") {
+      unreadable = true; // cannot tell whether the funds are there, so do not trade confidentially
+      continue;
+    }
+    const options = (
+      await Promise.all(
+        pre.candidates.map(async (c) => {
+          if (c.priceUsd === null) return null;
+          const tokenIn = buy ? cash.id : c.id;
+          const tokenOut = buy ? c.id : cash.id;
+          const amountIn = buy ? usdToUnits(request.amountUsd, cash.priceUsd ?? 1, cash.decimals) : usdToUnits(request.amountUsd, c.priceUsd, c.decimals);
+          if (holdings && BigInt(holdings[tokenIn] ?? "0") < BigInt(amountIn)) {
+            const inAsset = buy ? cash : c;
+            shortfall ??= `${venue === "confidential" ? "its confidential balance" : "its public balance"} holds ${unitsToNumber(holdings[tokenIn] ?? "0", inAsset.decimals)} ${inAsset.symbol}, and this trade needs ${unitsToNumber(amountIn, inAsset.decimals)}`;
+            return null;
+          }
+          attempted = true;
+          const quote = await deps.quoter.quote({ tokenIn, tokenOut, amountIn, recipient: vault.walletAccount, venue }).catch((e: unknown) => {
+            quoteFault = e instanceof Error ? e.message : String(e);
+            return null;
+          });
+          return quote ? { candidate: c, tokenIn, tokenOut, amountIn, quote, venue } : null;
+        }),
+      )
+    ).filter((o): o is NonNullable<typeof o> => o !== null);
+    const best = selectBestQuote(options.map((o) => ({ assetId: o.candidate.id, issuer: o.candidate.issuer, amountInUsd: o.quote.amountInUsd, amountOutUsd: o.quote.amountOutUsd })));
+    chosen = best ? options.find((o) => o.candidate.id === best.assetId) : undefined;
+    if (chosen) break;
+  }
 
-  const best = selectBestQuote(options.map((o) => ({ assetId: o.candidate.id, issuer: o.candidate.issuer, amountInUsd: o.quote.amountInUsd, amountOutUsd: o.quote.amountOutUsd })));
-  const chosen = best && options.find((o) => o.candidate.id === best.assetId);
   if (!chosen) {
+    if (mode === "require") {
+      const why = unreadable
+        ? "Norr could not read the vault's confidential balance."
+        : shortfall
+          ? `${shortfall}. The owner can fund the vault in the confidential layer.`
+          : quoteFault
+            ? "pricing is temporarily unavailable."
+            : "no confidential liquidity was found for this trade.";
+      const b = privacyUnavailable(why);
+      return { decision: blocked(b.code, b.message), shieldBypassed, note: quoteFault ? `quote service fault: ${quoteFault}` : undefined };
+    }
     if (quoteFault) {
       return {
         decision: failed("Pricing is temporarily unavailable, so no trade was made. Try again in a few minutes."),
@@ -147,11 +196,12 @@ export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeReq
         note: `quote service fault: ${quoteFault}`,
       };
     }
+    if (shortfall && !attempted) return { decision: failed(`The vault does not hold enough for this trade: ${shortfall}. Check get_portfolio.`), shieldBypassed };
     const nl = noLiquidity();
     return { decision: blocked(nl.code, nl.message), shieldBypassed };
   }
 
-  const { candidate, tokenIn, tokenOut, amountIn, quote } = chosen;
+  const { candidate, tokenIn, tokenOut, amountIn, quote, venue } = chosen;
 
   // Price sanity: the implied price of the traded asset against its reference price.
   const implied = buy
@@ -169,7 +219,11 @@ export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeReq
   }
 
   return {
-    plan: { candidate, quote, bounds, side: request.side, intended: { tokenIn, tokenOut, amountIn, minAmountOut: quote.minAmountOut, recipient: vault.walletAccount } },
+    plan: {
+      candidate, quote, bounds, side: request.side, venue,
+      confidentialBefore: venue === "confidential" ? layers.confidential : undefined,
+      intended: { tokenIn, tokenOut, amountIn, minAmountOut: quote.minAmountOut, recipient: vault.walletAccount },
+    },
     shieldBypassed,
   };
 }
@@ -201,12 +255,20 @@ async function executeTradeLocked(deps: TradeDeps, request: TradeRequest): Promi
   }
   const { plan } = planned;
 
+  // A confidential swap is checked against balances read before it. If another confidential swap is still
+  // waiting for the owner, the balances could move underneath it, so wait for that one to finish first.
+  if (plan.venue === "confidential" && deps.ledger.list(vault.id).some((r) => r.pending?.venue === "confidential")) {
+    const d = failed("Another confidential trade is still waiting for the owner's approval. Wait for it to finish, then try again.");
+    log(d, { note: bypassNote });
+    return d;
+  }
+
   // Step 6: execute through the custody provider. A buy is counted against the daily spend cap before
   // the swap is sent, and given back only if the swap is known not to have run.
   const spend = plan.side === "buy" ? { day: deps.vaults.reserveSpend(vault.id, request.amountUsd, deps.now()), usd: request.amountUsd } : undefined;
   let status: SwapStatus;
   try {
-    status = await vault.custody.swap(plan.bounds);
+    status = await vault.custody.swap(plan.bounds, plan.venue);
   } catch (e) {
     const refused = e instanceof IntentsApiError && e.status === 403;
     // A policy refusal means nothing ran. Any other error is ambiguous, so the spend stays counted.
@@ -229,6 +291,8 @@ async function executeTradeLocked(deps: TradeDeps, request: TradeRequest): Promi
     decimals: plan.candidate.decimals,
     side: plan.side,
     spend,
+    venue: plan.venue,
+    confidentialBefore: plan.confidentialBefore,
   };
   const row = log({ status: "pending_approval", requestId: status.requestId, message: "Swap submitted." }, { pending: ctx, note: bypassNote });
   const decision = await settle(deps, request.vaultId, ctx, status);
@@ -268,18 +332,36 @@ export async function settle(deps: TradeDeps, vaultId: string, ctx: PendingSettl
     deps.vaults.pause(vaultId, why);
     return failed("The swap ran but Norr could not confirm it matched the agreed terms, so this vault has been paused for the owner to review.");
   };
-  if (!st.depositAddress) return pause("no deposit address to audit");
-  const executed = await deps.auditor.audit(st.depositAddress).catch(() => null);
-  if (!executed) return pause("independent status unavailable");
-  const check = verifyExecution(ctx.intended, executed);
-  if (!check.ok) return pause(`mismatch: ${check.mismatches.map((m) => m.field).join(", ")}`);
+  let units: string; // whole units of the traded asset that were bought or sold
+  let verification: "independent" | "custody-reported";
+  if (ctx.venue === "confidential") {
+    // No independent source exists for the confidential layer, so compare balances read before and after
+    // with the provider's own report. Weaker than the public check, and labelled as such in the result.
+    const after = await vault.custody.confidentialHoldings().catch(() => null);
+    const before = ctx.confidentialBefore;
+    if (!after || !before) return pause("confidential balances unavailable");
+    const { tokenIn, tokenOut, amountIn, minAmountOut } = ctx.intended;
+    const check = verifyConfidentialSwap({ tokenIn, tokenOut, amountIn, minAmountOut }, before, after, st.reported);
+    if (!check.ok) return pause(`mismatch: ${check.mismatches.map((m) => m.field).join(", ")}`);
+    const moved = (k: string) => BigInt(after[k] ?? "0") - BigInt(before[k] ?? "0");
+    units = (ctx.side === "buy" ? moved(tokenOut) : -moved(tokenIn)).toString();
+    verification = "custody-reported";
+  } else {
+    if (!st.depositAddress) return pause("no deposit address to audit");
+    const executed = await deps.auditor.audit(st.depositAddress).catch(() => null);
+    if (!executed) return pause("independent status unavailable");
+    const check = verifyExecution(ctx.intended, executed);
+    if (!check.ok) return pause(`mismatch: ${check.mismatches.map((m) => m.field).join(", ")}`);
+    units = ctx.side === "buy" ? executed.amountOut : executed.amountIn;
+    verification = "independent";
+  }
 
   const now = deps.now();
-  const tokens = unitsToNumber(ctx.side === "buy" ? executed.amountOut : executed.amountIn, ctx.decimals);
+  const tokens = unitsToNumber(units, ctx.decimals);
   const usd = ctx.side === "buy" ? ctx.quoteUsd.in : ctx.quoteUsd.out;
   deps.vaults.recordTrade(vaultId, now);
   deps.vaults.recordFill(vaultId, { assetId: ctx.assetId, side: ctx.side, qty: tokens, usd }, now);
-  return { status: "executed", txRef: ctx.requestId, filled: { asset: ctx.symbol, amount: String(tokens), priceUsd: impliedPriceUsd(usd, tokens) } };
+  return { status: "executed", txRef: ctx.requestId, filled: { asset: ctx.symbol, amount: String(tokens), priceUsd: impliedPriceUsd(usd, tokens) }, venue: ctx.venue, verification };
 }
 
 /** Finish a swap that was pending when the agent called (for example after the owner approved it). */

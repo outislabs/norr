@@ -134,6 +134,7 @@ interface Policy {
   paused: boolean;               // kill switch
   nonUsConfirmed: boolean;       // owner confirmed non-US status; equities blocked (INELIGIBLE) without it
   allowMediumRisk: boolean;      // medium Scam Shield verdicts pass only if true
+  privacy: "public" | "prefer" | "require"; // prefer (default) = trade in the confidential layer whenever the vault holds the funds there; require = never fall back to public
 }
 
 interface TradeRequest {
@@ -145,7 +146,8 @@ interface TradeRequest {
 }
 
 type Decision =
-  | { status: "executed"; txRef: string; filled: { asset: string; amount: string; priceUsd: number } }
+  | { status: "executed"; txRef: string; filled: { asset: string; amount: string; priceUsd: number };
+      venue?: "public" | "confidential"; verification?: "independent" | "custody-reported" }
   | { status: "blocked"; code: BlockCode; message: string }   // plain-language reason for the agent
   | { status: "pending_approval"; requestId: string; message: string }  // custody policy needs an owner signature
   | { status: "failed" | "refunded"; message: string };
@@ -154,7 +156,7 @@ type BlockCode =
   | "PAUSED" | "OVER_TRADE_LIMIT" | "DAILY_LOSS_CAP" | "COOLDOWN"
   | "ASSET_NOT_ALLOWED" | "EQUITY_LIMIT" | "SCAM_RISK" | "INELIGIBLE"
   | "PRICE_SANITY" | "UNKNOWN_ASSET" | "NO_LIQUIDITY" | "SHIELD_INCIDENT"
-  | "DAILY_SPEND_CAP";
+  | "DAILY_SPEND_CAP" | "PRIVACY_UNAVAILABLE";
 ```
 
 Tokenized markets trade 24/7, so there is no market-closed code. A quote failing with "No liquidity" maps to `NO_LIQUIDITY`.
@@ -171,10 +173,10 @@ Every `trade` call runs these steps in order, and any failing step returns `bloc
    - *crypto:* the scam/rug check (see §8). High risk → `SCAM_RISK`.
    - *equity:* the eligibility check, plus a price sanity check of the quote against a reference price (deviation > X% → `PRICE_SANITY`).
 4. **Policy:** paused, per-trade size, daily spend cap (buys only, counted when the swap is sent and given back if it did not run), daily loss, cooldown, allowlists, equity %. Trades for one vault run one at a time, so parallel requests cannot slip past a cap.
-5. **Quote:** the enclave requests a 1Click quote itself. Prefer Confidential Intents types when supported, and set the recipient and refund to the vault.
+5. **Quote:** the enclave requests a 1Click quote itself, per venue, in the order the vault's `privacy` mode allows: **confidential first** (`CONFIDENTIAL_INTENTS` types) when the vault holds the funds in the confidential layer, public only as a fallback (never under `require`, which blocks with `PRIVACY_UNAVAILABLE`). Recipient and refund are always the vault.
 6. **Execute:** the enclave signs the transfer to the quote's deposit address, then submits the deposit.
 7. **Track:** poll status until `SUCCESS` / `FAILED` / `REFUNDED`.
-8. **Verify:** compare the executed swap (tokens, amounts, recipient) with the enclave's own 1Click quote (`verifyExecution` in `packages/core`). On any mismatch, trip the kill switch and alert the owner. This guards against the custody provider's coordinator tampering with a route (see `docs/FINDINGS.md`).
+8. **Verify:** public swaps are compared with the enclave's own 1Click quote using 1Click's independent status (`verifyExecution`). Confidential swaps have no independent source, so they are checked from confidential balances read before and after plus the provider's own report (`verifyConfidentialSwap`), and the result is labelled `custody-reported`. On any mismatch, trip the kill switch and alert the owner. This guards against the custody provider's coordinator tampering with a route (see `docs/FINDINGS.md`).
 9. **Log:** write an encrypted ledger entry, update the daily P&L used by the loss cap.
 
 Policy and risk logic live in `packages/core` as **pure functions**, so they can be unit-tested exhaustively.

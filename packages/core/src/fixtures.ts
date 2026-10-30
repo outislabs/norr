@@ -34,7 +34,7 @@ export const riskProvider = () =>
 export const policy = (over: Partial<Policy> = {}): Policy => ({
   vaultId: "alpha.norr.near", maxTradeUsd: 50, dailySpendCapUsd: 500, dailyLossCapUsd: 20, maxEquityPct: 60,
   allowedCrypto: "any_safe", allowedEquities: ["NVDA", "TSLA"], cooldownSec: 0, paused: false,
-  nonUsConfirmed: true, allowMediumRisk: false, ...over,
+  nonUsConfirmed: true, allowMediumRisk: false, privacy: "prefer", ...over,
 });
 
 export const state = (over: Partial<VaultState> = {}): VaultState => ({

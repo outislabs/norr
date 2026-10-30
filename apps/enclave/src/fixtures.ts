@@ -29,7 +29,7 @@ export const WALLET = "vault-wallet-account";
 export const policy = (over: Partial<Policy> = {}): Policy => ({
   vaultId: "v1", maxTradeUsd: 50, dailySpendCapUsd: 1000, dailyLossCapUsd: 20, maxEquityPct: 100,
   allowedCrypto: "any_safe", allowedEquities: ["NVDA", "TSLA"], cooldownSec: 0, paused: false,
-  nonUsConfirmed: true, allowMediumRisk: false, ...over,
+  nonUsConfirmed: true, allowMediumRisk: false, privacy: "prefer", ...over,
 });
 
 export const req = (over: Partial<TradeRequest> = {}): TradeRequest => ({

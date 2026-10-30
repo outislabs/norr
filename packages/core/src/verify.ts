@@ -25,7 +25,7 @@ export interface ExecutedSwap {
 }
 
 export interface Mismatch {
-  field: "tokenIn" | "tokenOut" | "amountIn" | "amountOut" | "recipient";
+  field: "tokenIn" | "tokenOut" | "amountIn" | "amountOut" | "recipient" | "reportedAmount" | "otherAssets";
   intended: string;
   executed: string;
 }

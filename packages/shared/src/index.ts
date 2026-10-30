@@ -13,6 +13,13 @@ export const Asset = z.object({
 });
 export type Asset = z.infer<typeof Asset>;
 
+/** Where a vault trades: only the public Intents layer, confidential when possible (default), or confidential only. */
+export const Privacy = z.enum(["public", "prefer", "require"]);
+export type Privacy = z.infer<typeof Privacy>;
+
+export const Venue = z.enum(["public", "confidential"]);
+export type Venue = z.infer<typeof Venue>;
+
 export const Policy = z.object({
   vaultId: z.string().min(1),
   maxTradeUsd: z.number().positive(),
@@ -25,6 +32,7 @@ export const Policy = z.object({
   paused: z.boolean(), // kill switch
   nonUsConfirmed: z.boolean(), // owner confirmed non-US status; required for equities
   allowMediumRisk: z.boolean(), // medium Scam Shield verdicts pass only if the owner opts in
+  privacy: Privacy.default("prefer"), // prefer = trade confidentially whenever the vault holds the funds there
 });
 export type Policy = z.infer<typeof Policy>;
 
@@ -60,6 +68,7 @@ export const BlockCode = z.enum([
   "NO_LIQUIDITY",
   "SHIELD_INCIDENT",
   "DAILY_SPEND_CAP",
+  "PRIVACY_UNAVAILABLE",
 ]);
 export type BlockCode = z.infer<typeof BlockCode>;
 
@@ -68,6 +77,10 @@ export const Decision = z.discriminatedUnion("status", [
     status: z.literal("executed"),
     txRef: z.string(),
     filled: z.object({ asset: z.string(), amount: z.string(), priceUsd: z.number() }),
+    /** Which layer the trade ran in. */
+    venue: Venue.optional(),
+    /** "independent" = checked against a source the custody provider does not control; "custody-reported" = checked against the provider's own balances and reports. */
+    verification: z.enum(["independent", "custody-reported"]).optional(),
   }),
   z.object({ status: z.literal("blocked"), code: BlockCode, message: z.string() }),
   z.object({ status: z.literal("pending_approval"), requestId: z.string(), message: z.string() }),

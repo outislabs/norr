@@ -13,6 +13,9 @@ describe("shared schemas", () => {
     expect(Policy.safeParse({ ...base, dailySpendCapUsd: -1 }).success).toBe(false);
     const { dailySpendCapUsd: _omit, ...without } = base;
     expect(Policy.safeParse(without).success).toBe(false); // the cap is mandatory
+    expect(Policy.parse(base).privacy).toBe("prefer"); // confidential is the default path
+    expect(Policy.safeParse({ ...base, privacy: "sometimes" }).success).toBe(false);
+    expect(["public", "prefer", "require"].every((p) => Policy.safeParse({ ...base, privacy: p }).success)).toBe(true);
     expect(Policy.safeParse({ ...base, dailySpendCapUsd: 0 }).success).toBe(true); // 0 means no buying
   });
 
@@ -21,10 +24,11 @@ describe("shared schemas", () => {
     expect(TradeRequest.safeParse(r).success).toBe(false);
   });
 
-  it("defines all thirteen block codes (no market-closed) and validates a blocked decision", () => {
-    expect(BlockCode.options).toHaveLength(13);
+  it("defines all fourteen block codes (no market-closed) and validates a blocked decision", () => {
+    expect(BlockCode.options).toHaveLength(14);
     expect(BlockCode.options).toContain("NO_LIQUIDITY");
     expect(BlockCode.options).toContain("DAILY_SPEND_CAP");
+    expect(BlockCode.options).toContain("PRIVACY_UNAVAILABLE");
     expect(BlockCode.options).not.toContain("MARKET_CLOSED");
     const d = { status: "blocked", code: "PAUSED", message: "Vault is paused" };
     expect(Decision.safeParse(d).success).toBe(true);

@@ -93,3 +93,61 @@ describe("OutLayerCustody", () => {
     expect(mapState("succeeded")).toBe("in_progress");
   });
 });
+
+describe("confidential layer", () => {
+  const bounds = { tokenIn: "nep141:usdc", tokenOut: "nep141:sol", amountIn: "1500000", minAmountOut: "15635038" };
+  const ol = (r: ReturnType<typeof recorder>) => new OutLayerCustody({ apiKey: "test_key_do_not_use_0123456789", accountId: "acct", fetch: r.f });
+
+  it("1Click: a confidential quote uses CONFIDENTIAL_INTENTS types and confidentiality; a public one does not", async () => {
+    const r = recorder(() => json({ quote: { amountIn: "1", amountOut: "2", minAmountOut: "1", amountInUsd: "1", amountOutUsd: "1" } }));
+    const oc = new OneClick({ fetch: r.f, now: () => 0 });
+    await oc.quote({ tokenIn: "a", tokenOut: "b", amountIn: "1", recipient: "v", venue: "confidential" });
+    await oc.quote({ tokenIn: "a", tokenOut: "b", amountIn: "1", recipient: "v" });
+    const conf = JSON.parse(String(r.calls[0]!.init.body));
+    const pub = JSON.parse(String(r.calls[1]!.init.body));
+    expect(conf).toMatchObject({ depositType: "CONFIDENTIAL_INTENTS", recipientType: "CONFIDENTIAL_INTENTS", refundType: "CONFIDENTIAL_INTENTS", confidentiality: "basic", refundTo: "v" });
+    expect(pub).toMatchObject({ depositType: "INTENTS", recipientType: "INTENTS", refundType: "INTENTS" });
+    expect(pub.confidentiality).toBeUndefined();
+  });
+
+  it("OutLayer: a confidential swap goes to the confidential route with min_amount_out; a public one does not", async () => {
+    const r = recorder(() => json({ request_id: "r1", status: "pending_approval" }));
+    await ol(r).swap(bounds, "confidential");
+    await ol(r).swap(bounds);
+    expect(r.calls[0]!.url).toBe("https://api.outlayer.ai/wallet/v1/confidential/swap");
+    expect(JSON.parse(String(r.calls[0]!.init.body))).toEqual({ token_in: "nep141:usdc", token_out: "nep141:sol", amount_in: "1500000", min_amount_out: "15635038" });
+    expect(r.calls[1]!.url).toBe("https://api.outlayer.ai/wallet/v1/intents/swap");
+  });
+
+  it("OutLayer: still refuses a confidential swap without a minimum, before any request", async () => {
+    const r = recorder(() => json({}));
+    const { minAmountOut: _m, ...noMin } = bounds;
+    await expect(ol(r).swap(noMin as never, "confidential")).rejects.toThrow(/minAmountOut/);
+    expect(r.calls).toHaveLength(0);
+  });
+
+  it("OutLayer: reads confidential holdings, dropping zero and malformed rows", async () => {
+    const r = recorder(() => json({ balances: [{ token: "nep141:sol", balance: "15738716" }, { token: "nep141:usdc", balance: "0" }, { token: "x" }, { balance: "5" }], account_id: "acct" }));
+    expect(await ol(r).confidentialHoldings()).toEqual({ "nep141:sol": "15738716" });
+    expect(r.calls[0]!.url).toBe("https://api.outlayer.ai/wallet/v1/confidential/balance");
+    await expect(ol(recorder(() => json({ hello: 1 }))).confidentialHoldings()).rejects.toThrow(/unexpected/);
+  });
+
+  it("OutLayer: shield and withdraw send the documented bodies to the right routes", async () => {
+    const r = recorder(() => json({ request_id: "r2", status: "pending_approval" }));
+    const c = ol(r);
+    await c.shield("nep141:usdc", "1500000");
+    await c.withdraw({ to: "owner.near", token: "nep141:usdc", amount: "1000000", chain: "near", venue: "confidential" });
+    await c.withdraw({ to: "owner.near", token: "nep141:usdc", amount: "1000000", chain: "near", venue: "public" });
+    expect(r.calls.map((x) => x.url.replace("https://api.outlayer.ai", ""))).toEqual(["/wallet/v1/confidential/shield", "/wallet/v1/confidential/withdraw", "/wallet/v1/intents/withdraw"]);
+    expect(JSON.parse(String(r.calls[0]!.init.body))).toEqual({ token: "nep141:usdc", amount: "1500000" });
+    expect(JSON.parse(String(r.calls[1]!.init.body))).toEqual({ to: "owner.near", amount: "1000000", token: "nep141:usdc", chain: "near" });
+  });
+
+  it("OutLayer: status carries the amounts the provider reports", async () => {
+    const r = recorder(() => json({ status: "success", result: { amount: "1500000", amount_out: "15738716", swap_details: { amountIn: "1500000", amountOut: "15738716" } } }));
+    expect((await ol(r).status("r1")).reported).toEqual({ amountIn: "1500000", amountOut: "15738716" });
+    const none = recorder(() => json({ status: "pending_approval" }));
+    expect((await ol(none).status("r1")).reported).toBeUndefined();
+  });
+});

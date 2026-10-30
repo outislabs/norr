@@ -1,7 +1,7 @@
 import { BlockCode } from "@norr/shared";
 import { describe, expect, it } from "vitest";
 import { NVDA_ON, NVDA_X, RUG, USDC_FAKE, policy, registry, request, riskProvider, state } from "./fixtures";
-import { isBlock, noLiquidity, preTradeChecks, type PreTradeInput } from "./pipeline";
+import { isBlock, noLiquidity, preTradeChecks, privacyUnavailable, type PreTradeInput } from "./pipeline";
 import { checkPriceSanity } from "./risk";
 
 const base = (over: Partial<PreTradeInput> = {}): PreTradeInput => ({
@@ -58,6 +58,7 @@ const cases: [string, () => Promise<unknown>][] = [
   ["PRICE_SANITY", async () => checkPriceSanity(211, 260)],
   ["UNKNOWN_ASSET", () => preTradeChecks(base({ request: request({ asset: "NOPE" }) }))],
   ["NO_LIQUIDITY", async () => noLiquidity()],
+  ["PRIVACY_UNAVAILABLE", async () => privacyUnavailable("the vault holds no confidential funds.")],
   ["SHIELD_INCIDENT", () => preTradeChecks(base({ shield: null }))],
 ];
 

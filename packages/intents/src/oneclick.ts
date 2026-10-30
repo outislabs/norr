@@ -47,18 +47,20 @@ export class OneClick implements Quoter, ExecutionAuditor {
   }
 
   async quote(p: QuoteParams): Promise<Quote | null> {
+    const layer = p.venue === "confidential" ? "CONFIDENTIAL_INTENTS" : "INTENTS";
     const body = {
       dry: true,
       swapType: "EXACT_INPUT",
       slippageTolerance: this.slippageBps,
       originAsset: p.tokenIn,
-      depositType: "INTENTS",
+      depositType: layer,
       destinationAsset: p.tokenOut,
       amount: p.amountIn,
       recipient: p.recipient,
-      recipientType: "INTENTS",
+      recipientType: layer,
       refundTo: p.recipient,
-      refundType: "INTENTS",
+      refundType: layer,
+      ...(p.venue === "confidential" ? { confidentiality: "basic" } : {}),
       deadline: new Date(this.now() + 3_600_000).toISOString(),
     };
     try {

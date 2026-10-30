@@ -11,5 +11,6 @@
   "cooldownSec": 0,
   "paused": false,
   "nonUsConfirmed": false,
-  "allowMediumRisk": false
+  "allowMediumRisk": false,
+  "privacy": "prefer"
 }

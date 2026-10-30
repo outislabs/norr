@@ -35,14 +35,15 @@ export interface MockEnclave {
 
 /**
  * The whole Norr service on mock rails (NORR_MOCK=1): no 1Click, no custody provider, no TEE, no funds.
- * It starts with a funded demo vault on the Balanced preset, owner-confirmed for equities.
+ * It starts with a demo vault holding its cash in the confidential layer, on the Balanced preset,
+ * owner-confirmed for equities, so trades run confidentially by default.
  */
 export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed | null; now?: () => number; agentToken?: string } = {}): MockEnclave {
   const registry = new Registry({ crypto: [DEMO.USDC, DEMO.SOL, DEMO.wNEAR, DEMO.RUG], equities: [{ issuer: ONDO, tokens: [DEMO.NVDAon, DEMO.TSLAon, DEMO.SPYon] }] });
   const now = o.now ?? Date.now;
   const vaultId = "demo";
   const walletAccount = "demo-vault.mock.near";
-  const rails = createMockRails(registry.entries(), walletAccount, { seed: { [DEMO.USDC.assetId]: String(Math.round((o.startingUsd ?? 1000) * 1e6)) } });
+  const rails = createMockRails(registry.entries(), walletAccount, { confidentialSeed: { [DEMO.USDC.assetId]: String(Math.round((o.startingUsd ?? 1000) * 1e6)) } });
 
   const vaults = new MemoryVaultStore([
     newVault(

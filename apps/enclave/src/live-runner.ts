@@ -51,8 +51,9 @@ export async function runLiveTrade(deps: TradeDeps, a: RunArgs, log: (line: stri
   log(`  sends     ${unitsToNumber(plan.bounds.amountIn, inn.decimals)} ${inn.symbol}   (${plan.bounds.tokenIn})`);
   log(`  receives  ~${unitsToNumber(plan.quote.amountOut, out.decimals)} ${out.symbol}   (${plan.bounds.tokenOut})`);
   log(`  minimum   ${unitsToNumber(plan.bounds.minAmountOut, out.decimals)} ${out.symbol}`);
+  log(`  venue     ${plan.venue}${plan.venue === "confidential" ? " (not independently auditable: checked against the custody provider's own balances)" : ""}`);
   log(`  issuer    ${plan.candidate.issuer ?? "n/a"} | recipient is the vault's own Intents account`);
-  log(`  request   POST /wallet/v1/intents/swap ${JSON.stringify({ token_in: plan.bounds.tokenIn, token_out: plan.bounds.tokenOut, amount_in: plan.bounds.amountIn, min_amount_out: plan.bounds.minAmountOut })}`);
+  log(`  request   POST /wallet/v1/${plan.venue === "confidential" ? "confidential" : "intents"}/swap ${JSON.stringify({ token_in: plan.bounds.tokenIn, token_out: plan.bounds.tokenOut, amount_in: plan.bounds.amountIn, min_amount_out: plan.bounds.minAmountOut })}`);
 
   if (!a.confirmMainnet) {
     log("DRY RUN: nothing was sent. Re-run with --confirm-mainnet only after the owner has confirmed this exact trade.");

@@ -71,7 +71,7 @@ export function createNorrServer(client: EnclaveClient): McpServer {
       description:
         "Request a trade for your vault. The answer is one of: executed (it happened, with the fill); blocked (a rule or safety check stopped it: the message says why, so adjust the request instead of repeating it unchanged); " +
         "pending_approval (the vault owner must approve it first; check get_activity later and do not resend); or failed (nothing was lost, read the message). " +
-        "Norr checks your rules, the asset's risk and a daily spending cap first, and verifies the result afterwards. You cannot choose where funds go: they always stay in your vault. " +
+        "Norr checks your rules, the asset's risk and a daily spending cap first, and verifies the result afterwards. Trades run in the vault's confidential layer whenever it holds the funds there (the answer's 'venue' says which layer was used), so the trade stays off the public chain. You cannot choose where funds go: they always stay in your vault. " +
         "Norr's rules are authoritative: if you are unsure whether a trade is allowed, ask Norr instead of guessing or refusing in advance. Request it (or use get_quote) and read the answer, which names the rule and says what would fit. " +
         "'reason' is your private note to the vault owner explaining why you are making this trade; it is never shown to anyone else.",
       inputSchema: { side, asset, amountUsd, reason: z.string().max(2000).optional().describe("Why you want this trade. Private to the vault owner.") },

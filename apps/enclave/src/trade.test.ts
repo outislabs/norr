@@ -56,7 +56,7 @@ describe("executeTrade: happy paths", () => {
     const h = harness();
     await executeTrade(h.deps, req({ amountUsd: 10 }));
     await executeTrade(h.deps, req({ asset: "SOL", amountUsd: 5 }));
-    await executeTrade(h.deps, req({ asset: "SOL", side: "sell", amountUsd: 5 }));
+    await executeTrade(h.deps, req({ asset: "SOL", side: "sell", amountUsd: 4 })); // less than the 5 bought, which fees shrank
     expect(h.rails.swaps).toHaveLength(3);
     for (const s of h.rails.swaps) expect(s.minAmountOut).toMatch(/^[1-9]\d*$/);
   });

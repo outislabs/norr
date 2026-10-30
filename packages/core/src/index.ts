@@ -5,6 +5,7 @@ export * from "./shield";
 export * from "./policy";
 export * from "./pipeline";
 export * from "./verify";
+export * from "./confidential";
 export * from "./swap-guard";
 export * from "./units";
 export * from "./pnl";

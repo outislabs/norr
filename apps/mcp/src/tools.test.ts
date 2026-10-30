@@ -69,6 +69,7 @@ describe("tools against the mock Norr service", () => {
     const nvda = await call("trade", { side: "buy", asset: "NVDA", amountUsd: 40, reason: "momentum" });
     expect(nvda.isError).toBe(false);
     expect(nvda.json().status).toBe("executed");
+    expect(nvda.json()).toMatchObject({ venue: "confidential", verification: "custody-reported" }); // the mock vault holds its cash confidentially
 
     const tsla = await call("trade", { side: "buy", asset: "TSLA", amountUsd: 150, reason: "big bet" });
     expect(tsla.isError).toBe(false); // a block is an answer, not a tool failure
