@@ -1,0 +1,11 @@
+{
+  "name": "@norr/enclave",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@norr/core": "workspace:*",
+    "@norr/shared": "workspace:*",
+    "@norr/intents": "workspace:*"
+  }
+}

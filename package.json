@@ -1,0 +1,18 @@
+{
+  "name": "norr",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Private trading layer for AI agents on NEAR Intents",
+  "packageManager": "pnpm@10.18.0",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json",
+    "check:tokens": "node scripts/check-tokens.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}

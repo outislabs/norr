@@ -1,0 +1,14 @@
+node_modules
+dist
+coverage
+.env
+.env.*
+!.env.example
+*.log
+*.tmp
+*.out
+*.pem
+*.key
+*.swp
+.DS_Store
+.claude/
