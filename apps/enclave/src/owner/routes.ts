@@ -1,5 +1,6 @@
 import { applyFill, lossToday, sumToday, unitsToNumber, usdToUnits, type Book } from "@norr/core";
 import type { BuildInfo } from "../build-info";
+import type { SealKeyStore, SealingLedger } from "../seal";
 import { FUNDING_WINDOW_MS, FundingTracker, MAX_OPEN_FUNDING, fundingState } from "../funding";
 import { CASH_USD } from "../portfolio";
 import { Policy } from "@norr/shared";
@@ -25,6 +26,7 @@ export interface OwnerRouteContext {
   mock: boolean;
   /** The code version shown on the Verify screen. */
   build: BuildInfo;
+  seal?: { keys: SealKeyStore; ledger: SealingLedger };
   audit: OwnerAuditEntry[];
 }
 
@@ -153,6 +155,27 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
     }
   });
 
+  // The key the owner's private reasoning is sealed to. The browser derives it from a wallet signature and
+  // sends only the public half; the private half never leaves the browser.
+  app.get("/owner/v1/seal-key", (c) => c.json({ publicKey: ctx.seal?.keys.get(c.get("owner") as string) ?? null }));
+
+  app.put("/owner/v1/seal-key", async (c) => {
+    const owner = c.get("owner") as string;
+    if (!ctx.seal) return c.json({ error: "private reasoning is not available on this service" }, 501);
+    const body = z.object({ publicKey: z.string().min(40).max(48) }).safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "invalid key" }, 400);
+    try {
+      ctx.seal.keys.set(owner, body.data.publicKey);
+    } catch {
+      return c.json({ error: "invalid key" }, 400);
+    }
+    // Reasoning stored before the owner had a key moves to it now; the service can no longer read it.
+    let resealed = 0;
+    for (const v of deps.vaults.list().filter((x) => x.owner === owner)) resealed += ctx.seal.ledger.reseal(v.id, body.data.publicKey);
+    note(owner, "enrolled a key for private reasoning");
+    return c.json({ publicKey: body.data.publicKey, resealed });
+  });
+
   app.put("/owner/v1/vaults/:id/policy", async (c) => {
     const owner = c.get("owner") as string;
     const v = mine(owner, c.req.param("id"));
@@ -219,7 +242,8 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
         side: r.request.side,
         asset: r.request.asset,
         amountUsd: r.request.amountUsd,
-        reason: r.request.reason,
+        // The agent's reasoning, sealed to the owner: the service cannot read it, the owner's browser opens it.
+        sealedReason: r.sealedReason ?? null,
         decision: r.decision,
         note: r.note ?? null,
         pending: Boolean(r.pending),

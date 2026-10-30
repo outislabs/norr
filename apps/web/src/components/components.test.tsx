@@ -87,7 +87,7 @@ describe("KillSwitch", () => {
 });
 
 describe("ActivityList", () => {
-  const item = (over: Partial<ActivityItem>): ActivityItem => ({ id: "1", executed: null, at: "2026-11-03T11:30:00Z", side: "buy", asset: "NVDA", amountUsd: 40, reason: "", decision: { status: "blocked", code: "OVER_TRADE_LIMIT", message: "$150 is over the limit." }, note: null, pending: false, ...over });
+  const item = (over: Partial<ActivityItem>): ActivityItem => ({ id: "1", executed: null, at: "2026-11-03T11:30:00Z", side: "buy", asset: "NVDA", amountUsd: 40, sealedReason: null, decision: { status: "blocked", code: "OVER_TRADE_LIMIT", message: "$150 is over the limit." }, note: null, pending: false, ...over });
 
   it("shows what an executed trade really moved, not the size that was asked for", () => {
     const filled = { asset: "NVDAon", amount: "0.0294", priceUsd: 201.5 };
@@ -100,13 +100,22 @@ describe("ActivityList", () => {
     expect(text).not.toContain("$7.00");
   });
 
-  it("shows refusals with their code, and the agent's reasoning labelled as owner-only", () => {
-    render(<ActivityList now={Date.parse("2026-11-03T12:00:00Z")} items={[item({ reason: "momentum after earnings" })]} />);
+  const sealed = { v: 1 as const, k: "owner" as const, epk: "e", iv: "i", ct: "c" };
+
+  it("shows refusals with their code, and unlocked reasoning labelled as owner-only", () => {
+    render(<ActivityList now={Date.parse("2026-11-03T12:00:00Z")} items={[item({ sealedReason: sealed })]} reasons={{ "1": "momentum after earnings" }} />);
     expect(screen.getByText("Refused")).toBeTruthy();
     expect(screen.getByText(/OVER_TRADE_LIMIT/)).toBeTruthy();
     expect(screen.getByText(/visible only to you/)).toBeTruthy();
     expect(screen.getByText(/momentum after earnings/)).toBeTruthy();
     expect(screen.getByText("30 minutes ago")).toBeTruthy();
+  });
+
+  it("keeps reasoning sealed until it is unlocked, and shows none for entries that had none", () => {
+    const { container } = render(<ActivityList items={[item({ sealedReason: sealed }), item({ id: "2" })]} />);
+    expect(container.textContent).toContain("reasoning is sealed");
+    expect(container.textContent).not.toContain("visible only to you");
+    expect((container.textContent?.match(/reasoning is sealed/g) ?? []).length).toBe(1);
   });
 
   it("labels how an executed trade was checked, and its warnings", () => {

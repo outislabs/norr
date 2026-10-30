@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Policy } from "@norr/shared";
 import { ActivityList } from "../components/ActivityList";
 import { AgentAccess } from "../components/AgentAccess";
+import { ActivityTab } from "../components/ActivityTab";
 import { FundingPanel } from "../components/FundingPanel";
 import { PendingChecks } from "../components/PendingChecks";
 import { PolicyForm } from "../components/PolicyForm";
@@ -29,7 +30,7 @@ function Meter({ label, value, max }: { label: string; value: number; max: numbe
   );
 }
 
-export function VaultPage({ api, id, tab, onChanged }: { api: Api; id: string; tab: Tab; onChanged: () => void }) {
+export function VaultPage({ api, account, id, tab, onChanged }: { api: Api; account: string; id: string; tab: Tab; onChanged: () => void }) {
   const vault = useAsync(() => api.vault(id), `vault-${id}`);
   const activity = useAsync(() => (tab === "activity" ? api.activity(id) : Promise.resolve(null)), `act-${id}-${tab}`);
   const pending = useAsync(() => api.pending(id), `pend-${id}-${tab}`);
@@ -101,7 +102,7 @@ export function VaultPage({ api, id, tab, onChanged }: { api: Api; id: string; t
         )}
         {tab === "fund" && <FundingPanel api={api} vaultId={id} onArrived={() => vault.reload()} />}
         {tab === "rules" && <PolicyForm key={JSON.stringify(v.policy)} policy={v.policy} onSave={save} />}
-        {tab === "activity" && (activity.error ? <p role="alert" className="text-rust">{activity.error}</p> : activity.data ? <ActivityList items={activity.data.activity} /> : <p className="text-mist">Loading…</p>)}
+        {tab === "activity" && (activity.error ? <p role="alert" className="text-rust">{activity.error}</p> : activity.data ? <ActivityTab api={api} account={account} vaultId={id} items={activity.data.activity} reload={activity.reload} /> : <p className="text-mist">Loading…</p>)}
         {tab === "approvals" && (
           <div>
             <h2 className="font-display text-xl">Check before you sign</h2>

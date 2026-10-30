@@ -18,13 +18,24 @@ Notes from NEAR Intents' documentation (and OutLayer's): a vault's confidential 
 
 | Data | Who can read it today | Target | Status |
 |---|---|---|---|
-| Agent's stated reasoning (`reason`) | Held in plaintext in the live service's ledger file (`data/ledger.jsonl`, mode 0600, gitignored; memory only in mock mode); never returned to agents; never logged | Encrypted to the vault owner's key so only the owner can read it, even from the service's storage | Plaintext in memory; encryption Planned |
-| Activity log and decisions | The same plaintext ledger file, plus per-vault counters in `data/vaults/<id>.json` (spend, P&L, policy, kill switch), shared by the service and the live runner so a restart cannot reset the caps | Encrypted, owner-only, inside the TEE | Durable: Built. Encrypted: Planned |
-| Per-vault Norr policy | The service; the agent sees a planning view only | Same, with the service running in a TEE | Built (agent view); TEE Planned |
+| Agent's stated reasoning (`reason`) | **The owner only.** Sealed to a key derived in the owner's browser from one wallet signature (X25519 + AES-GCM). The service writes it but cannot read it back; the API returns only the sealed box. Until the owner has enrolled a key it is held sealed to the service's data key, then moved to the owner's key at enrollment | Same | Built |
+| Activity log and decisions | The service (it must read decisions to enforce caps and answer the agent). Encrypted on disk with the service data key (`data/ledger.jsonl`, mode 0600, gitignored), so copying the files alone reveals nothing | Data key sealed by the TEE | Encrypted at rest: Built. Key sealed in TEE: Planned |
+| Per-vault counters, positions, policy and kill switch | The service. Same encrypted file layer (`data/vaults/<id>.json`); the agent sees a planning view only | Same, with the service running in a TEE | Encrypted at rest: Built. TEE: Planned |
 | Agent tokens | Only SHA-256 hashes are stored | Same | Built |
 | API keys for custody | The service's environment | Sealed by the TEE | Planned |
 | Strategy / prompts in the agent | The agent's host (Claude Desktop, IronClaw or other) | Agent hosted in a TEE | Not Norr's to promise; IronClaw unverified |
-| Service code integrity | Nothing to verify yet | TEE attestation of the exact code, shown on the Verify screen | Planned |
+| Service code integrity | The Verify screen shows the git commit (flagging uncommitted changes); nothing proves it | TEE attestation of the exact code | Commit shown: Built. Attestation: Planned |
+
+### How the private reasoning works, and what it does not protect
+- The owner's key is derived from a wallet signature over a fixed message (ed25519 signatures are deterministic, so it is the same every time). The private half never leaves the browser; only the public half is sent to the service.
+- Unlocking asks the wallet for one signature: no transaction, no fee. The derived secret is kept for the tab's session so a reload does not prompt again, and it is cleared on logout.
+- **Limits, stated plainly:**
+  - The service chooses what to seal to: the public key the owner enrolled. A compromised service could swap that key for its own and read *future* reasoning. This is the same trust as running the service at all until it runs in an attested enclave.
+  - Anyone who can get you to sign the same fixed message (a phishing page) could derive the same key; they would still need the sealed data, which only the service holds.
+  - If your wallet ever produces a different signature (different key or wallet), older entries cannot be opened from it. The dashboard says so and offers a new key for new entries.
+  - The data key is the layer for everything else. Without `NORR_DATA_KEY` a development key is created in the data directory, which protects against copying the data files alone, not against someone who can read that directory. In production it comes from the enclave's sealed secrets.
+  - The decisions themselves (assets, amounts, outcomes) are readable by the service and, through `get_activity`, by the agent that made them.
+  - Losing the data key makes the files unreadable by design: the service refuses to start rather than start empty.
 
 ## Planned design for the final demo vault: confidential in, confidential out
 The first confidential spike only proves the mechanics (shield, confidential swap) on an old wallet. The stronger design keeps the public chain from ever seeing the vault hold or move the money:

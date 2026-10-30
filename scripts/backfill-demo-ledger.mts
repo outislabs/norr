@@ -3,6 +3,7 @@
 // trade uses. Idempotent: it does nothing if the buy's request id is already in the ledger.
 //   pnpm exec tsx scripts/backfill-demo-ledger.mts [--apply]      (dry run without --apply)
 import { FileLedger, FileVaultStore, dataDir } from "../apps/enclave/src/persist";
+import { DataCipher, FileSealKeys, SealingLedger } from "../apps/enclave/src/seal";
 import { newVault } from "../apps/enclave/src/state";
 import { Policy } from "../packages/shared/src/index";
 import { readFileSync } from "node:fs";
@@ -41,10 +42,11 @@ const trades = [
   },
 ];
 
-const ledger = new FileLedger(dir);
+const cipher = DataCipher.load(process.env, dir);
 const vaults = new FileVaultStore(dir, [
   newVault({ id: policy.vaultId, owner, policy, custody: {} as never, walletAccount: "n/a", state: { realizedLossTodayUsd: 0, spentTodayUsd: 0, lastTradeAtMs: null, portfolioValueUsd: 0, equityValueUsd: 0 } }, Date.now()),
-]);
+], cipher);
+const ledger = new SealingLedger(new FileLedger(dir, cipher), new FileSealKeys(dir), cipher, (id) => vaults.get(id)?.owner);
 
 if (ledger.list(policy.vaultId).some((r) => r.decision.status === "executed" && r.decision.txRef === trades[0]!.requestId)) {
   console.log("Already recorded. Nothing to do.");

@@ -1,6 +1,7 @@
 import { createHash, generateKeyPairSync, sign, type KeyObject } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { createMockEnclave, MOCK_OWNER } from "../mock-enclave";
+import { deriveOwnerKey, openBox } from "../../../web/src/lib/seal";
 import { OwnerAuth, RpcAccessKeyChecker, type AccessKeyChecker } from "./auth";
 import { base58Decode, nep413Hash, NEP413_TAG, parsePublicKey, verifyNep413 } from "./nep413";
 
@@ -229,11 +230,12 @@ describe("owner routes", () => {
     expect(audit).toEqual(expect.arrayContaining(["signed in", "paused", "resumed", "kill switch: paused all vaults"]));
   });
 
-  it("shows the agent's private reasoning to the owner only", async () => {
+  it("the agent's reasoning reaches neither the agent nor the service's responses in the clear", async () => {
     const { m, req, token } = await boot();
     await m.app.request("/v1/trade", { method: "POST", headers: { authorization: `Bearer ${m.agentToken}`, "content-type": "application/json" }, body: JSON.stringify({ side: "buy", asset: "SOL", amountUsd: 5, reason: "OWNER-ONLY-THESIS" }) });
     const owner = await (await req("/owner/v1/vaults/demo/activity", { token })).text();
-    expect(owner).toContain("OWNER-ONLY-THESIS");
+    expect(owner).not.toContain("OWNER-ONLY-THESIS");
+    expect(owner).toContain("sealedReason");
     const agent = await (await m.app.request("/v1/activity", { headers: { authorization: `Bearer ${m.agentToken}` } })).text();
     expect(agent).not.toContain("OWNER-ONLY-THESIS");
   });
@@ -283,6 +285,36 @@ describe("owner routes", () => {
     expect(buy.executed.usd).toBeCloseTo(20, 2); // the cash that left, not a size that was asked for
     expect(buy.executed.realizedUsd).toBeNull();
     for (const s of sells) expect(s.executed.realizedUsd).not.toBeNull();
+  });
+
+  it("private reasoning: the activity API returns it sealed; enrolling a key moves it to the owner, who alone can open it", async () => {
+    const { m, req, token, loginAs } = await boot();
+    const trade = (body: unknown) => m.app.request("/v1/trade", { method: "POST", headers: { authorization: `Bearer ${m.agentToken}`, "content-type": "application/json" }, body: JSON.stringify(body) });
+    await trade({ side: "buy", asset: "SOL", amountUsd: 5, reason: "SEALED-THESIS-123" });
+    const before = await (await req("/owner/v1/vaults/demo/activity", { token })).text();
+    expect(before).not.toContain("SEALED-THESIS-123"); // the service does not hand out plaintext, even to the owner
+    expect(JSON.parse(before).activity[0].sealedReason.k).toBe("service");
+
+    expect(await (await req("/owner/v1/seal-key", { token })).json()).toEqual({ publicKey: null });
+    const owner = await deriveOwnerKey(Uint8Array.from({ length: 64 }, (_, i) => i), MOCK_OWNER);
+    const put = await (await req("/owner/v1/seal-key", { token, method: "PUT", body: { publicKey: owner.publicKey } })).json();
+    expect(put).toMatchObject({ publicKey: owner.publicKey, resealed: 1 });
+    expect(await (await req("/owner/v1/seal-key", { token })).json()).toEqual({ publicKey: owner.publicKey });
+
+    const after = (await (await req("/owner/v1/vaults/demo/activity", { token })).json()).activity[0].sealedReason;
+    expect(after.k).toBe("owner");
+    expect(await openBox(after, owner, "demo")).toBe("SEALED-THESIS-123");
+
+    // New entries are sealed to the owner straight away.
+    await trade({ side: "buy", asset: "SOL", amountUsd: 5, reason: "SECOND-THESIS" });
+    const list = (await (await req("/owner/v1/vaults/demo/activity", { token })).json()).activity;
+    expect(list.map((a: { sealedReason: { k: string } }) => a.sealedReason.k)).toEqual(["owner", "owner"]);
+
+    // Bad keys are refused; an agent token cannot enroll one; another account has its own (empty) slot.
+    for (const publicKey of ["", "short", "A".repeat(44), 5]) expect((await req("/owner/v1/seal-key", { token, method: "PUT", body: { publicKey } })).status).toBe(400);
+    expect((await req("/owner/v1/seal-key", { token: m.agentToken, method: "PUT", body: { publicKey: owner.publicKey } })).status).toBe(401);
+    const other = await loginAs("someone-else.near");
+    expect(await (await req("/owner/v1/seal-key", { token: other.token })).json()).toEqual({ publicKey: null });
   });
 
   it("funding: the owner gets a deposit address from the custody provider, can watch it arrive, and no one else can", async () => {

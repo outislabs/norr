@@ -21,7 +21,7 @@ export interface VaultSummary {
 }
 export interface Holding { symbol: string; class: "crypto" | "equity"; amount: number; valueUsd: number; layer?: "public" | "confidential" }
 export interface Portfolio { holdings: Holding[]; totalUsd: number; byClass: { crypto: number; equity: number } }
-export interface ActivityItem { id: string; executed: { usd: number; realizedUsd: number | null } | null; at: string; side: "buy" | "sell"; asset: string; amountUsd: number; reason: string; decision: Decision; note: string | null; pending: boolean }
+export interface ActivityItem { id: string; executed: { usd: number; realizedUsd: number | null } | null; at: string; side: "buy" | "sell"; asset: string; amountUsd: number; sealedReason: SealedReason | null; decision: Decision; note: string | null; pending: boolean }
 export interface PendingItem {
   ledgerId: string;
   requestId: string;
@@ -32,6 +32,7 @@ export interface PendingItem {
   recipient: string;
   check: string;
 }
+import type { SealedReason } from "./seal";
 export interface FundingOffer { id: string; address: string; amountUsdc: number; asset: { symbol: string; chain: string; contract: string }; expiresAt: string }
 export interface FundingStatus { state: "waiting" | "arrived" | "expired"; receivedUsdc: number; balanceUsdc: number; expiresAt: string; reportedBy: string }
 export interface VerifyInfo { mode: "mock" | "live"; attested: boolean; note: string; commit: string | null; dirty?: boolean; source?: "env" | "git" | "unknown" }
@@ -88,6 +89,8 @@ export function createApi(o: ApiOptions) {
     revokeTokens: (id: string) => call<{ revoked: boolean }>(`/owner/v1/vaults/${encodeURIComponent(id)}/tokens`, { method: "DELETE" }),
     requestFunding: (id: string, amountUsdc: number) => call<FundingOffer>(`/owner/v1/vaults/${encodeURIComponent(id)}/funding`, { body: { amountUsdc } }),
     fundingStatus: (id: string, fid: string) => call<FundingStatus>(`/owner/v1/vaults/${encodeURIComponent(id)}/funding/${encodeURIComponent(fid)}`),
+    sealKey: () => call<{ publicKey: string | null }>("/owner/v1/seal-key"),
+    enrollSealKey: (publicKey: string) => call<{ publicKey: string; resealed: number }>("/owner/v1/seal-key", { method: "PUT", body: { publicKey } }),
     audit: () => call<{ audit: AuditItem[] }>("/owner/v1/audit"),
     verify: () => call<VerifyInfo>("/owner/v1/verify"),
   };

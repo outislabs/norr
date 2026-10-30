@@ -2,6 +2,7 @@ import { HeuristicRiskProvider, ONDO, Registry, presetPolicy, type CryptoSignals
 import { createMockRails } from "@norr/intents";
 import { createApp } from "./app";
 import { OwnerAuth, type AccessKeyChecker } from "./owner/auth";
+import { DataCipher, MemorySealKeys, SealingLedger } from "./seal";
 import { MemoryLedger, MemoryVaultStore, newVault } from "./state";
 import { AgentTokens } from "./tokens";
 import type { TradeDeps } from "./trade";
@@ -38,6 +39,8 @@ export interface MockEnclave {
   ownerAuth: OwnerAuth;
   /** The mock rails, so tests can simulate an owner deposit arriving. */
   rails: ReturnType<typeof createMockRails>;
+  sealKeys: MemorySealKeys;
+  sealing: SealingLedger;
 }
 
 /**
@@ -65,6 +68,9 @@ export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed
       now(),
     ),
   ]);
+  // Mock mode keeps the same rule as live: the agent's reasoning is only ever stored sealed.
+  const sealKeys = new MemorySealKeys();
+  const sealing = new SealingLedger(new MemoryLedger(), sealKeys, DataCipher.random(), (id) => vaults.get(id)?.owner);
 
   const deps: TradeDeps = {
     registry,
@@ -74,7 +80,7 @@ export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed
     auditor: rails.auditor,
     balances: rails.balances,
     vaults,
-    ledger: new MemoryLedger(),
+    ledger: sealing,
     quoteAsset: registry.byId(DEMO.USDC.assetId)!,
     now,
     sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
@@ -90,5 +96,5 @@ export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed
   const adminToken = `norr_admin_mock_${Math.random().toString(36).slice(2)}`;
   // Mock mode accepts any key for an account (it holds no funds and listens on localhost); live mode checks the chain.
   const ownerAuth = new OwnerAuth({ keys: o.keys ?? { hasKey: async () => true }, now });
-  return { app: createApp({ deps, tokens, mock: true, adminToken, owner: ownerAuth }), deps, vaults, tokens, agentToken, adminToken, vaultId, ownerAuth, rails };
+  return { app: createApp({ deps, tokens, mock: true, adminToken, owner: ownerAuth, seal: { keys: sealKeys, ledger: sealing } }), deps, vaults, tokens, agentToken, adminToken, vaultId, ownerAuth, rails, sealKeys, sealing };
 }

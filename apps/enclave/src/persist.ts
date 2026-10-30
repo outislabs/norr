@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import type { Book, DayPnl, DaySum, Fill } from "@norr/core";
 import { Policy } from "@norr/shared";
+import type { DataCipher } from "./seal";
 import { MemoryVaultStore, type Ledger, type LedgerEntry, type Vault } from "./state";
 
 /**
@@ -10,8 +11,8 @@ import { MemoryVaultStore, type Ledger, type LedgerEntry, type Vault } from "./s
  * trade made by either shows up in the other, and a restart does not reset the caps (a reset would
  * let a vault spend its daily cap again, so unreadable state stops startup instead of being ignored).
  *
- * Not encrypted yet: the files are 0600 and the directory is gitignored, but the planned privacy layer
- * (encrypted owner-only log inside the TEE) is what makes this private; see docs/PRIVACY.md.
+ * Encrypted at rest with the service data key (see seal.ts), files 0600, directory gitignored. Files
+ * written by an earlier version in the clear are read and rewritten encrypted on startup.
  */
 
 const sleepSync = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
@@ -63,11 +64,15 @@ export class FileVaultStore extends MemoryVaultStore {
    * Saved state wins over the policy the vault was created with: owner edits and the kill switch
    * must survive a restart. To start from the policy file again, delete the vault's state file.
    */
-  constructor(dir: string, vaults: Vault[]) {
+  constructor(dir: string, vaults: Vault[], private readonly cipher: DataCipher) {
     super(vaults);
     this.dir = join(dir, "vaults");
     mkdirSync(this.dir, { recursive: true, mode: 0o700 });
-    for (const v of vaults) withLock(this.dir, () => (this.load(v.id) ? undefined : this.save(v.id)));
+    // Always write back, so a state file left in the clear by an earlier version is encrypted now.
+    for (const v of vaults) withLock(this.dir, () => {
+      this.load(v.id);
+      this.save(v.id);
+    });
   }
 
   private path(id: string): string {
@@ -81,7 +86,8 @@ export class FileVaultStore extends MemoryVaultStore {
     if (!v || !existsSync(file)) return false;
     let saved: SavedVault;
     try {
-      saved = JSON.parse(readFileSync(file, "utf8")) as SavedVault;
+      const raw = JSON.parse(readFileSync(file, "utf8")) as SavedVault | { iv: string; ct: string };
+      saved = "ct" in raw ? (JSON.parse(this.cipher.decrypt(raw, `vault:${id}`)) as SavedVault) : raw;
       saved.policy = { ...Policy.parse(saved.policy), vaultId: v.id };
     } catch (e) {
       throw new Error(`Saved state for vault "${id}" is unreadable (${file}). Not starting, because ignoring it would reset the vault's caps. Fix or restore the file. (${e instanceof Error ? e.message : String(e)})`);
@@ -100,7 +106,7 @@ export class FileVaultStore extends MemoryVaultStore {
     const v = super.get(id);
     if (!v) return;
     const saved: SavedVault = { policy: v.policy, pauseReason: this.pauseReasons.get(id) ?? null, lastTradeAtMs: v.state.lastTradeAtMs, book: v.book, pnl: v.pnl, spend: v.spend };
-    writeAtomic(this.path(id), JSON.stringify(saved, null, 2));
+    writeAtomic(this.path(id), JSON.stringify({ v: 1, ...this.cipher.encrypt(JSON.stringify(saved), `vault:${id}`) }));
   }
 
   /** Reload, apply one change, write back, all under the lock. */
@@ -161,34 +167,50 @@ type LedgerOp = { op: "append"; entry: LedgerEntry } | { op: "update"; id: strin
 export class FileLedger implements Ledger {
   private readonly file: string;
 
-  constructor(private readonly dir: string) {
+  constructor(private readonly dir: string, private readonly cipher: DataCipher) {
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     this.file = join(dir, "ledger.jsonl");
     if (!existsSync(this.file)) writeFileSync(this.file, "", { mode: 0o600 });
     chmodSync(this.file, 0o600);
+    // A log written in the clear by an earlier version is rewritten encrypted.
+    withLock(dir, () => {
+      const ops = this.ops();
+      if (ops.some((o) => o.legacy)) writeAtomic(this.file, ops.map((o) => this.line(o.op)).join(""));
+    });
+  }
+
+  private line(op: LedgerOp): string {
+    return `${JSON.stringify({ v: 1, ...this.cipher.encrypt(JSON.stringify(op), "ledger") })}\n`;
   }
 
   private write(op: LedgerOp): void {
-    withLock(this.dir, () => appendFileSync(this.file, `${JSON.stringify(op)}\n`));
+    withLock(this.dir, () => appendFileSync(this.file, this.line(op)));
+  }
+
+  /** Every operation in the file, in order. Unreadable lines stop everything: the log feeds the caps. */
+  private ops(): { op: LedgerOp; legacy: boolean }[] {
+    const out: { op: LedgerOp; legacy: boolean }[] = [];
+    readFileSync(this.file, "utf8").split("\n").forEach((line, i) => {
+      if (!line.trim()) return;
+      try {
+        const raw = JSON.parse(line) as LedgerOp | { iv: string; ct: string };
+        out.push("ct" in raw ? { op: JSON.parse(this.cipher.decrypt(raw, "ledger")) as LedgerOp, legacy: false } : { op: raw, legacy: true });
+      } catch {
+        throw new Error(`Ledger ${this.file} is unreadable at line ${i + 1} (damaged, or the data key is wrong). Not continuing, because the log feeds the caps.`);
+      }
+    });
+    return out;
   }
 
   private rows(): LedgerEntry[] {
     const byId = new Map<string, LedgerEntry>();
-    const lines = readFileSync(this.file, "utf8").split("\n");
-    lines.forEach((line, i) => {
-      if (!line.trim()) return;
-      let op: LedgerOp;
-      try {
-        op = JSON.parse(line) as LedgerOp;
-      } catch {
-        throw new Error(`Ledger ${this.file} is unreadable at line ${i + 1}. Not continuing, because the log feeds the caps.`);
-      }
+    for (const { op } of this.ops()) {
       if (op.op === "append") byId.set(op.entry.id, op.entry);
       else {
         const row = byId.get(op.id);
         if (row) byId.set(op.id, { ...row, ...op.patch });
       }
-    });
+    }
     return [...byId.values()];
   }
 

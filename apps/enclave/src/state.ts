@@ -1,6 +1,7 @@
 import { addRealized, addToDay, applyFill, dayKey, emptyDay, releaseFromDay, type Book, type DayPnl, type DaySum, type Fill, type VaultState } from "@norr/core";
 import type { Custody } from "@norr/intents";
 import type { Decision, Policy, TradeRequest } from "@norr/shared";
+import type { SealedReason } from "./seal";
 import type { PendingSettlement } from "./trade";
 
 /** One Norr vault: its private policy and state, and the custody wallet behind it. */
@@ -45,6 +46,8 @@ export interface LedgerEntry {
   at: number;
   request: TradeRequest;
   decision: Decision;
+  /** The agent's stated reasoning, sealed so only the owner can read it. `request.reason` is always empty once stored. */
+  sealedReason?: SealedReason;
   /** Set while a swap waits for owner approval, so it can be settled later. */
   pending?: PendingSettlement;
   /** Why a vault was paused, if this entry caused it. Owner-readable only. */

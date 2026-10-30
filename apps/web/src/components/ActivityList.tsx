@@ -32,7 +32,8 @@ function headline(it: ActivityItem): string {
 
 const TONE = { ok: "text-verdigris", stop: "text-rust", wait: "text-brass", bad: "text-rust" } as const;
 
-export function ActivityList({ items, now }: { items: ActivityItem[]; now?: number }) {
+/** `reasons` holds the reasoning the owner has unlocked, by entry id. Anything else stays sealed. */
+export function ActivityList({ items, now, reasons = {} }: { items: ActivityItem[]; now?: number; reasons?: Record<string, string> }) {
   if (items.length === 0) return <p className="text-mist">Nothing yet. When the agent trades, or tries to, it shows up here.</p>;
   return (
     <ol className="flex flex-col">
@@ -56,12 +57,14 @@ export function ActivityList({ items, now }: { items: ActivityItem[]; now?: numb
                 {w}
               </p>
             ))}
-            {it.reason && (
+            {it.sealedReason && reasons[it.id] !== undefined ? (
               <blockquote className="mt-2 border-l-2 border-brass-deep pl-3 text-sm italic text-mist">
                 <span className="not-italic text-ivory">The agent's reasoning, visible only to you: </span>
-                {it.reason}
+                {reasons[it.id]}
               </blockquote>
-            )}
+            ) : it.sealedReason ? (
+              <p className="mt-2 border-l-2 border-line pl-3 text-sm text-mist">The agent's reasoning is sealed. Unlock it above to read it.</p>
+            ) : null}
             {it.note && <p className="mt-1 text-sm text-rust">Note: {it.note}</p>}
           </li>
         );

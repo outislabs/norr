@@ -52,7 +52,7 @@ export function App({ base = "/api" }: { base?: string }) {
       }}
     >
       {route.name === "vaults" && <VaultsPage api={api} account={session.accountId} version={version} />}
-      {route.name === "vault" && <VaultPage key={`${route.id}-${version}`} api={api} id={route.id} tab={route.tab} onChanged={() => setVersion((v) => v + 1)} />}
+      {route.name === "vault" && <VaultPage key={`${route.id}-${version}`} api={api} account={session.accountId} id={route.id} tab={route.tab} onChanged={() => setVersion((v) => v + 1)} />}
       {route.name === "verify" && <VerifyPage api={api} />}
     </Shell>
   );

@@ -7,6 +7,7 @@ import { OwnerAuth, RpcAccessKeyChecker } from "./owner/auth";
 import { BYPASS_BANNER, bypassWarning, resolveShieldMode } from "./shield-mode";
 import { walletCredentials } from "./wallet-env";
 import { FileLedger, FileVaultStore, dataDir } from "./persist";
+import { DataCipher, FileSealKeys, SealingLedger } from "./seal";
 import { newVault } from "./state";
 import { AgentTokens } from "./tokens";
 import type { TradeDeps } from "./trade";
@@ -41,6 +42,8 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env) {
   const now = Date.now;
   // Durable: the service and the live runner share this directory, and a restart does not reset the caps.
   const dir = dataDir(env);
+  const cipher = DataCipher.load(env, dir);
+  const sealKeys = new FileSealKeys(dir);
   const vaults = new FileVaultStore(dir, [
     newVault(
       {
@@ -53,7 +56,10 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env) {
       },
       now(),
     ),
-  ]);
+  ], cipher);
+  // The agent's reasoning is never stored in the clear: sealed to the owner's key (or, until they enroll one, to the service key).
+  const ledger = new SealingLedger(new FileLedger(dir, cipher), sealKeys, cipher, (id) => vaults.get(id)?.owner);
+  ledger.sealExisting(policy.vaultId);
 
   const shield = env.SHIELD_API_KEY ? new ShieldClient({ apiKey: env.SHIELD_API_KEY }).feed : async () => null;
   const deps: TradeDeps = {
@@ -66,12 +72,12 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env) {
     auditor: oneclick,
     balances: new NearIntentsBalances(),
     vaults,
-    ledger: new FileLedger(dir),
+    ledger,
     quoteAsset,
     now,
     sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
   };
-  return { deps, vaultId: policy.vaultId, walletAccount, shieldMode, shieldConfigured: Boolean(env.SHIELD_API_KEY) };
+  return { deps, ledger, sealKeys, vaultId: policy.vaultId, walletAccount, shieldMode, shieldConfigured: Boolean(env.SHIELD_API_KEY) };
 }
 
 /** The live HTTP service: the same API as mock mode, on real rails. */
@@ -80,7 +86,7 @@ export async function buildLive(env: NodeJS.ProcessEnv = process.env) {
   const tokens = new AgentTokens();
   const agentToken = tokens.issue(l.vaultId);
   return {
-    app: createApp({ deps: l.deps, tokens, mock: false, adminToken: env.NORR_ADMIN_TOKEN, owner: new OwnerAuth({ keys: new RpcAccessKeyChecker() }) }),
+    app: createApp({ deps: l.deps, tokens, mock: false, adminToken: env.NORR_ADMIN_TOKEN, owner: new OwnerAuth({ keys: new RpcAccessKeyChecker() }), seal: { keys: l.sealKeys, ledger: l.ledger } }),
     agentToken,
     vaultId: l.vaultId,
     shieldConfigured: l.shieldConfigured,
