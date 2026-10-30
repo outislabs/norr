@@ -93,6 +93,16 @@ export interface TradePlan {
 const blocked = (code: Extract<Decision, { status: "blocked" }>["code"], message: string): Decision => ({ status: "blocked", code, message });
 const failed = (message: string): Decision => ({ status: "failed", message });
 
+/**
+ * Options for operator tooling (the live runner); not reachable from the agent API.
+ * sellAll sells the vault's whole balance of the asset instead of a USD-sized amount, so no dust is left.
+ * The request's amountUsd then acts as a ceiling: a holding worth more than it is refused, so the
+ * per-trade policy check cannot be sidestepped.
+ */
+export interface TradeOptions {
+  sellAll?: boolean;
+}
+
 /** What a vault holds in each layer, where it could be read. */
 export interface Layers {
   public?: Holdings;
@@ -119,7 +129,7 @@ export async function refreshState(deps: TradeDeps, vault: Vault): Promise<Layer
  * Pipeline steps 1-5: paused, resolve, Shield, risk or eligibility, policy, then Norr's own quote for
  * every candidate issuer, price sanity and the swap guard. Moves no funds, so it also serves previews.
  */
-export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeRequest): Promise<({ plan: TradePlan } | { decision: Decision }) & { shieldBypassed: boolean; note?: string }> {
+export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeRequest, opts: TradeOptions = {}): Promise<({ plan: TradePlan } | { decision: Decision }) & { shieldBypassed: boolean; note?: string }> {
   // A paused vault does no work and makes no outbound calls.
   if (vault.policy.paused) {
     return { decision: blocked("PAUSED", "This vault is paused by its owner. No trades are allowed until it is resumed."), shieldBypassed: false };
@@ -176,7 +186,19 @@ export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeReq
             if (c.priceUsd === null) return null;
             const tokenIn = buy ? cash.id : c.id;
             const tokenOut = buy ? c.id : cash.id;
-            const amountIn = buy ? usdToUnits(usd, cash.priceUsd ?? 1, cash.decimals) : usdToUnits(usd, c.priceUsd, c.decimals);
+            const sellAll = opts.sellAll === true && !buy;
+            const amountIn = sellAll ? (holdings?.[tokenIn] ?? "0") : buy ? usdToUnits(usd, cash.priceUsd ?? 1, cash.decimals) : usdToUnits(usd, c.priceUsd, c.decimals);
+            if (sellAll) {
+              const heldValue = unitsToNumber(amountIn, c.decimals) * c.priceUsd;
+              if (BigInt(amountIn) === 0n) {
+                a.shortfall ??= `${venue === "confidential" ? "its confidential balance" : "its public balance"} holds no ${c.symbol}`;
+                return null;
+              }
+              if (heldValue > request.amountUsd) {
+                a.shortfall = `${venue === "confidential" ? "its confidential" : "its public"} ${c.symbol} balance is worth about $${heldValue.toFixed(2)}, above the $${request.amountUsd} ceiling given for selling everything`;
+                return null;
+              }
+            }
             if (checkFunds && holdings && BigInt(holdings[tokenIn] ?? "0") < BigInt(amountIn)) {
               const inAsset = buy ? cash : c;
               a.shortfall ??= `${venue === "confidential" ? "its confidential balance" : "its public balance"} holds ${unitsToNumber(holdings[tokenIn] ?? "0", inAsset.decimals)} ${inAsset.symbol}, and this trade needs ${unitsToNumber(amountIn, inAsset.decimals)}`;
@@ -283,20 +305,20 @@ const mutexes = new WeakMap<object, KeyedMutex>();
  * Run the trade pipeline (CLAUDE.md section 7). Never throws: every outcome is a Decision. Trades for
  * one vault run one at a time, so parallel requests cannot slip past a cap together.
  */
-export function executeTrade(deps: TradeDeps, request: TradeRequest): Promise<Decision> {
+export function executeTrade(deps: TradeDeps, request: TradeRequest, opts: TradeOptions = {}): Promise<Decision> {
   let m = mutexes.get(deps.vaults);
   if (!m) mutexes.set(deps.vaults, (m = new KeyedMutex()));
-  return m.run(request.vaultId, () => executeTradeLocked(deps, request));
+  return m.run(request.vaultId, () => executeTradeLocked(deps, request, opts));
 }
 
-async function executeTradeLocked(deps: TradeDeps, request: TradeRequest): Promise<Decision> {
+async function executeTradeLocked(deps: TradeDeps, request: TradeRequest, opts: TradeOptions): Promise<Decision> {
   const vault = deps.vaults.get(request.vaultId);
   if (!vault) return failed("This vault does not exist.");
 
   const log = (decision: Decision, extra: { pending?: PendingSettlement; note?: string } = {}) =>
     deps.ledger.append({ vaultId: vault.id, at: deps.now(), request, decision, ...extra });
 
-  const planned = await planTrade(deps, vault, request);
+  const planned = await planTrade(deps, vault, request, opts);
   const bypassNote = [planned.shieldBypassed ? "SHIELD BYPASS: evaluated without the Shield incident feed (dev-bypass)" : undefined, planned.note].filter(Boolean).join(" | ") || undefined;
   if ("decision" in planned) {
     log(planned.decision, { note: bypassNote });

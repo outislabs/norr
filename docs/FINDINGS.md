@@ -218,3 +218,20 @@ In `.env` as `ONECLICK_API_KEY`. It was used for the quotes above and was never 
 2. Approve a small funded OutLayer spike later (registering a vault and one tiny swap each way), or tell me to keep going on `packages/core` first.
 3. Equity minimum: the smallest live equity test is about $30. Is that acceptable, and should the demo change?
 4. Confirm the non-US-only handling for equities.
+
+## Equity round trip: $6 NVDAon, confidential (2026-10-30)
+
+First live equity trade, in the fresh demo vault, funded with 8 USDC from the owner (confidential deposit address, then a normal public NEP-141 send; the owner-to-vault link is therefore visible onchain at the deposit).
+
+| Leg | Request | Result |
+|---|---|---|
+| Buy $6 NVDA (confidential, Ondo issuer) | `11e33ed0-5660-4213-b9ec-1e04f8623f28`, approved by the owner | Sent 6.001944 USDC, received 0.029442134021611887 NVDAon at about $203.79 |
+| Sell the whole NVDAon balance | `8ab7a8e0-97d6-46bf-87f7-f065afebd94e`, approved by the owner | Sent 0.029442134021611887 NVDAon (exact balance), received 5.930068 USDC at about $201.59 |
+
+- Vault USDC: 8.000000 before, 7.928124 after. Round-trip cost 0.071876 USDC (about 1.2% of the 6.001944 spent). NVDAon balance back to zero, no dust.
+- Both legs beat the minimum output from Norr's own quote. Both are labelled `custody-reported`: the confidential layer has no independent source, and the balance reads come from the same provider.
+- Both swaps came back `pending_approval` (the demo policy gates `confidential`), and ran after approval.
+- $6 is above the $5.10 liquid-stock floor for NVDA; the quote needed no probing.
+- OutLayer's list still shows the deposit intent `57678451-0351-43d1-bed4-f442783c4d7a` as `pending_deposit` although the funds arrived: a stale label on their side. Requests carry no `request_hash` in the list or detail view.
+- Shield feed ran in dev-bypass (key still pending). Not valid for the demo.
+- Tooling: the live runner gained `--all` (`sellAll`), selling the exact held balance with the USD figure as a ceiling. Operator-only; the agent API cannot reach it.

@@ -1,12 +1,15 @@
 import { unitsToNumber } from "@norr/core";
 import type { Decision, TradeRequest } from "@norr/shared";
-import { planTrade, reconcile, executeTrade, type TradeDeps } from "./trade";
+import { planTrade, reconcile, executeTrade, type TradeDeps, type TradeOptions } from "./trade";
 
 export interface RunArgs {
   vaultId: string;
   side: "buy" | "sell";
   asset: string;
+  /** The trade size. With sellAll it is only a ceiling: the whole balance is sold if it is worth no more. */
   amountUsd: number;
+  /** Sell the vault's entire balance of the asset (exact token amount, no dust left behind). Sells only. */
+  sellAll?: boolean;
   reason: string;
   /** Without this the run is a dry run: it plans and prints, and sends nothing. */
   confirmMainnet: boolean;
@@ -36,9 +39,14 @@ export async function runLiveTrade(deps: TradeDeps, a: RunArgs, log: (line: stri
     return { exitCode: 1 };
   }
 
+  if (a.sellAll && a.side !== "sell") {
+    log("Refusing: --all only applies to sells.");
+    return { exitCode: 1 };
+  }
+  const opts: TradeOptions = { sellAll: a.sellAll === true };
   const request: TradeRequest = { vaultId: a.vaultId, side: a.side, asset: a.asset, amountUsd: a.amountUsd, reason: a.reason };
-  const planned = await planTrade(deps, vault, request);
-  log(`Vault ${a.vaultId} | wallet ${vault.walletAccount.slice(0, 8)}…${vault.walletAccount.slice(-4)} | ${a.side.toUpperCase()} $${a.amountUsd} ${a.asset}`);
+  const planned = await planTrade(deps, vault, request, opts);
+  log(`Vault ${a.vaultId} | wallet ${vault.walletAccount.slice(0, 8)}…${vault.walletAccount.slice(-4)} | ${a.side.toUpperCase()} ${a.sellAll ? `ALL ${a.asset} (ceiling $${a.amountUsd})` : `$${a.amountUsd} ${a.asset}`}`);
 
   if ("decision" in planned) {
     log(`WOULD NOT RUN. ${JSON.stringify(planned.decision)}`);
@@ -61,7 +69,7 @@ export async function runLiveTrade(deps: TradeDeps, a: RunArgs, log: (line: stri
   }
 
   log("EXECUTING on mainnet…");
-  let decision = await executeTrade(deps, request);
+  let decision = await executeTrade(deps, request, opts);
   log(`  result: ${JSON.stringify(decision)}`);
 
   if (decision.status === "pending_approval") {

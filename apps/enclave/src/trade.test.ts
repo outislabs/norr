@@ -2,7 +2,8 @@ import { BlockCode } from "@norr/shared";
 import { IntentsApiError, type Quoter } from "@norr/intents";
 import { describe, expect, it } from "vitest";
 import { NVDA_ON, NVDA_X, SOL, USDC, harness, req } from "./fixtures";
-import { executeTrade, reconcile } from "./trade";
+import { unitsToNumber } from "@norr/core";
+import { executeTrade, planTrade, reconcile } from "./trade";
 
 const blockedCode = (d: { status: string; code?: string }) => (d.status === "blocked" ? d.code : d.status);
 
@@ -324,5 +325,52 @@ describe("trade() gives Norr's own reason even when the agent skipped every pre-
     expect(rug).toMatchObject({ status: "blocked", code: "SCAM_RISK" });
     expect((rug as { message: string }).message).toMatch(/liquidity|market cap|new token/i);
     expect(h.rails.swaps).toHaveLength(0);
+  });
+});
+
+describe("sellAll (operator tooling): sell the whole balance, exact token amount", () => {
+  it("sells exactly what the vault holds, leaving nothing behind", async () => {
+    const h = harness();
+    const buy = await executeTrade(h.deps, req({ asset: "NVDA", amountUsd: 30 }));
+    expect(buy.status).toBe("executed");
+    h.clock.t += 60_000;
+    const vault = h.vaults.get("v1")!;
+    const planned = await planTrade(h.deps, vault, req({ side: "sell", asset: "NVDA", amountUsd: 40 }), { sellAll: true });
+    if (!("plan" in planned)) throw new Error(JSON.stringify(planned));
+    const held = (await h.rails.balances.holdings(vault.walletAccount))[NVDA_ON.assetId]!;
+    expect(planned.plan.bounds.amountIn).toBe(held);
+    expect(planned.plan.warnings).toEqual([]);
+    expect(BigInt(planned.plan.bounds.minAmountOut)).toBeGreaterThan(0n);
+
+    const sold = await executeTrade(h.deps, req({ side: "sell", asset: "NVDA", amountUsd: 40 }), { sellAll: true });
+    expect(sold.status).toBe("executed");
+    expect((await h.rails.balances.holdings(vault.walletAccount))[NVDA_ON.assetId] ?? "0").toBe("0");
+    expect(unitsToNumber(held, NVDA_ON.decimals)).toBeGreaterThan(0);
+  });
+
+  it("refuses a holding worth more than the ceiling, so the per-trade policy cannot be sidestepped", async () => {
+    const h = harness();
+    await executeTrade(h.deps, req({ asset: "NVDA", amountUsd: 30 }));
+    h.clock.t += 60_000;
+    const d = await executeTrade(h.deps, req({ side: "sell", asset: "NVDA", amountUsd: 10 }), { sellAll: true });
+    expect(d.status).toBe("failed");
+    expect((d as { message: string }).message).toContain("ceiling");
+    expect(h.rails.swaps).toHaveLength(1); // only the buy
+  });
+
+  it("fails cleanly when the vault holds none of the asset", async () => {
+    const h = harness();
+    const d = await executeTrade(h.deps, req({ side: "sell", asset: "NVDA", amountUsd: 10 }), { sellAll: true });
+    expect(d.status).toBe("failed");
+    expect(h.rails.swaps).toHaveLength(0);
+  });
+
+  it("is off by default: a USD-sized sell still sells the USD amount", async () => {
+    const h = harness();
+    await executeTrade(h.deps, req({ asset: "SOL", amountUsd: 30 }));
+    h.clock.t += 60_000;
+    await executeTrade(h.deps, req({ side: "sell", asset: "SOL", amountUsd: 10 }));
+    const sellIn = unitsToNumber(h.rails.swaps[1]!.amountIn, SOL.decimals);
+    expect(sellIn * SOL.price!).toBeCloseTo(10, 0);
   });
 });

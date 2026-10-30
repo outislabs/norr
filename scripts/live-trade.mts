@@ -1,5 +1,5 @@
 // One manually driven live trade through the real Norr pipeline. Dry run unless --confirm-mainnet.
-//   pnpm live:trade --side buy --asset NVDA --usd 30 [--reason "..."] [--confirm-mainnet]
+//   pnpm live:trade --side buy --asset NVDA --usd 30 [--all] [--reason "..."] [--confirm-mainnet]
 import { runLiveTrade } from "../apps/enclave/src/live-runner";
 import { buildLiveDeps } from "../apps/enclave/src/live";
 import { parseArgs } from "node:util";
@@ -16,13 +16,14 @@ const { values } = parseArgs({
     asset: { type: "string" },
     usd: { type: "string" },
     reason: { type: "string", default: "manual live test" },
+    all: { type: "boolean", default: false },
     "confirm-mainnet": { type: "boolean", default: false },
     "wait-minutes": { type: "string", default: "15" },
   },
 });
 
 if ((values.side !== "buy" && values.side !== "sell") || !values.asset || !values.usd) {
-  console.error('usage: pnpm live:trade --side buy|sell --asset NVDA --usd 30 [--reason "..."] [--confirm-mainnet]');
+  console.error('usage: pnpm live:trade --side buy|sell --asset NVDA --usd 30 [--all] [--reason "..."] [--confirm-mainnet]');
   process.exit(1);
 }
 
@@ -34,6 +35,7 @@ const res = await runLiveTrade(
     side: values.side,
     asset: values.asset,
     amountUsd: Number(values.usd),
+    sellAll: values.all === true,
     reason: values.reason ?? "",
     confirmMainnet: values["confirm-mainnet"] === true,
     maxUsd: Number(process.env.NORR_LIVE_MAX_USD ?? 35),
