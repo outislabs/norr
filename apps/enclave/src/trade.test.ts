@@ -211,3 +211,29 @@ describe("balances and portfolio-aware limits", () => {
     expect(h.vaults.get("v1")!.policy.paused).toBe(false);
   });
 });
+
+describe("quote outages are not 'no liquidity'", () => {
+  const throwing: (q: Quoter) => Quoter = () => ({ quote: async () => { throw new IntentsApiError(400, "1Click quote: Quoting for this pair is not available"); } });
+
+  it("a failing quote service gives a retry-later failure, not NO_LIQUIDITY, and sends nothing", async () => {
+    const h = harness({ quoter: throwing });
+    const d = await executeTrade(h.deps, req());
+    expect(d.status).toBe("failed");
+    expect((d as { message: string }).message).toContain("temporarily unavailable");
+    expect(h.rails.swaps).toHaveLength(0);
+    expect(h.ledger.list("v1")[0]!.note).toContain("Quoting for this pair is not available");
+    expect(h.vaults.get("v1")!.policy.paused).toBe(false); // an outage is not tampering
+  });
+
+  it("a null quote is still NO_LIQUIDITY", async () => {
+    const h = harness({ mock: { liquidity: () => false } });
+    expect(await executeTrade(h.deps, req())).toMatchObject({ status: "blocked", code: "NO_LIQUIDITY" });
+  });
+
+  it("if one issuer's quote fails but another quotes, the trade routes through the other", async () => {
+    const flaky: (q: Quoter) => Quoter = (q) => ({ quote: async (p) => { if (p.tokenOut === NVDA_ON.assetId) throw new Error("boom"); return q.quote(p); } });
+    const h = harness({ quoter: flaky });
+    expect((await executeTrade(h.deps, req())).status).toBe("executed");
+    expect(h.rails.swaps[0]!.tokenOut).toBe(NVDA_X.assetId);
+  });
+});

@@ -12,3 +12,5 @@ coverage
 *.swp
 .DS_Store
 .claude/
+
+config/*.local.json

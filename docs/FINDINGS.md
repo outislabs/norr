@@ -49,6 +49,9 @@ Checked 2026-10-24 (updated after the API key was added). All checks were read-o
 - **Balances:** `intents.near` view calls `mt_tokens_for_owner` and `mt_batch_balance_of` work for the wallet's account and are what the portfolio and equity-limit checks read. (`rpc.mainnet.near.org` still answers, but `rpc.mainnet.fastnear.com` is what the tests and tooling used.)
 - **Funding by direct deposit:** per the Intents docs, `ft_transfer_call` on the token contract with `receiver_id: "intents.near"` and `msg` set to the account id (a plain string is accepted) credits that account; attached deposit 1 yoctoNEAR, 100 Tgas is enough. Not yet done for this wallet; the $0.10 test comes first.
 
+### 1Click quoting outage observed (2026-10-30, about 11:15Z)
+All dry quotes failed with HTTP 400 `Quoting for this pair is not available`, for every pair tried (USDC, wNEAR, ETH, BTC, USDT in both directions), with or without the partner API key, with the exact request shape that worked at about 08:00-09:30Z the same day, and via OutLayer's own quote route (`upstream_rejected`). `GET /v0/tokens` still answered 200. No incident was found in public search. Cause unknown: a service outage, or a Shield "under attack" pause (the Shield feed could not be read; the SHIELD key is pending). Consequences: live swaps cannot be tested while it lasts; Norr now reports a quote fault as "Pricing is temporarily unavailable" and not as `NO_LIQUIDITY`, and the live dry-run runner (`pnpm live:trade`, no `--confirm-mainnet`) works end to end up to the quote.
+
 ## 1. Assets and multi-issuer routing
 - `GET /v0/tokens` returns 205 tokens, no equities. `?ondoTokens=true` adds 28, all **Ondo on BSC**, wrapped as `nep141:bnb-0x…omdep.near`, 18 decimals. Examples:
   - TSLAon `nep141:bnb-0x2494b603319d4d9f9715c9f4496d9e0364b59d93.omdep.near`

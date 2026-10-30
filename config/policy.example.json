@@ -1,0 +1,12 @@
+{
+  "vaultId": "dev",
+  "maxTradeUsd": 35,
+  "dailyLossCapUsd": 10,
+  "maxEquityPct": 100,
+  "allowedCrypto": "any_safe",
+  "allowedEquities": ["NVDA"],
+  "cooldownSec": 0,
+  "paused": false,
+  "nonUsConfirmed": false,
+  "allowMediumRisk": false
+}

@@ -89,7 +89,7 @@ export async function refreshState(deps: TradeDeps, vault: Vault): Promise<void>
  * Pipeline steps 1-5: paused, resolve, Shield, risk or eligibility, policy, then Norr's own quote for
  * every candidate issuer, price sanity and the swap guard. Moves no funds, so it also serves previews.
  */
-export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeRequest): Promise<({ plan: TradePlan } | { decision: Decision }) & { shieldBypassed: boolean }> {
+export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeRequest): Promise<({ plan: TradePlan } | { decision: Decision }) & { shieldBypassed: boolean; note?: string }> {
   // A paused vault does no work and makes no outbound calls.
   if (vault.policy.paused) {
     return { decision: blocked("PAUSED", "This vault is paused by its owner. No trades are allowed until it is resumed."), shieldBypassed: false };
@@ -115,6 +115,8 @@ export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeReq
   // Norr requests its own quote for every candidate issuer and picks the best.
   const buy = request.side === "buy";
   const cash = deps.quoteAsset;
+  // A thrown error is a service fault, not "no liquidity" (which is a null quote); keep them apart.
+  let quoteFault: string | undefined;
   const options = (
     await Promise.all(
       pre.candidates.map(async (c) => {
@@ -122,7 +124,10 @@ export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeReq
         const tokenIn = buy ? cash.id : c.id;
         const tokenOut = buy ? c.id : cash.id;
         const amountIn = buy ? usdToUnits(request.amountUsd, cash.priceUsd ?? 1, cash.decimals) : usdToUnits(request.amountUsd, c.priceUsd, c.decimals);
-        const quote = await deps.quoter.quote({ tokenIn, tokenOut, amountIn, recipient: vault.walletAccount }).catch(() => null);
+        const quote = await deps.quoter.quote({ tokenIn, tokenOut, amountIn, recipient: vault.walletAccount }).catch((e: unknown) => {
+          quoteFault = e instanceof Error ? e.message : String(e);
+          return null;
+        });
         return quote ? { candidate: c, tokenIn, tokenOut, amountIn, quote } : null;
       }),
     )
@@ -131,6 +136,13 @@ export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeReq
   const best = selectBestQuote(options.map((o) => ({ assetId: o.candidate.id, issuer: o.candidate.issuer, amountInUsd: o.quote.amountInUsd, amountOutUsd: o.quote.amountOutUsd })));
   const chosen = best && options.find((o) => o.candidate.id === best.assetId);
   if (!chosen) {
+    if (quoteFault) {
+      return {
+        decision: failed("Pricing is temporarily unavailable, so no trade was made. Try again in a few minutes."),
+        shieldBypassed,
+        note: `quote service fault: ${quoteFault}`,
+      };
+    }
     const nl = noLiquidity();
     return { decision: blocked(nl.code, nl.message), shieldBypassed };
   }
@@ -167,7 +179,7 @@ export async function executeTrade(deps: TradeDeps, request: TradeRequest): Prom
     deps.ledger.append({ vaultId: vault.id, at: deps.now(), request, decision, ...extra });
 
   const planned = await planTrade(deps, vault, request);
-  const bypassNote = planned.shieldBypassed ? "SHIELD BYPASS: evaluated without the Shield incident feed (dev-bypass)" : undefined;
+  const bypassNote = [planned.shieldBypassed ? "SHIELD BYPASS: evaluated without the Shield incident feed (dev-bypass)" : undefined, planned.note].filter(Boolean).join(" | ") || undefined;
   if ("decision" in planned) {
     log(planned.decision, { note: bypassNote });
     return planned.decision;
