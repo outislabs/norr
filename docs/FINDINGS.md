@@ -71,7 +71,14 @@ All dry quotes failed with HTTP 400 `Quoting for this pair is not available`, fo
 - **Independent verification of the confidential side is not possible.** 1Click's `/v0/status` returned 404 "Deposit address … not found" for the shield's deposit address, even though OutLayer's own result says `oneclick_status: SUCCESS`. The only independent evidence is the public side.
 - **What the public chain shows:** the shield is a public `execute_intents` call on `intents.near` whose arguments are readable: the signer is the wallet's account, the intent is a `transfer` of the USDC token, amount `1500000`, to a per-request deposit address, with deadlines and signatures. So a shield reveals the wallet, token, amount and time, as predicted in `docs/PRIVACY.md`.
 
- and multi-issuer routing
+### First confidential swap: 1.5 USDC to SOL (2026-10-30, request `37a811a9-…`)
+- **Shape:** `POST /wallet/v1/confidential/swap` takes the same body as the public swap (`token_in`, `token_out`, `amount_in`, `min_amount_out`); accepted on the first try. It paused for the owner's approval, then ran in about 10 seconds.
+- **Result:** received 15738716 SOL units (0.015738716), against Norr's own confidential quote of 15792968 (-0.34%, taken about 8 minutes earlier; the executed quote is taken at approval) and Norr's minimum of 15635038 (+103,678 above it). `verifyExecution` passed, but it ran on OutLayer-reported numbers and so is not an independent audit.
+- **`min_amount_out` is again not enforced:** the result records `minAmountOut: null`.
+- **Privacy, observed:** the public Intents balance did not change (USDC 497728, SOL 0, read from `intents.near`) and the result lists no NEAR transaction hashes (`nearTxHashes: []`, unlike the shield, which had one). The swap left no public trace we could find; the confidential balance (OutLayer-reported) is 0.015738716 SOL and no USDC.
+- **Verification limits:** 1Click's `/v0/status` does not know this deposit address either (404), so no independent audit of the confidential side exists. Cost: 0.34% from the quoted price, no explicit fee.
+
+## 1. Assets and multi-issuer routing
 - `GET /v0/tokens` returns 205 tokens, no equities. `?ondoTokens=true` adds 28, all **Ondo on BSC**, wrapped as `nep141:bnb-0x…omdep.near`, 18 decimals. Examples:
   - TSLAon `nep141:bnb-0x2494b603319d4d9f9715c9f4496d9e0364b59d93.omdep.near`
   - NVDAon `nep141:bnb-0xa9ee28c80f960b889dfbd1902055218cba016f75.omdep.near`
