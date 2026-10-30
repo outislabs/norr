@@ -1,4 +1,5 @@
 import { unitsToNumber } from "@norr/core";
+import type { BuildInfo } from "../build-info";
 import { Policy } from "@norr/shared";
 import type { Hono } from "hono";
 import { z } from "zod";
@@ -20,6 +21,8 @@ export interface OwnerRouteContext {
   tokens: AgentTokens;
   auth: OwnerAuth;
   mock: boolean;
+  /** The code version shown on the Verify screen. */
+  build: BuildInfo;
   audit: OwnerAuditEntry[];
 }
 
@@ -212,7 +215,7 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
       mode: ctx.mock ? "mock" : "live",
       attested: false,
       note: "This service is not running inside a TEE yet, so there is no hardware attestation to show. When it is deployed, this screen will show the attestation quote and the code hash.",
-      commit: process.env.NORR_COMMIT ?? null,
+      ...ctx.build,
     }),
   );
 }

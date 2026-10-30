@@ -18,8 +18,8 @@ Notes from NEAR Intents' documentation (and OutLayer's): a vault's confidential 
 
 | Data | Who can read it today | Target | Status |
 |---|---|---|---|
-| Agent's stated reasoning (`reason`) | Held in the service's memory ledger in plaintext; never returned to agents; never logged | Encrypted to the vault owner's key so only the owner can read it, even from the service's storage | Plaintext in memory; encryption Planned |
-| Activity log and decisions | The service's memory | Same | Planned |
+| Agent's stated reasoning (`reason`) | Held in plaintext in the live service's ledger file (`data/ledger.jsonl`, mode 0600, gitignored; memory only in mock mode); never returned to agents; never logged | Encrypted to the vault owner's key so only the owner can read it, even from the service's storage | Plaintext in memory; encryption Planned |
+| Activity log and decisions | The same plaintext ledger file, plus per-vault counters in `data/vaults/<id>.json` (spend, P&L, policy, kill switch), shared by the service and the live runner so a restart cannot reset the caps | Encrypted, owner-only, inside the TEE | Durable: Built. Encrypted: Planned |
 | Per-vault Norr policy | The service; the agent sees a planning view only | Same, with the service running in a TEE | Built (agent view); TEE Planned |
 | Agent tokens | Only SHA-256 hashes are stored | Same | Built |
 | API keys for custody | The service's environment | Sealed by the TEE | Planned |

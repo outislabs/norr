@@ -6,7 +6,8 @@ import { createApp } from "./app";
 import { OwnerAuth, RpcAccessKeyChecker } from "./owner/auth";
 import { BYPASS_BANNER, bypassWarning, resolveShieldMode } from "./shield-mode";
 import { walletCredentials } from "./wallet-env";
-import { MemoryLedger, MemoryVaultStore, newVault } from "./state";
+import { FileLedger, FileVaultStore, dataDir } from "./persist";
+import { newVault } from "./state";
 import { AgentTokens } from "./tokens";
 import type { TradeDeps } from "./trade";
 
@@ -38,7 +39,9 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env) {
   if (!quoteAsset) throw new Error("USDC on NEAR is missing from the 1Click token list");
 
   const now = Date.now;
-  const vaults = new MemoryVaultStore([
+  // Durable: the service and the live runner share this directory, and a restart does not reset the caps.
+  const dir = dataDir(env);
+  const vaults = new FileVaultStore(dir, [
     newVault(
       {
         id: policy.vaultId,
@@ -63,7 +66,7 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env) {
     auditor: oneclick,
     balances: new NearIntentsBalances(),
     vaults,
-    ledger: new MemoryLedger(),
+    ledger: new FileLedger(dir),
     quoteAsset,
     now,
     sleep: (ms) => new Promise((r) => setTimeout(r, ms)),

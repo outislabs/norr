@@ -18,7 +18,10 @@ export function VerifyPage({ api }: { api: Api }) {
             <dt className="text-mist">Mode</dt>
             <dd>{data.mode === "mock" ? "Mock (no funds, fixed prices)" : "Live"}</dd>
             <dt className="text-mist">Code version</dt>
-            <dd className="mono">{data.commit ?? "not reported"}</dd>
+            <dd className="mono">
+              {data.commit ? data.commit.slice(0, 12) : "not reported"}
+              {data.commit && data.dirty ? <span className="text-brass"> (uncommitted changes: this hash does not fully describe the running code)</span> : null}
+            </dd>
           </dl>
         </div>
       )}

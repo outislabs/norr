@@ -1,6 +1,7 @@
 import { checkShield, EQUITY_DISCLAIMER, equityMinimum, MINIMUMS_NOTE, sumToday, unitsToNumber, type RiskResult } from "@norr/core";
 import { TradeInput, type Decision, type TradeRequest } from "@norr/shared";
 import { Hono } from "hono";
+import { resolveBuildInfo, type BuildInfo } from "./build-info";
 import { mountOwnerRoutes, type OwnerAuditEntry } from "./owner/routes";
 import type { OwnerAuth } from "./owner/auth";
 import { valueLayers } from "./portfolio";
@@ -15,6 +16,8 @@ export interface AppOptions {
   adminToken?: string;
   /** Wallet sign-in for the dashboard. When set, the owner API is mounted under /owner/v1. */
   owner?: OwnerAuth;
+  /** Code version for the Verify screen; defaults to the local git checkout. */
+  build?: BuildInfo;
 }
 
 type Env = { Variables: { vaultId: string } };
@@ -23,7 +26,7 @@ type Env = { Variables: { vaultId: string } };
  * The agent-facing API. There is deliberately no route that moves funds out, changes policy, or
  * accepts a destination. The vault always comes from the agent token. Request bodies are never logged.
  */
-export function createApp({ deps, tokens, mock, adminToken, owner }: AppOptions): Hono<Env> {
+export function createApp({ deps, tokens, mock, adminToken, owner, build }: AppOptions): Hono<Env> {
   const app = new Hono<Env>();
 
   // In mock mode the demo owner is public, so the dashboard can offer a one-click demo sign-in.
@@ -159,7 +162,7 @@ export function createApp({ deps, tokens, mock, adminToken, owner }: AppOptions)
     });
   });
 
-  if (owner) mountOwnerRoutes(app, { deps, tokens, auth: owner, mock, audit: [] as OwnerAuditEntry[] });
+  if (owner) mountOwnerRoutes(app, { deps, tokens, auth: owner, mock, build: build ?? resolveBuildInfo(), audit: [] as OwnerAuditEntry[] });
 
   if (adminToken) {
     const admin = (c: { req: { header(n: string): string | undefined } }) => safeEqual(c.req.header("x-admin-token") ?? "", adminToken);

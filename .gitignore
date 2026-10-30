@@ -16,3 +16,6 @@ coverage
 config/*.local.json
 
 config/*.local.*
+
+# durable service state (ledger, vault counters): private, never commit
+data/

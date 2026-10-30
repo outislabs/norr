@@ -32,7 +32,7 @@ export interface PendingItem {
   recipient: string;
   check: string;
 }
-export interface VerifyInfo { mode: "mock" | "live"; attested: boolean; note: string; commit: string | null }
+export interface VerifyInfo { mode: "mock" | "live"; attested: boolean; note: string; commit: string | null; dirty?: boolean; source?: "env" | "git" | "unknown" }
 export interface AuditItem { at: string; owner: string; action: string; vaultId?: string }
 
 export interface ApiOptions {
