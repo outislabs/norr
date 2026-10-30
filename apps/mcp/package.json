@@ -3,5 +3,18 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "dependencies": { "@norr/shared": "workspace:*" }
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@norr/shared": "workspace:*",
+    "zod": "^3.25.76"
+  },
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "stdio": "tsx src/stdio.ts",
+    "http": "tsx src/http.ts"
+  },
+  "devDependencies": {
+    "@norr/enclave": "workspace:*"
+  }
 }

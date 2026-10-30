@@ -21,7 +21,7 @@ curl -X POST localhost:8787/v1/trade -H "Authorization: Bearer $TOKEN" -H 'conte
 curl -X POST localhost:8787/v1/trade -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
      -d '{"side":"buy","asset":"RUGPULL","amountUsd":5}'                      # SCAM_RISK
 ```
-Mock mode stubs 1Click quotes, the custody provider and the TEE with fixed prices; nothing leaves your machine. The MCP server and dashboard are not built yet.
+Mock mode stubs 1Click quotes, the custody provider and the TEE with fixed prices; nothing leaves your machine. Connect an agent (Claude Desktop, Claude Code, or any MCP client) with the steps in `docs/MCP.md`. The dashboard is not built yet.
 
 ## Timeline & disclosure
 This repository keeps its full history. Some research and spike work happened **before** the hackathon window opened on Nov 1; it is listed here so judges can separate it from work done during the window. The project was built with Claude Code as the main implementation assistant, directed by the repository owner.
