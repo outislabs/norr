@@ -17,15 +17,16 @@ export async function demoSignIn(api: Api, owner: string): Promise<SessionInfo> 
  */
 export async function walletSignIn(api: Api): Promise<SessionInfo> {
   (globalThis as { Buffer?: typeof Buffer }).Buffer ??= Buffer;
-  const [{ setupWalletSelector }, { setupModal }, { setupMeteorWallet }, { setupMyNearWallet }] = await Promise.all([
+  const [{ setupWalletSelector }, { setupModal }, { setupMeteorWallet }, { setupMyNearWallet }, { setupHotWallet }] = await Promise.all([
     import("@near-wallet-selector/core"),
     import("@near-wallet-selector/modal-ui"),
     import("@near-wallet-selector/meteor-wallet"),
     import("@near-wallet-selector/my-near-wallet"),
+    import("@near-wallet-selector/hot-wallet"),
   ]);
   await import("@near-wallet-selector/modal-ui/styles.css");
 
-  const selector = await setupWalletSelector({ network: "mainnet", modules: [setupMeteorWallet(), setupMyNearWallet()] });
+  const selector = await setupWalletSelector({ network: "mainnet", modules: [setupHotWallet(), setupMeteorWallet(), setupMyNearWallet()] });
   if (selector.store.getState().accounts.length === 0) {
     const modal = setupModal(selector, {});
     modal.show();
