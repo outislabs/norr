@@ -1,6 +1,8 @@
 import { checkShield, EQUITY_DISCLAIMER, equityMinimum, MINIMUMS_NOTE, sumToday, unitsToNumber, type RiskResult } from "@norr/core";
 import { TradeInput, type Decision, type TradeRequest } from "@norr/shared";
 import { Hono } from "hono";
+import { mountOwnerRoutes, type OwnerAuditEntry } from "./owner/routes";
+import type { OwnerAuth } from "./owner/auth";
 import { valueLayers } from "./portfolio";
 import { safeEqual, type AgentTokens } from "./tokens";
 import { executeTrade, planTrade, reconcile, type TradeDeps } from "./trade";
@@ -11,6 +13,8 @@ export interface AppOptions {
   mock: boolean;
   /** Development-only owner controls (pause/resume). Disabled when unset. Replaced by NEAR-signed owner sessions with the dashboard. */
   adminToken?: string;
+  /** Wallet sign-in for the dashboard. When set, the owner API is mounted under /owner/v1. */
+  owner?: OwnerAuth;
 }
 
 type Env = { Variables: { vaultId: string } };
@@ -19,7 +23,7 @@ type Env = { Variables: { vaultId: string } };
  * The agent-facing API. There is deliberately no route that moves funds out, changes policy, or
  * accepts a destination. The vault always comes from the agent token. Request bodies are never logged.
  */
-export function createApp({ deps, tokens, mock, adminToken }: AppOptions): Hono<Env> {
+export function createApp({ deps, tokens, mock, adminToken, owner }: AppOptions): Hono<Env> {
   const app = new Hono<Env>();
 
   app.get("/health", (c) => c.json({ ok: true, mock }));
@@ -153,6 +157,8 @@ export function createApp({ deps, tokens, mock, adminToken }: AppOptions): Hono<
       activity: rows.map((r) => ({ at: new Date(r.at).toISOString(), side: r.request.side, asset: r.request.asset, amountUsd: r.request.amountUsd, decision: r.decision })),
     });
   });
+
+  if (owner) mountOwnerRoutes(app, { deps, tokens, auth: owner, mock, audit: [] as OwnerAuditEntry[] });
 
   if (adminToken) {
     const admin = (c: { req: { header(n: string): string | undefined } }) => safeEqual(c.req.header("x-admin-token") ?? "", adminToken);

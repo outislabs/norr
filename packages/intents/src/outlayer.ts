@@ -49,7 +49,7 @@ export class OutLayerCustody implements Custody {
   private started(res: Record<string, unknown>): SwapStatus {
     const requestId = str(res.request_id);
     if (!requestId) return { state: "failed", requestId: "", detail: "OutLayer returned no request id" };
-    return { state: mapState(str(res.status)), requestId };
+    return { state: mapState(str(res.status)), requestId, requestHash: str(res.request_hash) };
   }
 
   async swap(bounds: SwapBounds, venue: Venue = "public"): Promise<SwapStatus> {

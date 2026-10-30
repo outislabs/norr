@@ -35,6 +35,8 @@ export interface SwapStatus {
   requestId: string;
   /** Set once the custody gateway has created the 1Click deposit address. */
   depositAddress?: string;
+  /** The custody provider's hash of the request, shown on its approval screen. Lets an owner match what Norr asked for. */
+  requestHash?: string;
   /** Short reason for a failure, safe to log. */
   detail?: string;
   /** Amounts the custody provider says it moved. Not independent evidence. */

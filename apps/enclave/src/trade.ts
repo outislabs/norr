@@ -72,6 +72,8 @@ export interface PendingSettlement {
   confidentialBefore?: Holdings;
   /** Things to tell the agent with the result, for example a dust warning. */
   warnings?: string[];
+  /** The custody provider's request hash, so the owner can match it to the approval screen. */
+  requestHash?: string;
 }
 
 /** A trade that passed every check and has a quote, ready to send (or just to show as a preview). */
@@ -341,6 +343,7 @@ async function executeTradeLocked(deps: TradeDeps, request: TradeRequest): Promi
     venue: plan.venue,
     confidentialBefore: plan.confidentialBefore,
     warnings: plan.warnings,
+    requestHash: status.requestHash,
   };
   const row = log({ status: "pending_approval", requestId: status.requestId, message: "Swap submitted." }, { pending: ctx, note: bypassNote });
   const decision = await settle(deps, request.vaultId, ctx, status);

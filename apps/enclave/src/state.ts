@@ -6,6 +6,8 @@ import type { PendingSettlement } from "./trade";
 /** One Norr vault: its private policy and state, and the custody wallet behind it. */
 export interface Vault {
   id: string;
+  /** The NEAR account that owns this vault: the only account that can sign in to manage it. */
+  owner: string;
   policy: Policy;
   state: VaultState;
   custody: Custody;
@@ -21,6 +23,9 @@ export interface Vault {
 
 export interface VaultStore {
   get(id: string): Vault | undefined;
+  list(): Vault[];
+  /** Replace the vault's Norr policy (owner action). The vault id cannot change. */
+  setPolicy(id: string, policy: Policy): void;
   /** The kill switch. Also used when a post-trade check fails. */
   pause(id: string, reason: string): void;
   resume(id: string): void;
@@ -69,6 +74,15 @@ export class MemoryVaultStore implements VaultStore {
 
   get(id: string): Vault | undefined {
     return this.vaults.get(id);
+  }
+
+  list(): Vault[] {
+    return [...this.vaults.values()];
+  }
+
+  setPolicy(id: string, policy: Policy): void {
+    const v = this.vaults.get(id);
+    if (v) v.policy = { ...policy, vaultId: v.id };
   }
 
   pause(id: string, reason: string): void {

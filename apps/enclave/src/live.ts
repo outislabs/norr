@@ -3,6 +3,7 @@ import { DexScreenerSignals, NearIntentsBalances, OneClick, OutLayerCustody, Shi
 import { Policy } from "@norr/shared";
 import { readFileSync } from "node:fs";
 import { createApp } from "./app";
+import { OwnerAuth, RpcAccessKeyChecker } from "./owner/auth";
 import { BYPASS_BANNER, bypassWarning, resolveShieldMode } from "./shield-mode";
 import { walletCredentials } from "./wallet-env";
 import { MemoryLedger, MemoryVaultStore, newVault } from "./state";
@@ -41,6 +42,7 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env) {
     newVault(
       {
         id: policy.vaultId,
+        owner: need(env, "NORR_OWNER_ACCOUNT"),
         policy,
         state: { realizedLossTodayUsd: 0, spentTodayUsd: 0, lastTradeAtMs: null, portfolioValueUsd: 0, equityValueUsd: 0 },
         custody: new OutLayerCustody({ apiKey: outlayerKey, accountId: walletAccount, baseUrl: env.OUTLAYER_BASE_URL }),
@@ -75,7 +77,7 @@ export async function buildLive(env: NodeJS.ProcessEnv = process.env) {
   const tokens = new AgentTokens();
   const agentToken = tokens.issue(l.vaultId);
   return {
-    app: createApp({ deps: l.deps, tokens, mock: false, adminToken: env.NORR_ADMIN_TOKEN }),
+    app: createApp({ deps: l.deps, tokens, mock: false, adminToken: env.NORR_ADMIN_TOKEN, owner: new OwnerAuth({ keys: new RpcAccessKeyChecker() }) }),
     agentToken,
     vaultId: l.vaultId,
     shieldConfigured: l.shieldConfigured,

@@ -1,6 +1,7 @@
 import { HeuristicRiskProvider, ONDO, Registry, presetPolicy, type CryptoSignals, type OneClickToken, type ShieldFeed } from "@norr/core";
 import { createMockRails } from "@norr/intents";
 import { createApp } from "./app";
+import { OwnerAuth, type AccessKeyChecker } from "./owner/auth";
 import { MemoryLedger, MemoryVaultStore, newVault } from "./state";
 import { AgentTokens } from "./tokens";
 import type { TradeDeps } from "./trade";
@@ -23,6 +24,9 @@ export const DEMO = {
 const RUG_SIGNALS: CryptoSignals = { routable: true, liquidityUsd: 3_200, marketCapUsd: 41_000, ageDays: 2 };
 const HEALTHY: CryptoSignals = { routable: true, liquidityUsd: 5_000_000, marketCapUsd: 900_000_000, ageDays: 800 };
 
+/** The mock vault's owner account. Mock mode accepts any key for it: no funds, localhost only. */
+export const MOCK_OWNER = "demo-owner.mock.near";
+
 export interface MockEnclave {
   app: ReturnType<typeof createApp>;
   deps: TradeDeps;
@@ -31,6 +35,7 @@ export interface MockEnclave {
   agentToken: string;
   adminToken: string;
   vaultId: string;
+  ownerAuth: OwnerAuth;
 }
 
 /**
@@ -38,7 +43,7 @@ export interface MockEnclave {
  * It starts with a demo vault holding its cash in the confidential layer, on the Balanced preset,
  * owner-confirmed for equities, so trades run confidentially by default.
  */
-export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed | null; now?: () => number; agentToken?: string } = {}): MockEnclave {
+export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed | null; now?: () => number; agentToken?: string; keys?: AccessKeyChecker } = {}): MockEnclave {
   const registry = new Registry({ crypto: [DEMO.USDC, DEMO.SOL, DEMO.wNEAR, DEMO.RUG], equities: [{ issuer: ONDO, tokens: [DEMO.NVDAon, DEMO.TSLAon, DEMO.SPYon] }] });
   const now = o.now ?? Date.now;
   const vaultId = "demo";
@@ -49,6 +54,7 @@ export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed
     newVault(
       {
         id: vaultId,
+        owner: MOCK_OWNER,
         policy: { ...presetPolicy("balanced", vaultId), nonUsConfirmed: true },
         state: { realizedLossTodayUsd: 0, spentTodayUsd: 0, lastTradeAtMs: null, portfolioValueUsd: 0, equityValueUsd: 0 },
         custody: rails.custody,
@@ -80,5 +86,7 @@ export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed
     agentToken = o.agentToken;
   } else agentToken = tokens.issue(vaultId);
   const adminToken = `norr_admin_mock_${Math.random().toString(36).slice(2)}`;
-  return { app: createApp({ deps, tokens, mock: true, adminToken }), deps, vaults, tokens, agentToken, adminToken, vaultId };
+  // Mock mode accepts any key for an account (it holds no funds and listens on localhost); live mode checks the chain.
+  const ownerAuth = new OwnerAuth({ keys: o.keys ?? { hasKey: async () => true }, now });
+  return { app: createApp({ deps, tokens, mock: true, adminToken, owner: ownerAuth }), deps, vaults, tokens, agentToken, adminToken, vaultId, ownerAuth };
 }

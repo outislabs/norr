@@ -55,7 +55,7 @@ export function harness(opts: { mock?: MockOptions; policy?: Partial<Policy>; sh
   const shieldCalls = { n: 0 };
   const vault: Vault = newVault(
     {
-      id: "v1", policy: policy(opts.policy), custody: rails.custody, walletAccount: WALLET,
+      id: "v1", owner: "owner.test.near", policy: policy(opts.policy), custody: rails.custody, walletAccount: WALLET,
       state: { realizedLossTodayUsd: 0, spentTodayUsd: 0, lastTradeAtMs: null, portfolioValueUsd: 1000, equityValueUsd: 0 },
     },
     1_000_000,
