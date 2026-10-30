@@ -7,7 +7,8 @@ const port = Number(process.env.PORT ?? 8787);
 
 if (process.env.NORR_MOCK === "1") {
   assertNoBypassInMock(process.env);
-  const m = createMockEnclave();
+  // Mock only: NORR_MOCK_AGENT_TOKEN pins the demo token so a Claude Desktop config survives restarts.
+  const m = createMockEnclave({ agentToken: process.env.NORR_MOCK_AGENT_TOKEN || undefined });
   serve({ fetch: m.app.fetch, port });
   console.log(`Norr (MOCK mode, no funds, no network) listening on http://localhost:${port}`);
   console.log(`  agent token : ${m.agentToken}`);

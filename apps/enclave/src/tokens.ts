@@ -16,6 +16,15 @@ export class AgentTokens {
     return token;
   }
 
+  /**
+   * Register a caller-chosen token. Only the mock-mode demo uses this, so its config does not change
+   * on every restart; live mode always issues random tokens. The token must look like an agent token.
+   */
+  register(vaultId: string, token: string): void {
+    if (!/^norr_agent_[A-Za-z0-9_-]{16,}$/.test(token)) throw new Error("agent token must be norr_agent_ followed by at least 16 letters, digits, - or _");
+    this.byHash.set(sha256(token), vaultId);
+  }
+
   vaultFor(token: string): string | undefined {
     return this.byHash.get(sha256(token));
   }

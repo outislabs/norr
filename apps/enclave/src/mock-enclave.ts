@@ -37,7 +37,7 @@ export interface MockEnclave {
  * The whole Norr service on mock rails (NORR_MOCK=1): no 1Click, no custody provider, no TEE, no funds.
  * It starts with a funded demo vault on the Balanced preset, owner-confirmed for equities.
  */
-export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed | null; now?: () => number } = {}): MockEnclave {
+export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed | null; now?: () => number; agentToken?: string } = {}): MockEnclave {
   const registry = new Registry({ crypto: [DEMO.USDC, DEMO.SOL, DEMO.wNEAR, DEMO.RUG], equities: [{ issuer: ONDO, tokens: [DEMO.NVDAon, DEMO.TSLAon, DEMO.SPYon] }] });
   const now = o.now ?? Date.now;
   const vaultId = "demo";
@@ -73,7 +73,11 @@ export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed
   };
 
   const tokens = new AgentTokens();
-  const agentToken = tokens.issue(vaultId);
+  let agentToken: string;
+  if (o.agentToken) {
+    tokens.register(vaultId, o.agentToken);
+    agentToken = o.agentToken;
+  } else agentToken = tokens.issue(vaultId);
   const adminToken = `norr_admin_mock_${Math.random().toString(36).slice(2)}`;
   return { app: createApp({ deps, tokens, mock: true, adminToken }), deps, vaults, tokens, agentToken, adminToken, vaultId };
 }

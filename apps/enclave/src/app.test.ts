@@ -177,3 +177,25 @@ describe("demo catalog", () => {
     expect(DEMO.NVDAon.price).toBe(208);
   });
 });
+
+describe("pinned mock token", () => {
+  const pinned = "norr_agent_mock_demo_0123456789";
+
+  it("authenticates, and is scoped to the demo vault like any token", async () => {
+    const m = createMockEnclave({ agentToken: pinned });
+    expect(m.agentToken).toBe(pinned);
+    const ok = await m.app.request("/v1/policy", { headers: { authorization: `Bearer ${pinned}` } });
+    expect(ok.status).toBe(200);
+    expect((await m.app.request("/v1/policy", { headers: { authorization: "Bearer norr_agent_mock_demo_other_value" } })).status).toBe(401);
+  });
+
+  it("rejects tokens that do not look like agent tokens, or are too short", () => {
+    for (const bad of ["short", "norr_agent_", "norr_agent_tooshort", "sk-ant-api03-whatever", "norr_agent_has spaces in it!!"]) {
+      expect(() => createMockEnclave({ agentToken: bad })).toThrow(/agent token must be/);
+    }
+  });
+
+  it("without a pinned token, every start issues a different random one", () => {
+    expect(createMockEnclave().agentToken).not.toBe(createMockEnclave().agentToken);
+  });
+});
