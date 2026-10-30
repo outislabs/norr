@@ -78,6 +78,10 @@ All dry quotes failed with HTTP 400 `Quoting for this pair is not available`, fo
 - **Privacy, observed:** the public Intents balance did not change (USDC 497728, SOL 0, read from `intents.near`) and the result lists no NEAR transaction hashes (`nearTxHashes: []`, unlike the shield, which had one). The swap left no public trace we could find; the confidential balance (OutLayer-reported) is 0.015738716 SOL and no USDC.
 - **Verification limits:** 1Click's `/v0/status` does not know this deposit address either (404), so no independent audit of the confidential side exists. Cost: 0.34% from the quoted price, no explicit fee.
 
+### Confidential swap back: all SOL to USDC (2026-10-30, request `11ef5a82-…`)
+- Approved by the owner, then ran in seconds. Received 1486643 USDC units (1.486643) for 0.015738716 SOL, above Norr's own confidential quote (1481237, +0.36%) and minimum (1466424). `minAmountOut` is again recorded as null (not enforced). The public Intents balance stayed at 497728 USDC and 0 SOL (on-chain); no NEAR transaction hash was listed. `verifyConfidentialSwap` passed on the before/after balances and the provider's report (not independent).
+- Round trip 1.5 USDC to SOL to USDC, all inside the confidential layer after the shield: 1.5 to 1.486643 (cost 0.89%).
+
 ## 1. Assets and multi-issuer routing
 - `GET /v0/tokens` returns 205 tokens, no equities. `?ondoTokens=true` adds 28, all **Ondo on BSC**, wrapped as `nep141:bnb-0x…omdep.near`, 18 decimals. Examples:
   - TSLAon `nep141:bnb-0x2494b603319d4d9f9715c9f4496d9e0364b59d93.omdep.near`
