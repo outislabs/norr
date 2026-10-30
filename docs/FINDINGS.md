@@ -57,6 +57,13 @@ All dry quotes failed with HTTP 400 `Quoting for this pair is not available`, fo
 - 1Click dry quotes: public Intents to confidential (shield) 0.000% cost; USDC from a NEAR account straight into the confidential layer 0.000%; confidential to a NEAR account 0.000%; confidential $30 USDC to NVDAon 0.343%. `basic` and `advanced` confidentiality returned identical quotes.
 - Per NEAR Intents' docs, balances and swaps live on a private chain ("FAR") with no public RPC; the operator, auditors or law enforcement with a warrant can read it, and the 1Click/Defuse solver layer sees plaintext intents. See `docs/PRIVACY.md`.
 
+### Do trusted ops still need approval? Conflicting evidence (2026-10-30, ~13:15Z)
+- **OutLayer's dashboard** now shows, under swap: "Multisig approval is not available for trusted ops. Gate with limits + capability instead."
+- **OutLayer's docs** (CUSTODY.md and the agent-custody page, both fetched today) say the opposite: "Multisig covers Trusted ops too", and that swap, confidential, cross_chain_withdraw and limit_order "execute only after the approvers confirm". They also describe a per-capability `requires_approval` flag and `approval.excluded_types`, and do not reconcile them.
+- **Our own history:** this morning (about 08:00-09:30Z) every swap, the withdraw and both limit orders went to `pending_approval` and ran only after the owner signed.
+- **Dry runs now:** the public `intents/withdraw/dry-run` still says "Operation would require multisig approval". The `confidential/withdraw/dry-run` returns a quote-shaped answer (`amount_out`, `min_amount_out`) with no approval message at all, which fits the dashboard banner but does not prove it.
+- **Unresolved.** The live policy's `approval` section is unchanged (threshold 1, approver `legalalienx.near`). The first trusted op (the 1.5 USDC shield) will show the answer: the response says `pending_approval`, or the op simply runs. If trusted ops execute immediately, the controls for swaps and confidential ops are the capability, the allowed tokens, the limits and the whitelist, plus Norr's own checks; plain withdrawals stay approval-gated. This also changes the autonomous-mode plan: it would no longer need an approval exemption for swaps.
+
 ## 1. Assets and multi-issuer routing
 - `GET /v0/tokens` returns 205 tokens, no equities. `?ondoTokens=true` adds 28, all **Ondo on BSC**, wrapped as `nep141:bnb-0x…omdep.near`, 18 decimals. Examples:
   - TSLAon `nep141:bnb-0x2494b603319d4d9f9715c9f4496d9e0364b59d93.omdep.near`
