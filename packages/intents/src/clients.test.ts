@@ -126,6 +126,14 @@ describe("confidential layer", () => {
     expect(r.calls).toHaveLength(0);
   });
 
+  it("OutLayer: asks for a confidential deposit address with the source asset and amount, and rejects a reply without one", async () => {
+    const r = recorder(() => json({ intent_id: "i1", deposit_address: "49e108dd", amount: "8000000", amount_out: "8000000", min_amount_out: "7920000", expires_at: "2026-11-02T17:49:39Z" }));
+    expect(await ol(r).requestConfidentialDeposit("nep141:usdc", "8000000")).toEqual({ intentId: "i1", depositAddress: "49e108dd", amount: "8000000", minAmountOut: "7920000", expiresAt: "2026-11-02T17:49:39Z" });
+    expect(r.calls[0]!.url).toBe("https://api.outlayer.ai/wallet/v1/confidential/deposit/cross-chain");
+    expect(JSON.parse(String(r.calls[0]!.init.body))).toEqual({ source_asset: "nep141:usdc", amount: "8000000" });
+    await expect(ol(recorder(() => json({ intent_id: "i1" }))).requestConfidentialDeposit("nep141:usdc", "1")).rejects.toThrow(/unexpected/);
+  });
+
   it("OutLayer: reads confidential holdings, dropping zero and malformed rows", async () => {
     const r = recorder(() => json({ balances: [{ token: "nep141:sol", balance: "15738716" }, { token: "nep141:usdc", balance: "0" }, { token: "x" }, { balance: "5" }], account_id: "acct" }));
     expect(await ol(r).confidentialHoldings()).toEqual({ "nep141:sol": "15738716" });

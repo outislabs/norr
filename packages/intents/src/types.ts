@@ -65,6 +65,23 @@ export interface Custody {
   shield(token: string, amount: string): Promise<SwapStatus>;
   /** Send funds out to a whitelisted destination. Owner-level action: never exposed to agents. */
   withdraw(w: WithdrawParams): Promise<SwapStatus>;
+  /**
+   * Ask for a one-time address to which the owner sends `amount` of a public token; it settles into the
+   * vault's confidential balance. Moves no funds by itself. Owner-level action: never exposed to agents.
+   */
+  requestConfidentialDeposit(token: string, amount: string): Promise<DepositRequest>;
+}
+
+/** A one-time confidential deposit address. The address always comes from the custody provider, never from a caller. */
+export interface DepositRequest {
+  intentId: string;
+  depositAddress: string;
+  /** Smallest units the owner is asked to send. */
+  amount: string;
+  /** The least that will be credited, in smallest units. */
+  minAmountOut: string;
+  /** The provider's own expiry, if it gave one. */
+  expiresAt?: string;
 }
 
 /** Independent view of what happened, from 1Click rather than the custody provider. Public layer only. */

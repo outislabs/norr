@@ -1,6 +1,6 @@
 import { unitsToNumber, usdToUnits, type ExecutedSwap, type RegistryEntry, type SwapBounds } from "@norr/core";
 import type { BalanceReader } from "./balances";
-import type { Custody, ExecutionAuditor, Quote, QuoteParams, Quoter, SwapStatus, Venue, WithdrawParams } from "./types";
+import type { Custody, DepositRequest, ExecutionAuditor, Quote, QuoteParams, Quoter, SwapStatus, Venue, WithdrawParams } from "./types";
 
 /**
  * Mock rails for NORR_MOCK=1: prices come from the registry, fees are fixed, nothing leaves the process.
@@ -125,6 +125,11 @@ export function createMockRails(entries: RegistryEntry[], vaultAccount: string, 
       return { state: "success", requestId: id };
     },
 
+    async requestConfidentialDeposit(_token: string, amount: string): Promise<DepositRequest> {
+      const k = ++n;
+      return { intentId: `mock-intent-${k}`, depositAddress: `mock${k.toString(16).padStart(60, "0")}`, amount, minAmountOut: ((BigInt(amount) * 99n) / 100n).toString() };
+    },
+
     async withdraw(w: WithdrawParams): Promise<SwapStatus> {
       const id = `mock-req-${++n}`;
       if ((held[w.venue][w.token] ?? 0n) < BigInt(w.amount)) return { state: "failed", requestId: id, detail: "insufficient balance" };
@@ -150,6 +155,10 @@ export function createMockRails(entries: RegistryEntry[], vaultAccount: string, 
       if (!r || r.state !== "pending_approval") return;
       r.state = "success";
       apply(r.venue, r.done);
+    },
+    /** Test helper: the owner's deposit "arrives" in the confidential layer. */
+    creditConfidential(token: string, amount: string) {
+      held.confidential[token] = (held.confidential[token] ?? 0n) + BigInt(amount);
     },
     /** The vault's public-layer balances, moved by mock swaps. */
     balances: { async holdings() { return positive(held.public); } } as BalanceReader,

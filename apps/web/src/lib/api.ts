@@ -32,6 +32,8 @@ export interface PendingItem {
   recipient: string;
   check: string;
 }
+export interface FundingOffer { id: string; address: string; amountUsdc: number; asset: { symbol: string; chain: string; contract: string }; expiresAt: string }
+export interface FundingStatus { state: "waiting" | "arrived" | "expired"; receivedUsdc: number; balanceUsdc: number; expiresAt: string; reportedBy: string }
 export interface VerifyInfo { mode: "mock" | "live"; attested: boolean; note: string; commit: string | null; dirty?: boolean; source?: "env" | "git" | "unknown" }
 export interface AuditItem { at: string; owner: string; action: string; vaultId?: string }
 
@@ -84,6 +86,8 @@ export function createApi(o: ApiOptions) {
     pending: (id: string) => call<{ pending: PendingItem[] }>(`/owner/v1/vaults/${encodeURIComponent(id)}/pending`),
     issueToken: (id: string) => call<{ token: string; note: string }>(`/owner/v1/vaults/${encodeURIComponent(id)}/tokens`, { body: {} }),
     revokeTokens: (id: string) => call<{ revoked: boolean }>(`/owner/v1/vaults/${encodeURIComponent(id)}/tokens`, { method: "DELETE" }),
+    requestFunding: (id: string, amountUsdc: number) => call<FundingOffer>(`/owner/v1/vaults/${encodeURIComponent(id)}/funding`, { body: { amountUsdc } }),
+    fundingStatus: (id: string, fid: string) => call<FundingStatus>(`/owner/v1/vaults/${encodeURIComponent(id)}/funding/${encodeURIComponent(fid)}`),
     audit: () => call<{ audit: AuditItem[] }>("/owner/v1/audit"),
     verify: () => call<VerifyInfo>("/owner/v1/verify"),
   };

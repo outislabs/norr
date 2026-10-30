@@ -1,5 +1,7 @@
-import { applyFill, lossToday, sumToday, unitsToNumber, type Book } from "@norr/core";
+import { applyFill, lossToday, sumToday, unitsToNumber, usdToUnits, type Book } from "@norr/core";
 import type { BuildInfo } from "../build-info";
+import { FUNDING_WINDOW_MS, FundingTracker, MAX_OPEN_FUNDING, fundingState } from "../funding";
+import { CASH_USD } from "../portfolio";
 import { Policy } from "@norr/shared";
 import type { Hono } from "hono";
 import { z } from "zod";
@@ -42,6 +44,8 @@ const LoginBody = z.object({
 export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
   const { deps, tokens, auth } = ctx;
   const note = (owner: string, action: string, vaultId?: string) => ctx.audit.push({ at: new Date(deps.now()).toISOString(), owner, action, ...(vaultId ? { vaultId } : {}) });
+
+  const funding = new FundingTracker();
 
   app.get("/owner/v1/challenge", (c) => c.json(auth.challenge()));
 
@@ -101,6 +105,52 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
       /* balances unavailable: the rest of the page still works */
     }
     return c.json({ ...summary(v), portfolio });
+  });
+
+  // Funding: the owner asks for a one-time confidential deposit address, sends USDC to it from their own wallet,
+  // and watches for it to arrive. The address always comes from the custody provider; nothing here takes one from a caller.
+  const FundBody = z.object({ amountUsdc: z.number().min(1).max(1000) });
+  const cash = () => deps.quoteAsset;
+  const SAFE_ADDRESS = /^[A-Za-z0-9._-]{8,128}$/;
+
+  app.post("/owner/v1/vaults/:id/funding", async (c) => {
+    const owner = c.get("owner") as string;
+    const v = mine(owner, c.req.param("id"));
+    if (!v) return c.json({ error: "not found" }, 404);
+    const body = FundBody.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "amountUsdc must be a number from 1 to 1000" }, 400);
+    const now = deps.now();
+    if (funding.open(v.id, now).length >= MAX_OPEN_FUNDING) return c.json({ error: "Too many open deposit requests. Use one of them, or wait for them to expire." }, 429);
+    try {
+      const baseline = (await v.custody.confidentialHoldings())[cash().id] ?? "0";
+      const amount = usdToUnits(body.data.amountUsdc, CASH_USD, cash().decimals);
+      const req = await v.custody.requestConfidentialDeposit(cash().id, amount);
+      if (!SAFE_ADDRESS.test(req.depositAddress)) return c.json({ error: "The custody provider returned an address that does not look valid, so it is not shown." }, 502);
+      const id = `fund-${now.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      const expiresAt = now + FUNDING_WINDOW_MS;
+      funding.add({ id, vaultId: v.id, token: cash().id, amount: req.amount, minAmount: req.minAmountOut, address: req.depositAddress, intentId: req.intentId, baseline, requestedAt: now, expiresAt });
+      note(owner, `requested a deposit address for ${body.data.amountUsdc} USDC`, v.id);
+      return c.json({ id, address: req.depositAddress, amountUsdc: unitsToNumber(req.amount, cash().decimals), asset: { symbol: cash().symbol, chain: "NEAR", contract: cash().id.replace(/^nep141:/, "") }, expiresAt: new Date(expiresAt).toISOString() });
+    } catch (e) {
+      // The custody provider gates this request by transaction type ("call"). Say so, rather than a vague failure.
+      if (e instanceof Error && /not allowed by policy/i.test(e.message)) {
+        return c.json({ error: "Your custody policy does not allow deposit-address requests (transaction type \"call\"). Allow it in your custody dashboard while you fund this vault, then remove it again." }, 409);
+      }
+      return c.json({ error: "Could not get a deposit address from the custody provider. Try again in a moment." }, 503);
+    }
+  });
+
+  app.get("/owner/v1/vaults/:id/funding/:fid", async (c) => {
+    const v = mine(c.get("owner") as string, c.req.param("id"));
+    const r = v ? funding.get(c.req.param("fid")) : undefined;
+    if (!v || !r || r.vaultId !== v.id) return c.json({ error: "not found" }, 404);
+    try {
+      const balance = (await v.custody.confidentialHoldings())[r.token] ?? "0";
+      const s = fundingState(r, balance, deps.now());
+      return c.json({ state: s.state, receivedUsdc: unitsToNumber(s.received, cash().decimals), balanceUsdc: unitsToNumber(balance, cash().decimals), expiresAt: new Date(r.expiresAt).toISOString(), reportedBy: "custody provider" });
+    } catch {
+      return c.json({ error: "Could not read the vault's balance right now." }, 503);
+    }
   });
 
   app.put("/owner/v1/vaults/:id/policy", async (c) => {

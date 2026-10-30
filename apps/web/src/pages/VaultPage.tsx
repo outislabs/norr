@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Policy } from "@norr/shared";
 import { ActivityList } from "../components/ActivityList";
 import { AgentAccess } from "../components/AgentAccess";
+import { FundingPanel } from "../components/FundingPanel";
 import { PendingChecks } from "../components/PendingChecks";
 import { PolicyForm } from "../components/PolicyForm";
 import { Portfolio } from "../components/Portfolio";
@@ -11,7 +12,7 @@ import { vaultHref, type Route } from "../lib/route";
 import { useAsync } from "../lib/useAsync";
 
 type Tab = Extract<Route, { name: "vault" }>["tab"];
-const TABS: [Tab, string][] = [["overview", "Overview"], ["rules", "Rules"], ["activity", "Activity"], ["approvals", "Approvals"]];
+const TABS: [Tab, string][] = [["overview", "Overview"], ["fund", "Fund"], ["rules", "Rules"], ["activity", "Activity"], ["approvals", "Approvals"]];
 
 function Meter({ label, value, max }: { label: string; value: number; max: number }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 100;
@@ -98,6 +99,7 @@ export function VaultPage({ api, id, tab, onChanged }: { api: Api; id: string; t
             </div>
           </div>
         )}
+        {tab === "fund" && <FundingPanel api={api} vaultId={id} onArrived={() => vault.reload()} />}
         {tab === "rules" && <PolicyForm key={JSON.stringify(v.policy)} policy={v.policy} onSave={save} />}
         {tab === "activity" && (activity.error ? <p role="alert" className="text-rust">{activity.error}</p> : activity.data ? <ActivityList items={activity.data.activity} /> : <p className="text-mist">Loading…</p>)}
         {tab === "approvals" && (

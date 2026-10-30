@@ -1,6 +1,6 @@
 import { requireSwapBounds, type SwapBounds } from "@norr/core";
 import { obj, requestJson, str, type FetchLike } from "./http";
-import type { Custody, SwapState, SwapStatus, Venue, WithdrawParams } from "./types";
+import type { Custody, DepositRequest, SwapState, SwapStatus, Venue, WithdrawParams } from "./types";
 
 export interface OutLayerOptions {
   baseUrl?: string;
@@ -93,6 +93,14 @@ export class OutLayerCustody implements Custody {
 
   async shield(token: string, amount: string): Promise<SwapStatus> {
     return this.started(obj(await this.post("/wallet/v1/confidential/shield", { token, amount }, "OutLayer shield")));
+  }
+
+  async requestConfidentialDeposit(token: string, amount: string): Promise<DepositRequest> {
+    const res = obj(await this.post("/wallet/v1/confidential/deposit/cross-chain", { source_asset: token, amount }, "OutLayer confidential deposit address"));
+    const depositAddress = str(res.deposit_address);
+    const intentId = str(res.intent_id);
+    if (!depositAddress || !intentId) throw new Error("OutLayer confidential deposit address: unexpected response");
+    return { intentId, depositAddress, amount: str(res.amount) ?? amount, minAmountOut: str(res.min_amount_out) ?? amount, expiresAt: str(res.expires_at) };
   }
 
   async withdraw(w: WithdrawParams): Promise<SwapStatus> {

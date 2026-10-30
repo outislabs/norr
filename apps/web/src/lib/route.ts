@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
-export type Route = { name: "vaults" } | { name: "vault"; id: string; tab: "overview" | "rules" | "activity" | "approvals" } | { name: "verify" };
-const TABS = ["overview", "rules", "activity", "approvals"] as const;
+export type Route = { name: "vaults" } | { name: "vault"; id: string; tab: "overview" | "fund" | "rules" | "activity" | "approvals" } | { name: "verify" };
+const TABS = ["overview", "fund", "rules", "activity", "approvals"] as const;
 
 /** Hash routes: #/ , #/vault/<id>/<tab> , #/verify . Anything else is the vault list. */
 export function parseRoute(path: string): Route {

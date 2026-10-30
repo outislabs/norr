@@ -7,6 +7,8 @@ import { ActivityList, describe as describeDecision } from "./ActivityList";
 import { KillSwitch } from "./KillSwitch";
 import { PendingChecks } from "./PendingChecks";
 import { fromForm, PolicyForm, toForm } from "./PolicyForm";
+import { FundingPanel } from "./FundingPanel";
+import type { Api, FundingOffer, FundingStatus } from "../lib/api";
 
 afterEach(cleanup);
 
@@ -136,5 +138,40 @@ describe("PendingChecks", () => {
   it("says when nothing is waiting", () => {
     render(<PendingChecks items={[]} />);
     expect(screen.getByText("Nothing is waiting for your approval.")).toBeTruthy();
+  });
+});
+
+describe("FundingPanel", () => {
+  const offer: FundingOffer = { id: "f1", address: "49e108dd75c0114f46b00b384c61bde9f6b4b4805cac85ab20f6dacf5452693b", amountUsdc: 8, asset: { symbol: "USDC", chain: "NEAR", contract: "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1" }, expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() };
+  const fakeApi = (status: () => FundingStatus, request: () => Promise<FundingOffer> = async () => offer) =>
+    ({ requestFunding: vi.fn(request), fundingStatus: vi.fn(async () => status()) }) as unknown as Api;
+
+  it("shows the address, amount, asset, network and the warnings, then reports the arrival", async () => {
+    let s: FundingStatus = { state: "waiting", receivedUsdc: 0, balanceUsdc: 0, expiresAt: offer.expiresAt, reportedBy: "custody provider" };
+    const api = fakeApi(() => s);
+    const arrived = vi.fn();
+    render(<FundingPanel api={api} vaultId="demo" pollMs={10} onArrived={arrived} />);
+    fireEvent.change(screen.getByLabelText("Amount in USDC"), { target: { value: "8" } });
+    fireEvent.click(screen.getByRole("button", { name: "Get a deposit address" }));
+    expect((await screen.findByTestId("deposit-address")).textContent).toBe(offer.address);
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("Send exactly 8 USDC on NEAR");
+    expect(text).toContain(offer.asset.contract);
+    expect(text).toContain("character by character");
+    expect(text).toContain("normal public transaction");
+    expect(api.requestFunding).toHaveBeenCalledWith("demo", 8);
+
+    s = { ...s, state: "arrived", receivedUsdc: 8, balanceUsdc: 15.93 };
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Arrived: $8.00 USDC"));
+    expect(arrived).toHaveBeenCalled();
+    expect(screen.queryByTestId("deposit-address")).toBeNull();
+  });
+
+  it("shows why it failed and keeps the form", async () => {
+    const api = fakeApi(() => { throw new Error("unused"); }, async () => { throw new Error("Could not get a deposit address from the custody provider."); });
+    render(<FundingPanel api={api} vaultId="demo" />);
+    fireEvent.click(screen.getByRole("button", { name: "Get a deposit address" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("custody provider");
+    expect(screen.queryByTestId("deposit-address")).toBeNull();
   });
 });

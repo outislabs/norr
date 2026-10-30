@@ -36,6 +36,8 @@ export interface MockEnclave {
   adminToken: string;
   vaultId: string;
   ownerAuth: OwnerAuth;
+  /** The mock rails, so tests can simulate an owner deposit arriving. */
+  rails: ReturnType<typeof createMockRails>;
 }
 
 /**
@@ -88,5 +90,5 @@ export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed
   const adminToken = `norr_admin_mock_${Math.random().toString(36).slice(2)}`;
   // Mock mode accepts any key for an account (it holds no funds and listens on localhost); live mode checks the chain.
   const ownerAuth = new OwnerAuth({ keys: o.keys ?? { hasKey: async () => true }, now });
-  return { app: createApp({ deps, tokens, mock: true, adminToken, owner: ownerAuth }), deps, vaults, tokens, agentToken, adminToken, vaultId, ownerAuth };
+  return { app: createApp({ deps, tokens, mock: true, adminToken, owner: ownerAuth }), deps, vaults, tokens, agentToken, adminToken, vaultId, ownerAuth, rails };
 }

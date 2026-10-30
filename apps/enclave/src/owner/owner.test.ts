@@ -285,6 +285,60 @@ describe("owner routes", () => {
     for (const s of sells) expect(s.executed.realizedUsd).not.toBeNull();
   });
 
+  it("funding: the owner gets a deposit address from the custody provider, can watch it arrive, and no one else can", async () => {
+    const { m, req, token, loginAs, clock } = await boot();
+    const usdc = m.deps.quoteAsset.id;
+    const before = (await m.deps.vaults.get("demo")!.custody.confidentialHoldings())[usdc] ?? "0";
+
+    const offer = await (await req("/owner/v1/vaults/demo/funding", { token, body: { amountUsdc: 8 } })).json();
+    expect(offer).toMatchObject({ amountUsdc: 8, asset: { symbol: "USDC", chain: "NEAR" } });
+    expect(offer.address).toMatch(/^mock/);
+    expect(Date.parse(offer.expiresAt) - clock.t).toBe(30 * 60_000);
+
+    expect(await (await req(`/owner/v1/vaults/demo/funding/${offer.id}`, { token })).json()).toMatchObject({ state: "waiting", receivedUsdc: 0 });
+    m.rails.creditConfidential(usdc, "8000000");
+    const arrived = await (await req(`/owner/v1/vaults/demo/funding/${offer.id}`, { token })).json();
+    expect(arrived).toMatchObject({ state: "arrived", receivedUsdc: 8, reportedBy: "custody provider" });
+    expect(arrived.balanceUsdc).toBeCloseTo(Number(before) / 1e6 + 8, 6);
+
+    // Someone else's session cannot see or poll it; an agent token cannot ask for one.
+    const other = await loginAs("someone-else.near");
+    expect((await req(`/owner/v1/vaults/demo/funding/${offer.id}`, { token: other.token })).status).toBe(404);
+    expect((await req("/owner/v1/vaults/demo/funding", { token: other.token, body: { amountUsdc: 5 } })).status).toBe(404);
+    expect((await req("/owner/v1/vaults/demo/funding", { token: m.agentToken, body: { amountUsdc: 5 } })).status).toBe(401);
+    expect((await m.app.request("/v1/funding", { method: "POST", headers: { authorization: `Bearer ${m.agentToken}` } })).status).toBe(404);
+  });
+
+  it("funding: expires after the window if nothing arrives, bad amounts are refused, and open requests are limited", async () => {
+    const { req, token, clock } = await boot();
+    for (const amountUsdc of [0, 0.5, 5000, "5", null]) expect((await req("/owner/v1/vaults/demo/funding", { token, body: { amountUsdc } })).status).toBe(400);
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) ids.push((await (await req("/owner/v1/vaults/demo/funding", { token, body: { amountUsdc: 5 } })).json()).id);
+    expect((await req("/owner/v1/vaults/demo/funding", { token, body: { amountUsdc: 5 } })).status).toBe(429);
+    clock.t += 31 * 60_000;
+    expect((await (await req(`/owner/v1/vaults/demo/funding/${ids[0]}`, { token })).json()).state).toBe("expired");
+    expect((await req("/owner/v1/vaults/demo/funding", { token, body: { amountUsdc: 5 } })).status).toBe(200);
+  });
+
+  it("funding: when the custody policy blocks the request, the owner is told why and what to change", async () => {
+    const { m, req, token } = await boot();
+    m.deps.vaults.get("demo")!.custody.requestConfidentialDeposit = async () => {
+      throw new Error("OutLayer confidential deposit address: Transaction type 'call' is not allowed by policy");
+    };
+    const r = await req("/owner/v1/vaults/demo/funding", { token, body: { amountUsdc: 5 } });
+    expect(r.status).toBe(409);
+    expect((await r.json()).error).toMatch(/custody policy does not allow.*"call"/);
+  });
+
+  it("funding: an address that does not look like one is never shown", async () => {
+    const { m, req, token } = await boot();
+    const custody = m.deps.vaults.get("demo")!.custody;
+    custody.requestConfidentialDeposit = async () => ({ intentId: "i", depositAddress: "send it to <script>", amount: "5000000", minAmountOut: "5000000" });
+    const r = await req("/owner/v1/vaults/demo/funding", { token, body: { amountUsdc: 5 } });
+    expect(r.status).toBe(502);
+    expect(await r.text()).not.toContain("script");
+  });
+
   it("the verify screen says honestly that there is no attestation yet", async () => {
     const { req, token } = await boot();
     const v = await (await req("/owner/v1/verify", { token })).json();
