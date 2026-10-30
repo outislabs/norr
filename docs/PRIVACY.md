@@ -8,7 +8,7 @@ Status as of 2026-10-30. "Built" means it exists in the repo and is tested; "Pla
 |---|---|---|---|---|---|
 | A normal (public-Intents) swap: pair, amount, vault account | Visible | Sees all | Sees all | Sees all | Built (public path) |
 | A **confidential** swap, inside the confidential layer: pair, amount, price, balance | **Hidden** (private "FAR" chain, no public RPC) | Sees all (it builds and signs the artifact) | **Sees plaintext intents**; the operator can read FAR state, as can auditors or law enforcement with a warrant | Sees all | Spike pending |
-| Shielding / unshielding between public and confidential | **Visible**: the vault's account, token, amount, time | Sees all | Sees all | Sees all | Spike pending |
+| Shielding / unshielding between public and confidential | **Visible, confirmed on mainnet**: a public `execute_intents` call on `intents.near` showing the vault's account, the token, the amount and the time | Sees all | Sees all | Sees all | Shield tested (1.5 USDC); unshield pending |
 | Link between a deposit and a later withdrawal | Hidden if funds were deposited into, traded in and withdrawn from the confidential layer (per NEAR Intents' docs: "deposits and withdrawals cannot be tracked to each other"); can still be correlated by timing and amount | Sees both | Sees both | Sees both | Spike pending |
 | That the traffic comes from Norr | n/a | Yes | Yes (the partner API key and `partner_id` identify Norr) | n/a | Not private |
 
@@ -40,6 +40,9 @@ Open risks:
 - Shield, confidential swap and confidential withdraw all appear to share the one `confidential` transaction type, so exempting swaps from approval for autonomous mode might also exempt withdrawals. Before the demo this must be tested; otherwise keep approvals on, or rely on the pinned whitelist destination and low limits.
 - Confidential trades cannot be verified independently of OutLayer (see above).
 - OutLayer, Defuse and the private-chain operator still see everything.
+
+## Verification limits (observed)
+After a shield, 1Click's status endpoint returned 404 for the deposit address. The only independent evidence of a confidential step is on the public side (the public balance falls, the public transaction is visible); the confidential balance and the result of confidential swaps come from OutLayer.
 
 ## What cannot honestly be claimed
 - That a trade is hidden from OutLayer, Defuse or the private-chain operator.

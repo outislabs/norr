@@ -64,7 +64,14 @@ All dry quotes failed with HTTP 400 `Quoting for this pair is not available`, fo
 - **Dry runs now:** the public `intents/withdraw/dry-run` still says "Operation would require multisig approval". The `confidential/withdraw/dry-run` returns a quote-shaped answer (`amount_out`, `min_amount_out`) with no approval message at all, which fits the dashboard banner but does not prove it.
 - **Unresolved.** The live policy's `approval` section is unchanged (threshold 1, approver `legalalienx.near`). The first trusted op (the 1.5 USDC shield) will show the answer: the response says `pending_approval`, or the op simply runs. If trusted ops execute immediately, the controls for swaps and confidential ops are the capability, the allowed tokens, the limits and the whitelist, plus Norr's own checks; plain withdrawals stay approval-gated. This also changes the autonomous-mode plan: it would no longer need an approval exemption for swaps.
 
-## 1. Assets and multi-issuer routing
+### First confidential op: shield 1.5 USDC (2026-10-30, request `e6d343bd-…`)
+- **Whitelist:** the first attempt was refused: "Address '2005d442…4046' is not in whitelist" (the wallet's own account must be listed, because a shield pays the wallet's own confidential identity). After adding it the request was accepted.
+- **Approval still applies to confidential ops.** The shield went to `pending_approval` and ran after the owner signed, so the dashboard banner ("not available for trusted ops") does not match this wallet's behavior; the docs were right for confidential. (A plain swap was not retested today; this morning's swaps paused the same way.)
+- **Result:** `confidential_shield`, status `success`, 1.5 USDC in and out (0 fee). Public Intents balance on-chain fell from 1.997728 to 0.497728 exactly; OutLayer reports a confidential balance of 1.5 USDC.
+- **Independent verification of the confidential side is not possible.** 1Click's `/v0/status` returned 404 "Deposit address … not found" for the shield's deposit address, even though OutLayer's own result says `oneclick_status: SUCCESS`. The only independent evidence is the public side.
+- **What the public chain shows:** the shield is a public `execute_intents` call on `intents.near` whose arguments are readable: the signer is the wallet's account, the intent is a `transfer` of the USDC token, amount `1500000`, to a per-request deposit address, with deadlines and signatures. So a shield reveals the wallet, token, amount and time, as predicted in `docs/PRIVACY.md`.
+
+ and multi-issuer routing
 - `GET /v0/tokens` returns 205 tokens, no equities. `?ondoTokens=true` adds 28, all **Ondo on BSC**, wrapped as `nep141:bnb-0x…omdep.near`, 18 decimals. Examples:
   - TSLAon `nep141:bnb-0x2494b603319d4d9f9715c9f4496d9e0364b59d93.omdep.near`
   - NVDAon `nep141:bnb-0xa9ee28c80f960b889dfbd1902055218cba016f75.omdep.near`
