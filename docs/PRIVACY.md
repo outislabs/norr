@@ -26,6 +26,21 @@ Notes from NEAR Intents' documentation (and OutLayer's): a vault's confidential 
 | Strategy / prompts in the agent | The agent's host (Claude Desktop, IronClaw or other) | Agent hosted in a TEE | Not Norr's to promise; IronClaw unverified |
 | Service code integrity | Nothing to verify yet | TEE attestation of the exact code, shown on the Verify screen | Planned |
 
+## Planned design for the final demo vault: confidential in, confidential out
+The first confidential spike only proves the mechanics (shield, confidential swap) on an old wallet. The stronger design keeps the public chain from ever seeing the vault hold or move the money:
+
+1. **Use a fresh OutLayer wallet** for the demo vault (registration is free and off-chain). The test wallet already has public history: a public deposit from the owner's account and a public withdrawal back, which are linked.
+2. **Fund it directly into the confidential layer** (`POST /wallet/v1/confidential/deposit/cross-chain`, request body not yet documented): the owner sends USDC to a per-request deposit address, and the funds arrive in the confidential balance, so the vault's account never holds them publicly. A dry quote for this route priced it at 0.000% (a same-asset route).
+3. **Trade inside the layer.** Norr must quote with `CONFIDENTIAL_INTENTS` deposit, recipient and refund types and `confidentiality: basic`, and its custody adapter needs confidential swap, balance and withdraw calls. Equities are quotable confidentially (a $30 NVDAon quote cost 0.343%); execution is untested.
+4. **Withdraw from the layer** (`confidential/withdraw`, approval-gated, destination on the whitelist). Per NEAR Intents' docs a deposit and a later withdrawal then cannot be tracked to each other, but timing and amount can still correlate, so: withdraw to a different owner account than the one that funded it where possible, leave a time gap, avoid round amounts. A dry quote for the withdraw route also priced at 0.000%.
+
+Needs: the `confidential` type and capability in the vault's OutLayer policy (and possibly more entries that only the live calls reveal, as with deposits earlier); the new Norr adapter code; the dashboard showing the confidential deposit address; a decision on autonomy (see below).
+
+Open risks:
+- Shield, confidential swap and confidential withdraw all appear to share the one `confidential` transaction type, so exempting swaps from approval for autonomous mode might also exempt withdrawals. Before the demo this must be tested; otherwise keep approvals on, or rely on the pinned whitelist destination and low limits.
+- Confidential trades cannot be verified independently of OutLayer (see above).
+- OutLayer, Defuse and the private-chain operator still see everything.
+
 ## What cannot honestly be claimed
 - That a trade is hidden from OutLayer, Defuse or the private-chain operator.
 - That confidential trades are independently verified: the audit trail for them rests on the custody provider's reports, because the independent check needs a user session that only the wallet's key can create.
