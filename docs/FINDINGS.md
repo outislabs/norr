@@ -82,6 +82,11 @@ All dry quotes failed with HTTP 400 `Quoting for this pair is not available`, fo
 - Approved by the owner, then ran in seconds. Received 1486643 USDC units (1.486643) for 0.015738716 SOL, above Norr's own confidential quote (1481237, +0.36%) and minimum (1466424). `minAmountOut` is again recorded as null (not enforced). The public Intents balance stayed at 497728 USDC and 0 SOL (on-chain); no NEAR transaction hash was listed. `verifyConfidentialSwap` passed on the before/after balances and the provider's report (not independent).
 - Round trip 1.5 USDC to SOL to USDC, all inside the confidential layer after the shield: 1.5 to 1.486643 (cost 0.89%).
 
+### Confidential withdraw: 1 USDC to the owner (2026-10-30, request `f37ff54c-…`)
+- `POST /wallet/v1/confidential/withdraw` with `{to, amount, token, chain}`; it paused for approval, then completed in about 90 seconds. The owner's account rose from 6.244794 to 7.244794 USDC on-chain (exact, no fee); the wallet's public Intents balance stayed at 0.497728; the confidential balance fell to 0.486643 (OutLayer-reported). A dry run to a non-whitelisted account was refused ("not in whitelist").
+- **What the public chain shows (two `execute_intents` calls on `intents.near`, readable by anyone):** (1) a `transfer` of 1 USDC from an intermediate account `51e8f94d…` to another intermediate account `1a3cfe89…`; (2) an `ft_withdraw` signed by `1a3cfe89…` sending 1 USDC to `legalalienx.near`. **The vault wallet's own account (`2005d442…`) appears in neither transaction.** An observer sees that some intermediate account paid 1 USDC to the owner, with no on-chain link to the vault's account. (This wallet's account is still publicly linked to the owner through the earlier public deposit and withdrawal; the test shows the withdrawal path itself does not leak it.)
+- Timing and amount can still correlate: the withdrawal (1 USDC, 15:09Z) is visible, and a funding deposit of a similar amount shortly before would be matched by an observer.
+
 ## 1. Assets and multi-issuer routing
 - `GET /v0/tokens` returns 205 tokens, no equities. `?ondoTokens=true` adds 28, all **Ondo on BSC**, wrapped as `nep141:bnb-0x…omdep.near`, 18 decimals. Examples:
   - TSLAon `nep141:bnb-0x2494b603319d4d9f9715c9f4496d9e0364b59d93.omdep.near`

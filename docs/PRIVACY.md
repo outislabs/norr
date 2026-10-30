@@ -9,7 +9,7 @@ Status as of 2026-10-30. "Built" means it exists in the repo and is tested; "Pla
 | A normal (public-Intents) swap: pair, amount, vault account | Visible | Sees all | Sees all | Sees all | Built (public path) |
 | A **confidential** swap, inside the confidential layer: pair, amount, price, balance | **Hidden, confirmed on mainnet for a 1.5 USDC to SOL swap**: the public Intents balance did not move and no public transaction was listed (private "FAR" chain, no public RPC) | Sees all (it builds and signs the artifact) | **Sees plaintext intents**; the operator can read FAR state, as can auditors or law enforcement with a warrant | Sees all | Swap tested; hidden from the public side |
 | Shielding / unshielding between public and confidential | **Visible, confirmed on mainnet**: a public `execute_intents` call on `intents.near` showing the vault's account, the token, the amount and the time | Sees all | Sees all | Sees all | Shield tested (1.5 USDC); unshield pending |
-| Link between a deposit and a later withdrawal | Hidden if funds were deposited into, traded in and withdrawn from the confidential layer (per NEAR Intents' docs: "deposits and withdrawals cannot be tracked to each other"); can still be correlated by timing and amount | Sees both | Sees both | Sees both | Spike pending |
+| Link between a deposit and a later withdrawal | **Withdrawal tested on mainnet**: the two public transactions show intermediate accounts paying the owner, and the vault's own account does not appear in either. Per NEAR Intents' docs a deposit and a later withdrawal cannot be tracked to each other, but can still be correlated by timing and amount. Not yet tested end to end with a confidential deposit | Sees both | Sees both | Sees both | Withdraw tested; confidential funding pending |
 | That the traffic comes from Norr | n/a | Yes | Yes (the partner API key and `partner_id` identify Norr) | n/a | Not private |
 
 Notes from NEAR Intents' documentation (and OutLayer's): a vault's confidential identity is the custody wallet itself, so there is no separate unlinkable identity; the private layer is a permissioned chain run by a small validator set; its protection is against the public, not against the operator.
@@ -40,6 +40,13 @@ Open risks:
 - Shield, confidential swap and confidential withdraw all appear to share the one `confidential` transaction type, so exempting swaps from approval for autonomous mode might also exempt withdrawals. Before the demo this must be tested; otherwise keep approvals on, or rely on the pinned whitelist destination and low limits.
 - Confidential trades cannot be verified independently of OutLayer (see above).
 - OutLayer, Defuse and the private-chain operator still see everything.
+
+## Observed on mainnet (2026-10-30, 1.5 USDC test)
+| Step | Public footprint seen |
+|---|---|
+| Shield 1.5 USDC | One public `execute_intents` on `intents.near`: the vault's account, USDC, 1500000, deadlines and signatures |
+| Confidential swap USDC to SOL, and back | None found: the public Intents balance did not move; no NEAR transaction hash listed |
+| Confidential withdraw 1 USDC to the owner | Two public `execute_intents`: an intermediate account pays another intermediate account, which withdraws 1 USDC to the owner's account. The vault's account is not named |
 
 ## Verification limits (observed)
 After a shield, 1Click's status endpoint returned 404 for the deposit address. The only independent evidence of a confidential step is on the public side (the public balance falls, the public transaction is visible); the confidential balance and the result of confidential swaps come from OutLayer.
