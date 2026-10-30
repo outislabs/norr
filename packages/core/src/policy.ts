@@ -30,6 +30,18 @@ export function evaluatePolicy(
     return block("OVER_TRADE_LIMIT", `$${req.amountUsd} is over this vault's per-trade limit of $${policy.maxTradeUsd}. Try a smaller amount.`);
   }
 
+  // Counts buys only, so an agent can always sell to reduce risk. Splitting a big buy into small ones
+  // cannot get past this, because every buy adds to the same daily total.
+  if (buying && state.spentTodayUsd + req.amountUsd > policy.dailySpendCapUsd + 1e-9) {
+    const remaining = Math.max(0, policy.dailySpendCapUsd - state.spentTodayUsd);
+    return block(
+      "DAILY_SPEND_CAP",
+      remaining > 0
+        ? `$${req.amountUsd} would take today's spending to $${(state.spentTodayUsd + req.amountUsd).toFixed(2)}, over this vault's daily spending cap of $${policy.dailySpendCapUsd}. You have $${remaining.toFixed(2)} left today (UTC): try that or less, or wait until tomorrow.`
+        : `This vault has used its whole daily spending cap of $${policy.dailySpendCapUsd}. Buying resumes tomorrow (UTC); selling is still allowed.`,
+    );
+  }
+
   if (buying && state.realizedLossTodayUsd >= policy.dailyLossCapUsd) {
     return block("DAILY_LOSS_CAP", `The daily loss cap of $${policy.dailyLossCapUsd} has been reached. Buying resumes tomorrow; selling is still allowed.`);
   }

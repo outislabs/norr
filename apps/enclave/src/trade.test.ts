@@ -237,3 +237,92 @@ describe("quote outages are not 'no liquidity'", () => {
     expect(h.rails.swaps[0]!.tokenOut).toBe(NVDA_X.assetId);
   });
 });
+
+describe("daily spend cap", () => {
+  const capped = { maxTradeUsd: 50, dailySpendCapUsd: 120, cooldownSec: 0 };
+
+  it("splitting a $160 buy into $40 pieces is stopped at the daily cap, and the agent is told how much is left", async () => {
+    const h = harness({ policy: capped });
+    for (let i = 0; i < 3; i++) expect((await executeTrade(h.deps, req({ amountUsd: 40 }))).status).toBe("executed");
+    const fourth = await executeTrade(h.deps, req({ amountUsd: 40 }));
+    expect(fourth).toMatchObject({ status: "blocked", code: "DAILY_SPEND_CAP" });
+    expect((fourth as { message: string }).message).toContain("whole daily spending cap");
+    expect(h.rails.swaps).toHaveLength(3);
+  });
+
+  it("tells the agent the amount that would still fit", async () => {
+    const h = harness({ policy: capped });
+    await executeTrade(h.deps, req({ amountUsd: 50 }));
+    await executeTrade(h.deps, req({ amountUsd: 50 }));
+    const d = await executeTrade(h.deps, req({ amountUsd: 40 }));
+    expect(d).toMatchObject({ code: "DAILY_SPEND_CAP" });
+    expect((d as { message: string }).message).toContain("$20.00 left today");
+    expect((await executeTrade(h.deps, req({ amountUsd: 20 }))).status).toBe("executed");
+  });
+
+  it("sells are never blocked by it", async () => {
+    const h = harness({ policy: { ...capped, dailySpendCapUsd: 50 } });
+    await executeTrade(h.deps, req({ asset: "SOL", amountUsd: 50 }));
+    expect(await executeTrade(h.deps, req({ asset: "SOL", amountUsd: 5 }))).toMatchObject({ code: "DAILY_SPEND_CAP" });
+    expect((await executeTrade(h.deps, req({ side: "sell", asset: "SOL", amountUsd: 20 }))).status).toBe("executed");
+  });
+
+  it("five parallel $50 buys cannot slip past a $120 cap together", async () => {
+    const h = harness({ policy: capped });
+    const results = await Promise.all(Array.from({ length: 5 }, () => executeTrade(h.deps, req({ amountUsd: 50 }))));
+    expect(results.filter((d) => d.status === "executed")).toHaveLength(2);
+    expect(results.filter((d) => d.status === "blocked" && d.code === "DAILY_SPEND_CAP")).toHaveLength(3);
+    expect(h.rails.swaps).toHaveLength(2);
+  });
+
+  it("resets on the next UTC day", async () => {
+    const h = harness({ policy: { ...capped, dailySpendCapUsd: 50 } });
+    expect((await executeTrade(h.deps, req({ amountUsd: 50 }))).status).toBe("executed");
+    expect(await executeTrade(h.deps, req({ amountUsd: 10 }))).toMatchObject({ code: "DAILY_SPEND_CAP" });
+    h.clock.t += 24 * 3_600_000;
+    expect((await executeTrade(h.deps, req({ amountUsd: 50 }))).status).toBe("executed");
+  });
+
+  it("a swap that did not run gives its spend back: custody policy refusal (403) and an immediate custody failure", async () => {
+    const refused = harness({ policy: { ...capped, dailySpendCapUsd: 50 }, mock: { swapError: new IntentsApiError(403, "OutLayer swap: refused") } });
+    expect((await executeTrade(refused.deps, req({ amountUsd: 50 }))).status).toBe("failed");
+    expect(refused.vaults.get("v1")!.spend.usd).toBe(0);
+
+    const broke = harness({ policy: { ...capped, dailySpendCapUsd: 50 }, mock: { seed: {} } }); // no cash: custody reports failure
+    expect((await executeTrade(broke.deps, req({ asset: "SOL", amountUsd: 50 }))).status).toBe("failed");
+    expect(broke.vaults.get("v1")!.spend.usd).toBe(0);
+  });
+
+  it("an ambiguous error keeps the spend counted, since the swap may have run", async () => {
+    const h = harness({ policy: { ...capped, dailySpendCapUsd: 50 }, mock: { swapError: new Error("socket hang up") } });
+    await executeTrade(h.deps, req({ amountUsd: 50 }));
+    expect(h.vaults.get("v1")!.spend.usd).toBe(50);
+  });
+
+  it("a swap waiting for owner approval counts, so a second buy cannot be queued behind it", async () => {
+    const h = harness({ policy: { ...capped, dailySpendCapUsd: 50 }, mock: { requireApproval: true } });
+    expect((await executeTrade(h.deps, req({ amountUsd: 40 }))).status).toBe("pending_approval");
+    expect(await executeTrade(h.deps, req({ amountUsd: 40 }))).toMatchObject({ status: "blocked", code: "DAILY_SPEND_CAP" });
+    expect(h.rails.swaps).toHaveLength(1);
+  });
+
+  it("a verified-bad swap keeps its spend (the money moved) and pauses the vault", async () => {
+    const h = harness({ policy: capped, mock: { tamper: (e) => ({ ...e, tokenOut: "x" }) } });
+    await executeTrade(h.deps, req({ amountUsd: 40 }));
+    expect(h.vaults.get("v1")!.spend.usd).toBe(40);
+    expect(h.vaults.get("v1")!.policy.paused).toBe(true);
+  });
+});
+
+describe("trade() gives Norr's own reason even when the agent skipped every pre-check", () => {
+  it("blocks directly, with a reason that names the rule, without check_asset or get_quote having been called", async () => {
+    const h = harness({ policy: { maxTradeUsd: 50, dailySpendCapUsd: 100, cooldownSec: 0 } });
+    const tsla = await executeTrade(h.deps, req({ asset: "TSLA", amountUsd: 150 }));
+    expect(tsla).toMatchObject({ status: "blocked", code: "OVER_TRADE_LIMIT" });
+    expect((tsla as { message: string }).message).toMatch(/\$150.*\$50/);
+    const rug = await executeTrade(h.deps, req({ asset: "RUGCOIN", amountUsd: 5 }));
+    expect(rug).toMatchObject({ status: "blocked", code: "SCAM_RISK" });
+    expect((rug as { message: string }).message).toMatch(/liquidity|market cap|new token/i);
+    expect(h.rails.swaps).toHaveLength(0);
+  });
+});

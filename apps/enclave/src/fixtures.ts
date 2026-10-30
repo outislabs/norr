@@ -27,7 +27,7 @@ export const makeRegistry = () =>
 export const WALLET = "vault-wallet-account";
 
 export const policy = (over: Partial<Policy> = {}): Policy => ({
-  vaultId: "v1", maxTradeUsd: 50, dailyLossCapUsd: 20, maxEquityPct: 100,
+  vaultId: "v1", maxTradeUsd: 50, dailySpendCapUsd: 1000, dailyLossCapUsd: 20, maxEquityPct: 100,
   allowedCrypto: "any_safe", allowedEquities: ["NVDA", "TSLA"], cooldownSec: 0, paused: false,
   nonUsConfirmed: true, allowMediumRisk: false, ...over,
 });
@@ -55,7 +55,7 @@ export function harness(opts: { mock?: MockOptions; policy?: Partial<Policy>; sh
   const vault: Vault = newVault(
     {
       id: "v1", policy: policy(opts.policy), custody: rails.custody, walletAccount: WALLET,
-      state: { realizedLossTodayUsd: 0, lastTradeAtMs: null, portfolioValueUsd: 1000, equityValueUsd: 0 },
+      state: { realizedLossTodayUsd: 0, spentTodayUsd: 0, lastTradeAtMs: null, portfolioValueUsd: 1000, equityValueUsd: 0 },
     },
     1_000_000,
   );

@@ -16,7 +16,7 @@ agent token → Norr: resolve asset → Shield feed → risk or eligibility → 
 | OutLayer | Norr |
 |---|---|
 | TEE wallet, signing, API key for the service | Agent tokens, one vault each |
-| Per-token limits, whitelist, approvals, freeze (owner-set) | Private policy: trade size, loss cap, cooldown, allowlists, equity %, eligibility |
+| Per-token limits, whitelist, approvals, freeze (owner-set) | Private policy: trade size, daily spend cap, loss cap, cooldown, allowlists, equity %, eligibility |
 | Gateway builds the 1Click route and deposit address | Asset registry, multi-issuer routing, Scam Shield, Shield feed |
 | Gasless swaps and withdrawals | Post-trade verification and kill switch |
 

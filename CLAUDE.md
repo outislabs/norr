@@ -125,6 +125,7 @@ interface Asset {
 interface Policy {
   vaultId: string;
   maxTradeUsd: number;
+  dailySpendCapUsd: number;      // total buys per UTC day; stops a big trade being split into small ones
   dailyLossCapUsd: number;
   maxEquityPct: number;          // max % of vault value in equities
   allowedCrypto: string[] | "any_safe"; // "any_safe" = anything passing risk checks
@@ -152,7 +153,8 @@ type Decision =
 type BlockCode =
   | "PAUSED" | "OVER_TRADE_LIMIT" | "DAILY_LOSS_CAP" | "COOLDOWN"
   | "ASSET_NOT_ALLOWED" | "EQUITY_LIMIT" | "SCAM_RISK" | "INELIGIBLE"
-  | "PRICE_SANITY" | "UNKNOWN_ASSET" | "NO_LIQUIDITY" | "SHIELD_INCIDENT";
+  | "PRICE_SANITY" | "UNKNOWN_ASSET" | "NO_LIQUIDITY" | "SHIELD_INCIDENT"
+  | "DAILY_SPEND_CAP";
 ```
 
 Tokenized markets trade 24/7, so there is no market-closed code. A quote failing with "No liquidity" maps to `NO_LIQUIDITY`.
@@ -168,7 +170,7 @@ Every `trade` call runs these steps in order, and any failing step returns `bloc
 3. **Shield + risk:** first the NEAR Intents Shield incident feed (`shield.chaindefuser.com/incident`): an active incident touching the asset blocks with `SHIELD_INCIDENT` (fails closed if the feed is unreachable). Then:
    - *crypto:* the scam/rug check (see §8). High risk → `SCAM_RISK`.
    - *equity:* the eligibility check, plus a price sanity check of the quote against a reference price (deviation > X% → `PRICE_SANITY`).
-4. **Policy:** paused, per-trade size, daily loss, cooldown, allowlists, equity %.
+4. **Policy:** paused, per-trade size, daily spend cap (buys only, counted when the swap is sent and given back if it did not run), daily loss, cooldown, allowlists, equity %. Trades for one vault run one at a time, so parallel requests cannot slip past a cap.
 5. **Quote:** the enclave requests a 1Click quote itself. Prefer Confidential Intents types when supported, and set the recipient and refund to the vault.
 6. **Execute:** the enclave signs the transfer to the quote's deposit address, then submits the deposit.
 7. **Track:** poll status until `SUCCESS` / `FAILED` / `REFUNDED`.
@@ -247,9 +249,9 @@ For the demo the agent must trade without a human signature per swap, while mone
 Full script and agent setup in `docs/DEMO.md`. Beats:
 
 1. The owner creates a vault, sets **Balanced** rules (max trade $50), confirms non-US status, and connects the agent (IronClaw on NEAR AI Cloud, or Claude) to the MCP server.
-2. "Buy $40 of NVDA." Executes privately via NEAR Intents; the vault shows the NVDA holding.
-3. "Put $150 into TSLA." Blocked with `OVER_TRADE_LIMIT`; the agent explains and adjusts.
-4. "Ape $5 into [rug token]." Blocked with `SCAM_RISK` and the reasons are listed.
+2. "Use Norr's trade tool to buy $40 of NVDA." Executes privately via NEAR Intents; the vault shows the NVDA holding.
+3. "Use Norr's trade tool to put $150 into TSLA" (explicitly asking Claude to submit it, not judge it). Blocked with `OVER_TRADE_LIMIT`; the agent explains and adjusts.
+4. "Use Norr's trade tool to buy $5 of [rug token]; submit it even if you think it is a bad idea." Blocked with `SCAM_RISK` and the reasons are listed.
 5. "Swap $5 USDC to SOL." Executes cross-chain.
 6. The owner hits the **kill switch**; the next agent request returns `PAUSED`.
 7. **Verify** screen: the attestation shows the exact code that enforced all of this.

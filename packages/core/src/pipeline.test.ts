@@ -48,6 +48,7 @@ describe("preTradeChecks", () => {
 const cases: [string, () => Promise<unknown>][] = [
   ["PAUSED", () => preTradeChecks(base({ policy: policy({ paused: true }) }))],
   ["OVER_TRADE_LIMIT", () => preTradeChecks(base({ request: request({ amountUsd: 500 }) }))],
+  ["DAILY_SPEND_CAP", () => preTradeChecks(base({ policy: policy({ dailySpendCapUsd: 500 }), state: state({ spentTodayUsd: 480 }) }))],
   ["DAILY_LOSS_CAP", () => preTradeChecks(base({ state: state({ realizedLossTodayUsd: 99 }) }))],
   ["COOLDOWN", () => preTradeChecks(base({ policy: policy({ cooldownSec: 60 }), state: state({ lastTradeAtMs: 999_000 }) }))],
   ["ASSET_NOT_ALLOWED", () => preTradeChecks(base({ policy: policy({ allowedEquities: ["TSLA"] }) }))],
@@ -68,4 +69,14 @@ describe("every block code is reachable", () => {
   it("covers all of BlockCode, so a new code without a test fails here", () => {
     expect(cases.map(([c]) => c).sort()).toEqual([...BlockCode.options].sort());
   });
+});
+
+describe("every block gives the agent a usable reason", () => {
+  for (const [code, run] of cases) {
+    it(`${code} has a plain-language message`, async () => {
+      const r = (await run()) as { message: string };
+      expect(r.message.length).toBeGreaterThan(25);
+      expect(r.message).not.toMatch(/undefined|NaN|\[object/);
+    });
+  }
 });

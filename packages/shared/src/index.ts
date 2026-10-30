@@ -16,6 +16,7 @@ export type Asset = z.infer<typeof Asset>;
 export const Policy = z.object({
   vaultId: z.string().min(1),
   maxTradeUsd: z.number().positive(),
+  dailySpendCapUsd: z.number().nonnegative(), // total buys per UTC day; stops splitting a big trade into small ones
   dailyLossCapUsd: z.number().nonnegative(),
   maxEquityPct: z.number().min(0).max(100),
   allowedCrypto: z.union([z.array(z.string()), z.literal("any_safe")]),
@@ -58,6 +59,7 @@ export const BlockCode = z.enum([
   "UNKNOWN_ASSET",
   "NO_LIQUIDITY",
   "SHIELD_INCIDENT",
+  "DAILY_SPEND_CAP",
 ]);
 export type BlockCode = z.infer<typeof BlockCode>;
 

@@ -137,3 +137,35 @@ describe("errors the agent can act on", () => {
     expect(r.text).toContain("internal error");
   });
 });
+
+describe("trade is authoritative, even when the agent skips every pre-check", () => {
+  it("a cold trade call gets Norr's own reason for each kind of block", async () => {
+    const { call } = await connect();
+    // No list_assets, check_asset or get_quote first.
+    const tsla = (await call("trade", { side: "buy", asset: "TSLA", amountUsd: 150, reason: "x" })).json();
+    expect(tsla).toMatchObject({ status: "blocked", code: "OVER_TRADE_LIMIT" });
+    expect(tsla.message).toMatch(/\$150.*\$50/);
+
+    const rug = (await call("trade", { side: "buy", asset: "RUGPULL", amountUsd: 5, reason: "ape" })).json();
+    expect(rug).toMatchObject({ status: "blocked", code: "SCAM_RISK" });
+    expect(rug.message).toMatch(/liquidity/i);
+  });
+
+  it("the daily spending cap stops a split trade through MCP, with what is left", async () => {
+    const { call, clock } = await connect();
+    for (let i = 0; i < 3; i++) {
+      expect((await call("trade", { side: "buy", asset: "SOL", amountUsd: 50 })).json().status).toBe("executed");
+      clock.t += 11_000;
+    }
+    expect((await call("get_policy")).json()).toMatchObject({ dailySpendCapUsd: 150, spendRemainingTodayUsd: 0 });
+    const d = (await call("trade", { side: "buy", asset: "SOL", amountUsd: 10 })).json();
+    expect(d).toMatchObject({ status: "blocked", code: "DAILY_SPEND_CAP" });
+    expect(d.message).toContain("daily spending cap");
+  });
+
+  it("the tool guidance tells agents to ask Norr rather than pre-judge", async () => {
+    const { mcp } = await connect();
+    const trade = (await mcp.listTools()).tools.find((t) => t.name === "trade")!;
+    expect(trade.description).toContain("ask Norr instead of guessing");
+  });
+});

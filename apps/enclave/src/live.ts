@@ -42,7 +42,7 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env) {
       {
         id: policy.vaultId,
         policy,
-        state: { realizedLossTodayUsd: 0, lastTradeAtMs: null, portfolioValueUsd: 0, equityValueUsd: 0 },
+        state: { realizedLossTodayUsd: 0, spentTodayUsd: 0, lastTradeAtMs: null, portfolioValueUsd: 0, equityValueUsd: 0 },
         custody: new OutLayerCustody({ apiKey: outlayerKey, accountId: walletAccount, baseUrl: env.OUTLAYER_BASE_URL }),
         walletAccount,
       },

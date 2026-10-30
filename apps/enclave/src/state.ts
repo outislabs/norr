@@ -1,4 +1,4 @@
-import { addRealized, applyFill, dayKey, type Book, type DayPnl, type Fill, type VaultState } from "@norr/core";
+import { addRealized, addToDay, applyFill, dayKey, emptyDay, releaseFromDay, type Book, type DayPnl, type DaySum, type Fill, type VaultState } from "@norr/core";
 import type { Custody } from "@norr/intents";
 import type { Decision, Policy, TradeRequest } from "@norr/shared";
 import type { PendingSettlement } from "./trade";
@@ -15,6 +15,8 @@ export interface Vault {
   book: Book;
   /** Net realized P&L for the current UTC day. */
   pnl: DayPnl;
+  /** Buys today (UTC), reserved when a swap is sent, for the daily spend cap. */
+  spend: DaySum;
 }
 
 export interface VaultStore {
@@ -26,6 +28,10 @@ export interface VaultStore {
   /** Update positions and the day's realized P&L after a verified fill. */
   recordFill(id: string, fill: Fill, atMs: number): void;
   refresh(id: string, patch: Partial<VaultState>): void;
+  /** Count a buy against today's spend cap. Returns the UTC day it was counted on, for a later release. */
+  reserveSpend(id: string, usd: number, atMs: number): string;
+  /** Give a reservation back when the swap definitely did not run. */
+  releaseSpend(id: string, day: string, usd: number): void;
 }
 
 export interface LedgerEntry {
@@ -47,7 +53,7 @@ export interface Ledger {
   list(vaultId: string): LedgerEntry[];
 }
 
-export const newVault = (v: Omit<Vault, "book" | "pnl">, nowMs: number): Vault => ({ ...v, book: {}, pnl: { day: dayKey(nowMs), netUsd: 0 } });
+export const newVault = (v: Omit<Vault, "book" | "pnl" | "spend">, nowMs: number): Vault => ({ ...v, book: {}, pnl: { day: dayKey(nowMs), netUsd: 0 }, spend: emptyDay(nowMs) });
 
 export class MemoryVaultStore implements VaultStore {
   private readonly vaults = new Map<string, Vault>();
@@ -90,6 +96,18 @@ export class MemoryVaultStore implements VaultStore {
     const r = applyFill(v.book, fill);
     v.book = r.book;
     v.pnl = addRealized(v.pnl, atMs, r.realizedUsd);
+  }
+
+  reserveSpend(id: string, usd: number, atMs: number): string {
+    const v = this.vaults.get(id);
+    if (!v) return dayKey(atMs);
+    v.spend = addToDay(v.spend, atMs, usd);
+    return v.spend.day;
+  }
+
+  releaseSpend(id: string, day: string, usd: number): void {
+    const v = this.vaults.get(id);
+    if (v) v.spend = releaseFromDay(v.spend, day, usd);
   }
 
   refresh(id: string, patch: Partial<VaultState>): void {

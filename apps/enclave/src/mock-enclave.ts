@@ -49,7 +49,7 @@ export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed
       {
         id: vaultId,
         policy: { ...presetPolicy("balanced", vaultId), nonUsConfirmed: true },
-        state: { realizedLossTodayUsd: 0, lastTradeAtMs: null, portfolioValueUsd: 0, equityValueUsd: 0 },
+        state: { realizedLossTodayUsd: 0, spentTodayUsd: 0, lastTradeAtMs: null, portfolioValueUsd: 0, equityValueUsd: 0 },
         custody: rails.custody,
         walletAccount,
       },

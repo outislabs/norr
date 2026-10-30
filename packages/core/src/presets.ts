@@ -14,10 +14,10 @@ export function presetPolicy(name: PresetName, vaultId: string): Policy {
   const base = { vaultId, paused: false, nonUsConfirmed: false };
   switch (name) {
     case "cautious":
-      return { ...base, maxTradeUsd: 25, dailyLossCapUsd: 10, maxEquityPct: 20, allowedCrypto: MAJORS, allowedEquities: INDEXES, cooldownSec: 300, allowMediumRisk: false };
+      return { ...base, maxTradeUsd: 25, dailySpendCapUsd: 50, dailyLossCapUsd: 10, maxEquityPct: 20, allowedCrypto: MAJORS, allowedEquities: INDEXES, cooldownSec: 300, allowMediumRisk: false };
     case "balanced":
-      return { ...base, maxTradeUsd: 50, dailyLossCapUsd: 25, maxEquityPct: 60, allowedCrypto: "any_safe", allowedEquities: LARGE_CAPS, cooldownSec: 10, allowMediumRisk: false };
+      return { ...base, maxTradeUsd: 50, dailySpendCapUsd: 150, dailyLossCapUsd: 25, maxEquityPct: 60, allowedCrypto: "any_safe", allowedEquities: LARGE_CAPS, cooldownSec: 10, allowMediumRisk: false };
     case "degen":
-      return { ...base, maxTradeUsd: 200, dailyLossCapUsd: 100, maxEquityPct: 100, allowedCrypto: "any_safe", allowedEquities: [...LARGE_CAPS, "CRCL", "HOOD"], cooldownSec: 0, allowMediumRisk: true };
+      return { ...base, maxTradeUsd: 200, dailySpendCapUsd: 600, dailyLossCapUsd: 100, maxEquityPct: 100, allowedCrypto: "any_safe", allowedEquities: [...LARGE_CAPS, "CRCL", "HOOD"], cooldownSec: 0, allowMediumRisk: true };
   }
 }

@@ -54,3 +54,46 @@ describe("policy", () => {
     expect(run(p, request({ amountUsd: 999 }))).toMatchObject({ code: "PAUSED" });
   });
 });
+
+describe("daily spend cap", () => {
+  const p = (cap: number) => policy({ dailySpendCapUsd: cap, maxTradeUsd: 100 });
+  const sp = (spent: number) => state({ spentTodayUsd: spent });
+
+  it("allows a buy that lands exactly on the cap, and blocks one cent over", () => {
+    expect(run(p(150), request({ amountUsd: 50 }), nvda, sp(100))).toBeNull();
+    expect(run(p(150), request({ amountUsd: 50.01 }), nvda, sp(100))).toMatchObject({ code: "DAILY_SPEND_CAP" });
+  });
+
+  it("splitting a big trade cannot get around it: each part adds to the same total", () => {
+    let spent = 0;
+    const codes: (string | null)[] = [];
+    for (let i = 0; i < 5; i++) {
+      const b = run(p(150), request({ amountUsd: 40 }), nvda, sp(spent));
+      codes.push(b ? b.code : null);
+      if (!b) spent += 40;
+    }
+    expect(codes).toEqual([null, null, null, "DAILY_SPEND_CAP", "DAILY_SPEND_CAP"]); // 40+40+40 = 120, the fourth would be 160
+  });
+
+  it("the message says how much is left, or that the cap is used up", () => {
+    const left = run(p(150), request({ amountUsd: 60 }), nvda, sp(100))!;
+    expect(left.message).toContain("$50.00 left today");
+    expect(left.message).toContain("$160.00");
+    const used = run(p(150), request({ amountUsd: 5 }), nvda, sp(150))!;
+    expect(used.message).toContain("whole daily spending cap");
+    expect(used.message).toContain("selling is still allowed");
+  });
+
+  it("never blocks a sell, so the agent can always reduce risk", () => {
+    expect(run(p(150), request({ side: "sell", amountUsd: 90 }), nvda, sp(150))).toBeNull();
+  });
+
+  it("a cap of 0 blocks all buying but not selling", () => {
+    expect(run(p(0), request({ amountUsd: 1 }), nvda, sp(0))).toMatchObject({ code: "DAILY_SPEND_CAP" });
+    expect(run(p(0), request({ side: "sell", amountUsd: 1 }), nvda, sp(0))).toBeNull();
+  });
+
+  it("checks the per-trade limit first, so an oversized trade is told to shrink, not to wait", () => {
+    expect(run(policy({ maxTradeUsd: 50, dailySpendCapUsd: 10 }), request({ amountUsd: 80 }), nvda, sp(0))).toMatchObject({ code: "OVER_TRADE_LIMIT" });
+  });
+});

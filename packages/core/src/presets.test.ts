@@ -24,6 +24,14 @@ describe("policy presets", () => {
     expect(d!.allowMediumRisk).toBe(true);
   });
 
+  it("every preset caps daily spending at or above one max-size trade, and below unlimited", () => {
+    for (const n of names) {
+      const p = presetPolicy(n, "v");
+      expect(p.dailySpendCapUsd).toBeGreaterThanOrEqual(p.maxTradeUsd);
+    }
+    expect(presetPolicy("balanced", "v").dailySpendCapUsd).toBe(150); // three max-size trades
+  });
+
   it("balanced matches the demo: a $50 cap, so a $150 order is over the limit", () => {
     expect(presetPolicy("balanced", "v").maxTradeUsd).toBe(50);
   });

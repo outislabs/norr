@@ -32,13 +32,13 @@ export const riskProvider = () =>
   new HeuristicRiskProvider(async (a) => signalsByAsset[a.id] ?? { routable: true, liquidityUsd: 5e6, marketCapUsd: 1e9, ageDays: 900 });
 
 export const policy = (over: Partial<Policy> = {}): Policy => ({
-  vaultId: "alpha.norr.near", maxTradeUsd: 50, dailyLossCapUsd: 20, maxEquityPct: 60,
+  vaultId: "alpha.norr.near", maxTradeUsd: 50, dailySpendCapUsd: 500, dailyLossCapUsd: 20, maxEquityPct: 60,
   allowedCrypto: "any_safe", allowedEquities: ["NVDA", "TSLA"], cooldownSec: 0, paused: false,
   nonUsConfirmed: true, allowMediumRisk: false, ...over,
 });
 
 export const state = (over: Partial<VaultState> = {}): VaultState => ({
-  realizedLossTodayUsd: 0, lastTradeAtMs: null, portfolioValueUsd: 1000, equityValueUsd: 0, ...over,
+  realizedLossTodayUsd: 0, spentTodayUsd: 0, lastTradeAtMs: null, portfolioValueUsd: 1000, equityValueUsd: 0, ...over,
 });
 
 export const request = (over: Partial<TradeRequest> = {}): TradeRequest => ({

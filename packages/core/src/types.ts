@@ -12,6 +12,8 @@ export const block = (code: BlockCode, message: string): Block => ({ ok: false, 
 /** Per-vault state the policy needs. Supplied by the enclave; core does no I/O. */
 export interface VaultState {
   realizedLossTodayUsd: number;
+  /** Total buys so far today (UTC), counted against the daily spend cap. */
+  spentTodayUsd: number;
   lastTradeAtMs: number | null;
   portfolioValueUsd: number;
   equityValueUsd: number;

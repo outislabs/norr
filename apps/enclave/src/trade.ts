@@ -3,6 +3,7 @@ import {
   impliedPriceUsd,
   isBlock,
   lossToday,
+  sumToday,
   noLiquidity,
   preTradeChecks,
   requireSwapBounds,
@@ -19,6 +20,7 @@ import {
 } from "@norr/core";
 import { IntentsApiError, type BalanceReader, type ExecutionAuditor, type Quote, type Quoter, type SwapStatus } from "@norr/intents";
 import type { Decision, TradeRequest } from "@norr/shared";
+import { KeyedMutex } from "./mutex";
 import { valuePortfolio } from "./portfolio";
 import type { Ledger, Vault, VaultStore } from "./state";
 
@@ -56,6 +58,8 @@ export interface PendingSettlement {
   symbol: string;
   decimals: number;
   side: "buy" | "sell";
+  /** The buy reserved against the daily spend cap, given back if the swap is known not to have run. */
+  spend?: { day: string; usd: number };
 }
 
 /** A trade that passed every check and has a quote, ready to send (or just to show as a preview). */
@@ -72,7 +76,7 @@ const failed = (message: string): Decision => ({ status: "failed", message });
 
 /** Bring the vault's state up to date: today's realized loss and, when readable, balances. */
 export async function refreshState(deps: TradeDeps, vault: Vault): Promise<void> {
-  const patch: Parameters<VaultStore["refresh"]>[1] = { realizedLossTodayUsd: lossToday(vault.pnl, deps.now()) };
+  const patch: Parameters<VaultStore["refresh"]>[1] = { realizedLossTodayUsd: lossToday(vault.pnl, deps.now()), spentTodayUsd: sumToday(vault.spend, deps.now()) };
   if (deps.balances) {
     try {
       const p = valuePortfolio(await deps.balances.holdings(vault.walletAccount), deps.registry);
@@ -170,8 +174,19 @@ export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeReq
   };
 }
 
-/** Run the trade pipeline (CLAUDE.md section 7). Never throws: every outcome is a Decision. */
-export async function executeTrade(deps: TradeDeps, request: TradeRequest): Promise<Decision> {
+const mutexes = new WeakMap<object, KeyedMutex>();
+
+/**
+ * Run the trade pipeline (CLAUDE.md section 7). Never throws: every outcome is a Decision. Trades for
+ * one vault run one at a time, so parallel requests cannot slip past a cap together.
+ */
+export function executeTrade(deps: TradeDeps, request: TradeRequest): Promise<Decision> {
+  let m = mutexes.get(deps.vaults);
+  if (!m) mutexes.set(deps.vaults, (m = new KeyedMutex()));
+  return m.run(request.vaultId, () => executeTradeLocked(deps, request));
+}
+
+async function executeTradeLocked(deps: TradeDeps, request: TradeRequest): Promise<Decision> {
   const vault = deps.vaults.get(request.vaultId);
   if (!vault) return failed("This vault does not exist.");
 
@@ -186,12 +201,16 @@ export async function executeTrade(deps: TradeDeps, request: TradeRequest): Prom
   }
   const { plan } = planned;
 
-  // Step 6: execute through the custody provider.
+  // Step 6: execute through the custody provider. A buy is counted against the daily spend cap before
+  // the swap is sent, and given back only if the swap is known not to have run.
+  const spend = plan.side === "buy" ? { day: deps.vaults.reserveSpend(vault.id, request.amountUsd, deps.now()), usd: request.amountUsd } : undefined;
   let status: SwapStatus;
   try {
     status = await vault.custody.swap(plan.bounds);
   } catch (e) {
     const refused = e instanceof IntentsApiError && e.status === 403;
+    // A policy refusal means nothing ran. Any other error is ambiguous, so the spend stays counted.
+    if (refused && spend) deps.vaults.releaseSpend(vault.id, spend.day, spend.usd);
     const d = failed(
       refused
         ? "The custody policy refused this swap. The owner can review it in the custody dashboard."
@@ -209,6 +228,7 @@ export async function executeTrade(deps: TradeDeps, request: TradeRequest): Prom
     symbol: plan.candidate.symbol,
     decimals: plan.candidate.decimals,
     side: plan.side,
+    spend,
   };
   const row = log({ status: "pending_approval", requestId: status.requestId, message: "Swap submitted." }, { pending: ctx, note: bypassNote });
   const decision = await settle(deps, request.vaultId, ctx, status);
@@ -239,6 +259,7 @@ export async function settle(deps: TradeDeps, vaultId: string, ctx: PendingSettl
     return { status: "pending_approval", requestId: ctx.requestId, message: "The swap is still processing. Check the activity log for the result." };
   }
   if (st.state === "failed") {
+    if (ctx.spend) deps.vaults.releaseSpend(vaultId, ctx.spend.day, ctx.spend.usd); // it did not run
     return failed(`The swap did not complete${st.detail ? ` (${st.detail})` : ""}. Funds stay in the vault.`);
   }
 

@@ -1,4 +1,4 @@
-import { checkShield, EQUITY_DISCLAIMER, unitsToNumber, type RiskResult } from "@norr/core";
+import { checkShield, EQUITY_DISCLAIMER, sumToday, unitsToNumber, type RiskResult } from "@norr/core";
 import { TradeInput, type Decision, type TradeRequest } from "@norr/shared";
 import { Hono } from "hono";
 import { valuePortfolio } from "./portfolio";
@@ -117,9 +117,14 @@ export function createApp({ deps, tokens, mock, adminToken }: AppOptions): Hono<
   });
 
   app.get("/v1/policy", (c) => {
-    const p = deps.vaults.get(c.get("vaultId"))!.policy;
+    const v = deps.vaults.get(c.get("vaultId"))!;
+    const p = v.policy;
+    const spent = sumToday(v.spend, deps.now());
     return c.json({
       maxTradeUsd: p.maxTradeUsd,
+      dailySpendCapUsd: p.dailySpendCapUsd,
+      spentTodayUsd: Number(spent.toFixed(2)),
+      spendRemainingTodayUsd: Number(Math.max(0, p.dailySpendCapUsd - spent).toFixed(2)),
       dailyLossCapUsd: p.dailyLossCapUsd,
       maxEquityPct: p.maxEquityPct,
       allowedCrypto: p.allowedCrypto,

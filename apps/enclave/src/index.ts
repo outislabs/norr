@@ -1,4 +1,5 @@
 export * from "./state";
+export * from "./mutex";
 export * from "./trade";
 export * from "./app";
 export * from "./tokens";

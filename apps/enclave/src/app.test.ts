@@ -66,6 +66,7 @@ describe("read endpoints", () => {
     const p = await (await call("/v1/policy")).json();
     expect(p).toMatchObject({ maxTradeUsd: 50, equitiesEnabled: true, paused: false });
     expect(Object.keys(p)).not.toContain("vaultId");
+    expect(p).toMatchObject({ dailySpendCapUsd: 150, spentTodayUsd: 0, spendRemainingTodayUsd: 150 });
   });
 });
 
@@ -197,5 +198,20 @@ describe("pinned mock token", () => {
 
   it("without a pinned token, every start issues a different random one", () => {
     expect(createMockEnclave().agentToken).not.toBe(createMockEnclave().agentToken);
+  });
+});
+
+describe("daily spend cap over the API", () => {
+  it("get_policy shows the cap and what is left, and trade enforces it with the reason", async () => {
+    const { call, clock } = boot();
+    for (let i = 0; i < 3; i++) {
+      expect((await (await call("/v1/trade", { body: { side: "buy", asset: "SOL", amountUsd: 50 } })).json()).status).toBe("executed");
+      clock.t += 11_000; // past the 10 s cooldown
+    }
+    const p = await (await call("/v1/policy")).json();
+    expect(p).toMatchObject({ spentTodayUsd: 150, spendRemainingTodayUsd: 0 });
+    const d = await (await call("/v1/trade", { body: { side: "buy", asset: "SOL", amountUsd: 5 } })).json();
+    expect(d).toMatchObject({ status: "blocked", code: "DAILY_SPEND_CAP" });
+    expect(d.message).toContain("daily spending cap of $150");
   });
 });
