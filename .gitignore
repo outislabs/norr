@@ -14,3 +14,5 @@ coverage
 .claude/
 
 config/*.local.json
+
+config/*.local.*

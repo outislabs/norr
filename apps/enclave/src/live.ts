@@ -4,6 +4,7 @@ import { Policy } from "@norr/shared";
 import { readFileSync } from "node:fs";
 import { createApp } from "./app";
 import { BYPASS_BANNER, bypassWarning, resolveShieldMode } from "./shield-mode";
+import { walletCredentials } from "./wallet-env";
 import { MemoryLedger, MemoryVaultStore, newVault } from "./state";
 import { AgentTokens } from "./tokens";
 import type { TradeDeps } from "./trade";
@@ -28,8 +29,7 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env) {
   if (shieldMode.bypass) console.warn(BYPASS_BANNER);
   // Read all configuration before any network call, so a missing value fails fast.
   const policy = Policy.parse(JSON.parse(readFileSync(need(env, "NORR_POLICY_FILE"), "utf8")));
-  const walletAccount = need(env, "OUTLAYER_ACCOUNT_ID");
-  const outlayerKey = need(env, "OUTLAYER_API_KEY");
+  const { apiKey: outlayerKey, accountId: walletAccount } = walletCredentials(env);
   const oneclick = new OneClick({ apiKey: env.ONECLICK_API_KEY, baseUrl: env.ONECLICK_BASE_URL });
   const [plain, withOndo] = await Promise.all([oneclick.tokens(false), oneclick.tokens(true)]);
   const registry = new Registry({ crypto: plain, equities: [{ issuer: ONDO, tokens: extraTokens(plain, withOndo) }] });

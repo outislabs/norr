@@ -13,6 +13,8 @@ export interface MockOptions {
   liquidity?: (assetId: string) => boolean;
   /** Return false to simulate no liquidity for an asset in the confidential layer only. */
   confidentialLiquidity?: (assetId: string) => boolean;
+  /** Smallest order (USD) that quotes for an asset, either side of the pair. Simulates the real minimums. */
+  minOrderUsd?: (assetId: string) => number;
   /** Skew every quoted price (basis points) to exercise the price-sanity check. */
   skewBps?: number;
   requireApproval?: boolean;
@@ -68,6 +70,7 @@ export function createMockRails(entries: RegistryEntry[], vaultAccount: string, 
       if (o.liquidity && !(o.liquidity(a.id) && o.liquidity(b.id))) return null;
       if (p.venue === "confidential" && o.confidentialLiquidity && !(o.confidentialLiquidity(a.id) && o.confidentialLiquidity(b.id))) return null;
       const usdIn = unitsToNumber(p.amountIn, a.decimals) * a.priceUsd;
+      if (o.minOrderUsd && usdIn < Math.max(o.minOrderUsd(a.id), o.minOrderUsd(b.id))) return null;
       const usdOut = usdIn * (1 - feeBps / 10_000) * (1 + (o.skewBps ?? 0) / 10_000);
       const amountOut = usdToUnits(usdOut, b.priceUsd, b.decimals);
       return { amountIn: p.amountIn, amountOut, minAmountOut: ((BigInt(amountOut) * 99n) / 100n).toString(), amountInUsd: usdIn, amountOutUsd: usdOut };

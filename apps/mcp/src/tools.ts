@@ -32,6 +32,7 @@ export function createNorrServer(client: EnclaveClient): McpServer {
       title: "List tradable assets",
       description:
         "List what you can trade through Norr. Crypto is listed by symbol and chain. Tokenized stocks and ETFs are listed by ticker (for example NVDA) with every issuer that offers it; ask for the ticker and Norr picks the best price. " +
+        "Stock and ETF entries show a minimumUsd: the smallest order that has been quoting for that ticker (about $5.10 for the most liquid names, $26 for the rest; it can be higher outside US market hours). " +
         "Use class to filter. Call this first if you are not sure an asset exists.",
       inputSchema: { class: z.enum(["crypto", "equity"]).optional().describe("Only crypto, or only tokenized stocks and ETFs.") },
       annotations: read,
@@ -57,7 +58,7 @@ export function createNorrServer(client: EnclaveClient): McpServer {
     {
       title: "Get a price without trading",
       description:
-        "Dry run: price a trade and see what it would return, with the minimum you would accept. No funds move. If your vault's rules or the asset's risk would stop the trade, you get the same blocked answer trade would give, with the reason. Use this to plan before you trade.",
+        "Dry run: price a trade and see what it would return, with the minimum you would accept. No funds move. For stocks it also shows the observed minimum order size, and warns if a sell would leave a remainder too small to sell later (under $5.10). If your vault's rules or the asset's risk would stop the trade, you get the same blocked answer trade would give, with the reason. Use this to plan before you trade.",
       inputSchema: { side, asset, amountUsd },
       annotations: read,
     },

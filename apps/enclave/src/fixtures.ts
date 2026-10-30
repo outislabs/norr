@@ -14,12 +14,13 @@ export const RUG = tok("RUGCOIN", "sol", 0.0001, 6);
 export const NVDA_ON = tok("NVDAon", "bsc", 200, 18);
 export const NVDA_X = tok("NVDAx", "sol", 200, 18);
 export const TSLA_ON = tok("TSLAon", "bsc", 370, 18);
+export const MSFT_ON = tok("MSFTon", "bsc", 520, 18);
 
 export const makeRegistry = () =>
   new Registry({
     crypto: [USDC, SOL, RUG],
     equities: [
-      { issuer: ONDO, tokens: [NVDA_ON, TSLA_ON] },
+      { issuer: ONDO, tokens: [NVDA_ON, TSLA_ON, MSFT_ON] },
       { issuer: XSTOCKS, tokens: [NVDA_X] },
     ],
   });
@@ -28,7 +29,7 @@ export const WALLET = "vault-wallet-account";
 
 export const policy = (over: Partial<Policy> = {}): Policy => ({
   vaultId: "v1", maxTradeUsd: 50, dailySpendCapUsd: 1000, dailyLossCapUsd: 20, maxEquityPct: 100,
-  allowedCrypto: "any_safe", allowedEquities: ["NVDA", "TSLA"], cooldownSec: 0, paused: false,
+  allowedCrypto: "any_safe", allowedEquities: ["NVDA", "TSLA", "MSFT"], cooldownSec: 0, paused: false,
   nonUsConfirmed: true, allowMediumRisk: false, privacy: "prefer", ...over,
 });
 

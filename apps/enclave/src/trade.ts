@@ -1,12 +1,15 @@
 import {
   checkPriceSanity,
+  dustWarning,
   impliedPriceUsd,
   isBlock,
   lossToday,
+  noLiquidityMessage,
   sumToday,
   noLiquidity,
   preTradeChecks,
   privacyUnavailable,
+  probeSizes,
   requireSwapBounds,
   selectBestQuote,
   unitsToNumber,
@@ -67,6 +70,8 @@ export interface PendingSettlement {
   venue: Venue;
   /** Confidential balances read just before a confidential swap, to check it against afterwards. */
   confidentialBefore?: Holdings;
+  /** Things to tell the agent with the result, for example a dust warning. */
+  warnings?: string[];
 }
 
 /** A trade that passed every check and has a quote, ready to send (or just to show as a preview). */
@@ -79,6 +84,8 @@ export interface TradePlan {
   /** The layer chosen: confidential whenever the vault's policy allows it and the funds are there. */
   venue: Venue;
   confidentialBefore?: Holdings;
+  /** Dust and similar warnings, shown with a dry-run quote and attached to the result. */
+  warnings: string[];
 }
 
 const blocked = (code: Extract<Decision, { status: "blocked" }>["code"], message: string): Decision => ({ status: "blocked", code, message });
@@ -139,45 +146,60 @@ export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeReq
   const cash = deps.quoteAsset;
   const mode = vault.policy.privacy;
   const order: Venue[] = mode === "public" ? ["public"] : mode === "require" ? ["confidential"] : ["confidential", "public"];
-  // A thrown error is a service fault, not "no liquidity" (which is a null quote); keep them apart.
-  let quoteFault: string | undefined;
-  let shortfall: string | undefined;
-  let attempted = false; // a quote was requested somewhere, so a shortfall elsewhere is not the whole story
-  let unreadable = false;
-  let chosen: { candidate: RegistryEntry; tokenIn: string; tokenOut: string; amountIn: string; quote: Quote; venue: Venue } | undefined;
-  for (const venue of order) {
-    const holdings = layers[venue];
-    if (!holdings && venue === "confidential") {
-      unreadable = true; // cannot tell whether the funds are there, so do not trade confidentially
-      continue;
-    }
-    const options = (
-      await Promise.all(
-        pre.candidates.map(async (c) => {
-          if (c.priceUsd === null) return null;
-          const tokenIn = buy ? cash.id : c.id;
-          const tokenOut = buy ? c.id : cash.id;
-          const amountIn = buy ? usdToUnits(request.amountUsd, cash.priceUsd ?? 1, cash.decimals) : usdToUnits(request.amountUsd, c.priceUsd, c.decimals);
-          if (holdings && BigInt(holdings[tokenIn] ?? "0") < BigInt(amountIn)) {
-            const inAsset = buy ? cash : c;
-            shortfall ??= `${venue === "confidential" ? "its confidential balance" : "its public balance"} holds ${unitsToNumber(holdings[tokenIn] ?? "0", inAsset.decimals)} ${inAsset.symbol}, and this trade needs ${unitsToNumber(amountIn, inAsset.decimals)}`;
-            return null;
-          }
-          attempted = true;
-          const quote = await deps.quoter.quote({ tokenIn, tokenOut, amountIn, recipient: vault.walletAccount, venue }).catch((e: unknown) => {
-            quoteFault = e instanceof Error ? e.message : String(e);
-            return null;
-          });
-          return quote ? { candidate: c, tokenIn, tokenOut, amountIn, quote, venue } : null;
-        }),
-      )
-    ).filter((o): o is NonNullable<typeof o> => o !== null);
-    const best = selectBestQuote(options.map((o) => ({ assetId: o.candidate.id, issuer: o.candidate.issuer, amountInUsd: o.quote.amountInUsd, amountOutUsd: o.quote.amountOutUsd })));
-    chosen = best ? options.find((o) => o.candidate.id === best.assetId) : undefined;
-    if (chosen) break;
+
+  interface Option { candidate: RegistryEntry; tokenIn: string; tokenOut: string; amountIn: string; quote: Quote; venue: Venue }
+  interface Attempt {
+    chosen?: Option;
+    /** A thrown error is a service fault, not "no liquidity" (a null quote); keep them apart. */
+    quoteFault?: string;
+    shortfall?: string;
+    /** A quote was requested somewhere, so a shortfall elsewhere is not the whole story. */
+    attempted: boolean;
+    unreadable: boolean;
   }
 
+  // One pass over the venues for a given size. With checkFunds off it only asks whether a size quotes
+  // (used by the probe), so it ignores what the vault holds.
+  const attempt = async (usd: number, checkFunds: boolean): Promise<Attempt> => {
+    const a: Attempt = { attempted: false, unreadable: false };
+    for (const venue of order) {
+      const holdings = layers[venue];
+      if (checkFunds && !holdings && venue === "confidential") {
+        a.unreadable = true; // cannot tell whether the funds are there, so do not trade confidentially
+        continue;
+      }
+      const options = (
+        await Promise.all(
+          pre.candidates.map(async (c): Promise<Option | null> => {
+            if (c.priceUsd === null) return null;
+            const tokenIn = buy ? cash.id : c.id;
+            const tokenOut = buy ? c.id : cash.id;
+            const amountIn = buy ? usdToUnits(usd, cash.priceUsd ?? 1, cash.decimals) : usdToUnits(usd, c.priceUsd, c.decimals);
+            if (checkFunds && holdings && BigInt(holdings[tokenIn] ?? "0") < BigInt(amountIn)) {
+              const inAsset = buy ? cash : c;
+              a.shortfall ??= `${venue === "confidential" ? "its confidential balance" : "its public balance"} holds ${unitsToNumber(holdings[tokenIn] ?? "0", inAsset.decimals)} ${inAsset.symbol}, and this trade needs ${unitsToNumber(amountIn, inAsset.decimals)}`;
+              return null;
+            }
+            a.attempted = true;
+            const quote = await deps.quoter.quote({ tokenIn, tokenOut, amountIn, recipient: vault.walletAccount, venue }).catch((e: unknown) => {
+              a.quoteFault = e instanceof Error ? e.message : String(e);
+              return null;
+            });
+            return quote ? { candidate: c, tokenIn, tokenOut, amountIn, quote, venue } : null;
+          }),
+        )
+      ).filter((o): o is Option => o !== null);
+      const best = selectBestQuote(options.map((o) => ({ assetId: o.candidate.id, issuer: o.candidate.issuer, amountInUsd: o.quote.amountInUsd, amountOutUsd: o.quote.amountOutUsd })));
+      a.chosen = best ? options.find((o) => o.candidate.id === best.assetId) : undefined;
+      if (a.chosen) break;
+    }
+    return a;
+  };
+
+  const first = await attempt(request.amountUsd, true);
+  const chosen = first.chosen;
   if (!chosen) {
+    const { quoteFault, shortfall, attempted, unreadable } = first;
     if (mode === "require") {
       const why = unreadable
         ? "Norr could not read the vault's confidential balance."
@@ -197,6 +219,20 @@ export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeReq
       };
     }
     if (shortfall && !attempted) return { decision: failed(`The vault does not hold enough for this trade: ${shortfall}. Check get_portfolio.`), shieldBypassed };
+
+    // No liquidity. For a stock, find the smallest larger size that quotes right now (free dry quotes).
+    if (pre.class === "equity") {
+      const ceiling = vault.policy.maxTradeUsd;
+      let smallest: number | undefined;
+      for (const usd of probeSizes(request.amountUsd, ceiling)) {
+        if ((await attempt(usd, false)).chosen) {
+          smallest = usd;
+          break;
+        }
+      }
+      const d: Decision = { status: "blocked", code: "NO_LIQUIDITY", message: noLiquidityMessage(pre.ticker, request.amountUsd, smallest, ceiling), ...(smallest !== undefined ? { suggestedUsd: smallest } : {}) };
+      return { decision: d, shieldBypassed };
+    }
     const nl = noLiquidity();
     return { decision: blocked(nl.code, nl.message), shieldBypassed };
   }
@@ -218,9 +254,20 @@ export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeReq
     return { decision: failed("The quote had no usable minimum output, so the swap was not sent."), shieldBypassed };
   }
 
+  // A sell that leaves a remainder too small to sell later gets a warning, not a block.
+  const warnings: string[] = [];
+  if (!buy && candidate.class === "equity" && candidate.priceUsd !== null) {
+    const held = layers[venue]?.[tokenIn];
+    if (held !== undefined) {
+      const remaining = unitsToNumber((BigInt(held) - BigInt(amountIn)).toString(), candidate.decimals) * candidate.priceUsd;
+      const w = dustWarning(remaining, unitsToNumber(held, candidate.decimals) * candidate.priceUsd, candidate.symbol);
+      if (w) warnings.push(w);
+    }
+  }
+
   return {
     plan: {
-      candidate, quote, bounds, side: request.side, venue,
+      candidate, quote, bounds, side: request.side, venue, warnings,
       confidentialBefore: venue === "confidential" ? layers.confidential : undefined,
       intended: { tokenIn, tokenOut, amountIn, minAmountOut: quote.minAmountOut, recipient: vault.walletAccount },
     },
@@ -293,6 +340,7 @@ async function executeTradeLocked(deps: TradeDeps, request: TradeRequest): Promi
     spend,
     venue: plan.venue,
     confidentialBefore: plan.confidentialBefore,
+    warnings: plan.warnings,
   };
   const row = log({ status: "pending_approval", requestId: status.requestId, message: "Swap submitted." }, { pending: ctx, note: bypassNote });
   const decision = await settle(deps, request.vaultId, ctx, status);
@@ -361,7 +409,7 @@ export async function settle(deps: TradeDeps, vaultId: string, ctx: PendingSettl
   const usd = ctx.side === "buy" ? ctx.quoteUsd.in : ctx.quoteUsd.out;
   deps.vaults.recordTrade(vaultId, now);
   deps.vaults.recordFill(vaultId, { assetId: ctx.assetId, side: ctx.side, qty: tokens, usd }, now);
-  return { status: "executed", txRef: ctx.requestId, filled: { asset: ctx.symbol, amount: String(tokens), priceUsd: impliedPriceUsd(usd, tokens) }, venue: ctx.venue, verification };
+  return { status: "executed", txRef: ctx.requestId, filled: { asset: ctx.symbol, amount: String(tokens), priceUsd: impliedPriceUsd(usd, tokens) }, venue: ctx.venue, verification, ...(ctx.warnings?.length ? { warnings: ctx.warnings } : {}) };
 }
 
 /** Finish a swap that was pending when the agent called (for example after the owner approved it). */

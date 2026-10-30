@@ -81,8 +81,16 @@ export const Decision = z.discriminatedUnion("status", [
     venue: Venue.optional(),
     /** "independent" = checked against a source the custody provider does not control; "custody-reported" = checked against the provider's own balances and reports. */
     verification: z.enum(["independent", "custody-reported"]).optional(),
+    /** Things the agent should know, for example that a sell leaves a remainder too small to sell later. */
+    warnings: z.array(z.string()).optional(),
   }),
-  z.object({ status: z.literal("blocked"), code: BlockCode, message: z.string() }),
+  z.object({
+    status: z.literal("blocked"),
+    code: BlockCode,
+    message: z.string(),
+    /** For NO_LIQUIDITY on a stock: the smallest USD size that quotes right now, if one was found. */
+    suggestedUsd: z.number().optional(),
+  }),
   z.object({ status: z.literal("pending_approval"), requestId: z.string(), message: z.string() }),
   z.object({ status: z.enum(["failed", "refunded"]), message: z.string() }),
 ]);

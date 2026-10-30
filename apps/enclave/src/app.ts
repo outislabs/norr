@@ -1,4 +1,4 @@
-import { checkShield, EQUITY_DISCLAIMER, sumToday, unitsToNumber, type RiskResult } from "@norr/core";
+import { checkShield, EQUITY_DISCLAIMER, equityMinimum, MINIMUMS_NOTE, sumToday, unitsToNumber, type RiskResult } from "@norr/core";
 import { TradeInput, type Decision, type TradeRequest } from "@norr/shared";
 import { Hono } from "hono";
 import { valueLayers } from "./portfolio";
@@ -44,8 +44,9 @@ export function createApp({ deps, tokens, mock, adminToken }: AppOptions): Hono<
       for (const e of deps.registry.entries("equity")) {
         byTicker.set(e.ticker, [...(byTicker.get(e.ticker) ?? []), { issuer: e.issuer, symbol: e.symbol, id: e.id }]);
       }
-      out.equities = [...byTicker].map(([ticker, issuers]) => ({ ticker, issuers }));
+      out.equities = [...byTicker].map(([ticker, issuers]) => ({ ticker, minimumUsd: equityMinimum(ticker).usd, issuers }));
       out.equityNotice = EQUITY_DISCLAIMER;
+      out.equityMinimumNote = MINIMUMS_NOTE;
     }
     return c.json(out);
   });
@@ -97,6 +98,8 @@ export function createApp({ deps, tokens, mock, adminToken }: AppOptions): Hono<
       minimumOut: unitsToNumber(plan.quote.minAmountOut, out.decimals),
       outAsset: out.symbol,
       venue: plan.venue,
+      ...(plan.candidate.class === "equity" ? { statedMinimumUsd: equityMinimum(plan.candidate.ticker).usd } : {}),
+      ...(plan.warnings.length ? { warnings: plan.warnings } : {}),
     });
   });
 

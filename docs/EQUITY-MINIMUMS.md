@@ -43,5 +43,11 @@ Searched the live token lists (210 plain, 238 with `?ondoTokens=true`), includin
 ## Question for the NEAR Intents team (draft, ready to send)
 > Hi NEAR Intents team. We're building an agent trading layer on 1Click and Ondo assets. Dry quotes for USDC (NEAR) to Ondo tokens on Fri 2026-10-30 ~15:30Z: NVDAon, TSLAon, AAPLon, QQQon, AMZNon and GOOGLon quote from about $5.05 on `CONFIDENTIAL_INTENTS` routes, but MSFTon, INTCon, HOODon, TLTon and BRAINon only from $26; on the public `INTENTS` route quotes come and go with the amount (NVDAon quotes at $9 and $10 but not $12). On Sat 2026-10-24 ~10:30Z NVDAon needed at least $28. Sells quote from about $5.25 for all of them. Could you tell us: (1) Is there a documented minimum order size for Ondo assets through 1Click, and is it set by the protocol, the solvers or Ondo? (2) Why do the two ticker groups differ ($5 vs $26), and does the floor depend on US market hours or weekends? (3) Why are public-route quotes non-monotonic in amount while confidential ones are stable? (4) Positions under about $5 can't be sold ("No liquidity available"); is that expected? (5) Could the quote API return a specific minimum-amount error instead of the generic "No liquidity available"?
 
+## Built from these findings (2026-10-30)
+- `list_assets` shows each stock's `minimumUsd` ($5.10 for NVDA, TSLA, AAPL, QQQ, AMZN, GOOGL; $26 for the rest) with a note that it can be higher outside US market hours; `get_quote` shows `statedMinimumUsd`.
+- When a stock trade finds no liquidity, Norr probes larger sizes with free dry quotes (up to the vault's per-trade limit) and returns `NO_LIQUIDITY` with `suggestedUsd`, the smallest size that quotes right now, or says honestly that none does.
+- Sells that would leave a remainder under $5.10 return a `warnings` entry (in `get_quote` and in the result); they are not blocked.
+- The numbers are a static table (`packages/core/src/equity-minimums.ts`) from one afternoon of measurements. The scheduled re-runs (`scripts/research/run-at.sh`, results in `docs/research/`) are what should update it.
+
 ## Re-running
 `set -a; . ./.env; set +a; python3 scripts/research/equity-min-map.py --venue both` at different hours and on a weekend; compare with the table above and update this file.
