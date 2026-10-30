@@ -27,7 +27,7 @@ import {
 import { IntentsApiError, type BalanceReader, type ExecutionAuditor, type Quote, type Quoter, type SwapStatus, type Venue } from "@norr/intents";
 import type { Decision, TradeRequest } from "@norr/shared";
 import { KeyedMutex } from "./mutex";
-import { valueLayers } from "./portfolio";
+import { CASH_USD, valueLayers } from "./portfolio";
 import type { Ledger, Vault, VaultStore } from "./state";
 
 export interface TradeDeps {
@@ -117,7 +117,7 @@ export async function refreshState(deps: TradeDeps, vault: Vault): Promise<Layer
   layers.confidential = await vault.custody.confidentialHoldings().catch(() => undefined);
   // Update the totals only when every layer was readable; otherwise keep the last known values rather than guess.
   if ((!deps.balances || layers.public) && layers.confidential) {
-    const p = valueLayers(layers, deps.registry);
+    const p = valueLayers(layers, deps.registry, [deps.quoteAsset.id]);
     patch.portfolioValueUsd = p.totalUsd;
     patch.equityValueUsd = p.byClass.equity;
   }
@@ -406,6 +406,7 @@ export async function settle(deps: TradeDeps, vaultId: string, ctx: PendingSettl
     return failed("The swap ran but Norr could not confirm it matched the agreed terms, so this vault has been paused for the owner to review.");
   };
   let units: string; // whole units of the traded asset that were bought or sold
+  let cashUnits: string | undefined; // the cash (USDC) that actually moved: spent on a buy, received on a sell
   let verification: "independent" | "custody-reported";
   if (ctx.venue === "confidential") {
     // No independent source exists for the confidential layer, so compare balances read before and after
@@ -418,6 +419,7 @@ export async function settle(deps: TradeDeps, vaultId: string, ctx: PendingSettl
     if (!check.ok) return pause(`mismatch: ${check.mismatches.map((m) => m.field).join(", ")}`);
     const moved = (k: string) => BigInt(after[k] ?? "0") - BigInt(before[k] ?? "0");
     units = (ctx.side === "buy" ? moved(tokenOut) : -moved(tokenIn)).toString();
+    cashUnits = (ctx.side === "buy" ? -moved(tokenIn) : moved(tokenOut)).toString();
     verification = "custody-reported";
   } else {
     if (!st.depositAddress) return pause("no deposit address to audit");
@@ -426,12 +428,15 @@ export async function settle(deps: TradeDeps, vaultId: string, ctx: PendingSettl
     const check = verifyExecution(ctx.intended, executed);
     if (!check.ok) return pause(`mismatch: ${check.mismatches.map((m) => m.field).join(", ")}`);
     units = ctx.side === "buy" ? executed.amountOut : executed.amountIn;
+    cashUnits = ctx.side === "buy" ? executed.amountIn : executed.amountOut;
     verification = "independent";
   }
 
   const now = deps.now();
   const tokens = unitsToNumber(units, ctx.decimals);
-  const usd = ctx.side === "buy" ? ctx.quoteUsd.in : ctx.quoteUsd.out;
+  // Book what really moved (USDC at its peg), not the quote's estimate; fall back to the quote if the amount is unusable.
+  const cash = cashUnits !== undefined && BigInt(cashUnits) > 0n ? unitsToNumber(cashUnits, deps.quoteAsset.decimals) * CASH_USD : undefined;
+  const usd = cash ?? (ctx.side === "buy" ? ctx.quoteUsd.in : ctx.quoteUsd.out);
   deps.vaults.recordTrade(vaultId, now);
   deps.vaults.recordFill(vaultId, { assetId: ctx.assetId, side: ctx.side, qty: tokens, usd }, now);
   return { status: "executed", txRef: ctx.requestId, filled: { asset: ctx.symbol, amount: String(tokens), priceUsd: impliedPriceUsd(usd, tokens) }, venue: ctx.venue, verification, ...(ctx.warnings?.length ? { warnings: ctx.warnings } : {}) };

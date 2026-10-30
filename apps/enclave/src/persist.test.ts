@@ -110,8 +110,9 @@ describe("resolveBuildInfo", () => {
 
   it("falls back to the local git checkout", () => {
     const i = resolveBuildInfo({});
-    expect(i.source).toBe("git");
-    expect(i.commit).toMatch(/^[0-9a-f]{40}$/);
+    expect(["git", "unknown"]).toContain(i.source); // a copy of the repo without .git has no hash to report
+    if (i.source === "git") expect(i.commit).toMatch(/^[0-9a-f]{40}$/);
+    else expect(i.commit).toBeNull();
     expect(typeof i.dirty).toBe("boolean");
   });
 });

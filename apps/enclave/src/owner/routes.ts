@@ -1,4 +1,4 @@
-import { unitsToNumber } from "@norr/core";
+import { applyFill, lossToday, sumToday, unitsToNumber, type Book } from "@norr/core";
 import type { BuildInfo } from "../build-info";
 import { Policy } from "@norr/shared";
 import type { Hono } from "hono";
@@ -72,7 +72,8 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
     walletAccount: v.walletAccount,
     policy: v.policy,
     paused: v.policy.paused,
-    state: { spentTodayUsd: v.state.spentTodayUsd, realizedLossTodayUsd: v.state.realizedLossTodayUsd, lastTradeAt: v.state.lastTradeAtMs ? new Date(v.state.lastTradeAtMs).toISOString() : null },
+    // Computed now from the vault's day totals, not from the cached copy that only a trade refreshes.
+    state: { spentTodayUsd: sumToday(v.spend, deps.now()), realizedLossTodayUsd: lossToday(v.pnl, deps.now()), lastTradeAt: v.state.lastTradeAtMs ? new Date(v.state.lastTradeAtMs).toISOString() : null },
   });
 
   app.get("/owner/v1/me", (c) => {
@@ -146,9 +147,23 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
   app.get("/owner/v1/vaults/:id/activity", (c) => {
     const v = mine(c.get("owner") as string, c.req.param("id"));
     if (!v) return c.json({ error: "not found" }, 404);
-    const rows = deps.ledger.list(v.id).slice(-100).reverse();
+    const all = deps.ledger.list(v.id);
+    // What each executed trade actually moved, and the realized P&L of each sell, replayed in order with the
+    // same average-cost rule the loss cap uses (a sell only realizes the part Norr bought).
+    const executed = new Map<string, { usd: number; realizedUsd: number | null }>();
+    let book: Book = {};
+    for (const r of all) {
+      if (r.decision.status !== "executed") continue;
+      const qty = Number(r.decision.filled.amount);
+      const usd = qty * r.decision.filled.priceUsd;
+      const fill = applyFill(book, { assetId: r.decision.filled.asset, side: r.request.side, qty, usd });
+      book = fill.book;
+      executed.set(r.id, { usd, realizedUsd: r.request.side === "sell" ? fill.realizedUsd : null });
+    }
+    const rows = all.slice(-100).reverse();
     return c.json({
       activity: rows.map((r) => ({
+        executed: executed.get(r.id) ?? null,
         id: r.id,
         at: new Date(r.at).toISOString(),
         side: r.request.side,

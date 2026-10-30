@@ -19,6 +19,17 @@ export function describe(d: Decision): { label: string; tone: "ok" | "stop" | "w
   }
 }
 
+/** What happened. A trade that ran shows what it really moved; anything else shows what was asked for. */
+function headline(it: ActivityItem): string {
+  const buy = it.side === "buy";
+  if (it.decision.status === "executed" && it.executed) {
+    const base = buy ? `Bought ${it.asset}, spent ${usd(it.executed.usd)}` : `Sold ${it.asset}, received ${usd(it.executed.usd)}`;
+    const r = it.executed.realizedUsd;
+    return r === null ? base : `${base} (${r < 0 ? "realized loss" : "realized gain"} ${usd(Math.abs(r))})`;
+  }
+  return `${buy ? "Buy" : "Sell"} ${usd(it.amountUsd)} of ${it.asset}`;
+}
+
 const TONE = { ok: "text-verdigris", stop: "text-rust", wait: "text-brass", bad: "text-rust" } as const;
 
 export function ActivityList({ items, now }: { items: ActivityItem[]; now?: number }) {
@@ -33,7 +44,7 @@ export function ActivityList({ items, now }: { items: ActivityItem[]; now?: numb
               <p className="text-ivory">
                 <span className={`${TONE[d.tone]} font-medium`}>{d.label}</span>
                 <span className="mx-2 text-mist">·</span>
-                {it.side === "buy" ? "Buy" : "Sell"} {usd(it.amountUsd)} of {it.asset}
+                {headline(it)}
               </p>
               <time className="text-sm text-mist" dateTime={it.at}>
                 {ago(it.at, now)}

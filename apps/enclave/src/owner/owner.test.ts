@@ -258,8 +258,39 @@ describe("owner routes", () => {
     expect(pending[0].check).toContain("Approve only if");
   });
 
+  it("the overview reads today's spend and loss from the vault's own day totals, not a copy only a trade refreshes", async () => {
+    const { m, req, token } = await boot();
+    // Totals written outside the trade pipeline (as the live runner does), so no refresh has run in this process.
+    m.vaults.reserveSpend("demo", 6, T0);
+    m.vaults.recordFill("demo", { assetId: "nvda", side: "buy", qty: 0.03, usd: 6 }, T0);
+    m.vaults.recordFill("demo", { assetId: "nvda", side: "sell", qty: 0.03, usd: 5.93 }, T0);
+    const one = await (await req("/owner/v1/vaults/demo", { token })).json();
+    expect(one.state.spentTodayUsd).toBeCloseTo(6, 6);
+    expect(one.state.realizedLossTodayUsd).toBeCloseTo(0.07, 6);
+    const list = await (await req("/owner/v1/vaults", { token })).json();
+    expect(list.vaults[0].state.spentTodayUsd).toBeCloseTo(6, 6);
+  });
+
+  it("activity shows what each trade really moved and the realized P&L of each sell", async () => {
+    const { m, req, token, clock } = await boot();
+    const trade = (body: unknown) => m.app.request("/v1/trade", { method: "POST", headers: { authorization: `Bearer ${m.agentToken}`, "content-type": "application/json" }, body: JSON.stringify(body) });
+    expect((await (await trade({ side: "buy", asset: "SOL", amountUsd: 20, reason: "r" })).json()).status).toBe("executed");
+    clock.t += 60_000;
+    expect((await (await trade({ side: "sell", asset: "SOL", amountUsd: 30, reason: "r" })).json()).status).toMatch(/executed|failed/);
+    const { activity } = await (await req("/owner/v1/vaults/demo/activity", { token })).json();
+    const sells = activity.filter((a: { side: string; executed: unknown }) => a.side === "sell" && a.executed);
+    const buy = activity.find((a: { side: string }) => a.side === "buy");
+    expect(buy.executed.usd).toBeCloseTo(20, 2); // the cash that left, not a size that was asked for
+    expect(buy.executed.realizedUsd).toBeNull();
+    for (const s of sells) expect(s.executed.realizedUsd).not.toBeNull();
+  });
+
   it("the verify screen says honestly that there is no attestation yet", async () => {
     const { req, token } = await boot();
-    expect(await (await req("/owner/v1/verify", { token })).json()).toMatchObject({ mode: "mock", attested: false });
+    const v = await (await req("/owner/v1/verify", { token })).json();
+    expect(v).toMatchObject({ mode: "mock", attested: false });
+    // The code version is reported (a git checkout here; without .git it is honestly "unknown").
+    expect(v.source === "git" ? v.commit : null).toEqual(v.source === "git" ? expect.stringMatching(/^[0-9a-f]{40}$/) : null);
+    expect(typeof v.dirty).toBe("boolean");
   });
 });

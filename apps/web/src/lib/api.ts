@@ -21,7 +21,7 @@ export interface VaultSummary {
 }
 export interface Holding { symbol: string; class: "crypto" | "equity"; amount: number; valueUsd: number; layer?: "public" | "confidential" }
 export interface Portfolio { holdings: Holding[]; totalUsd: number; byClass: { crypto: number; equity: number } }
-export interface ActivityItem { id: string; at: string; side: "buy" | "sell"; asset: string; amountUsd: number; reason: string; decision: Decision; note: string | null; pending: boolean }
+export interface ActivityItem { id: string; executed: { usd: number; realizedUsd: number | null } | null; at: string; side: "buy" | "sell"; asset: string; amountUsd: number; reason: string; decision: Decision; note: string | null; pending: boolean }
 export interface PendingItem {
   ledgerId: string;
   requestId: string;

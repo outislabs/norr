@@ -125,7 +125,7 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build }: AppO
         public: deps.balances ? await deps.balances.holdings(vault.walletAccount) : undefined,
         confidential: await vault.custody.confidentialHoldings(),
       };
-      return c.json(valueLayers(layers, deps.registry));
+      return c.json(valueLayers(layers, deps.registry, [deps.quoteAsset.id]));
     } catch {
       return c.json({ error: "balances unavailable" }, 503);
     }

@@ -19,7 +19,7 @@ const policy = Policy.parse(JSON.parse(readFileSync(process.env.NORR_POLICY_FILE
 const owner = process.env.NORR_OWNER_ACCOUNT ?? "norrfi.near";
 const dir = dataDir(process.env);
 
-// Figures from the OutLayer-reported results (docs/FINDINGS.md). Times are when the requests were created.
+// Figures from the OutLayer-reported results (docs/FINDINGS.md). `usd` is the USDC that actually moved (balance before/after). Times are when the requests were created.
 const NVDA = "nep141:bnb-0xa9ee28c80f960b889dfbd1902055218cba016f75.omdep.near";
 const QTY = 0.029442134021611887;
 const trades = [
@@ -30,7 +30,6 @@ const trades = [
     amountUsd: 6,
     reason: "demo vault equity round trip",
     usd: 6.001944,
-    priceUsd: 203.7895543081124,
   },
   {
     at: Date.parse("2026-10-30T18:12:23.071Z"),
@@ -39,7 +38,6 @@ const trades = [
     amountUsd: 7,
     reason: "demo vault equity round trip, sell everything",
     usd: 5.930068,
-    priceUsd: 201.59092755461407,
   },
 ];
 
@@ -59,7 +57,7 @@ for (const t of trades) {
     vaultId: policy.vaultId,
     at: t.at,
     request: { vaultId: policy.vaultId, side: t.side, asset: "NVDA", amountUsd: t.amountUsd, reason: t.reason },
-    decision: { status: "executed", txRef: t.requestId, filled: { asset: "NVDAon", amount: String(QTY), priceUsd: t.priceUsd }, venue: "confidential", verification: "custody-reported" },
+    decision: { status: "executed", txRef: t.requestId, filled: { asset: "NVDAon", amount: String(QTY), priceUsd: t.usd / QTY }, venue: "confidential", verification: "custody-reported" },
     note: "Backfilled from the live runner's output (run before it shared durable state with the service).",
   });
   if (t.side === "buy") vaults.reserveSpend(policy.vaultId, t.amountUsd, t.at);

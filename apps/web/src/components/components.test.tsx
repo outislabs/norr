@@ -85,7 +85,18 @@ describe("KillSwitch", () => {
 });
 
 describe("ActivityList", () => {
-  const item = (over: Partial<ActivityItem>): ActivityItem => ({ id: "1", at: "2026-11-03T11:30:00Z", side: "buy", asset: "NVDA", amountUsd: 40, reason: "", decision: { status: "blocked", code: "OVER_TRADE_LIMIT", message: "$150 is over the limit." }, note: null, pending: false, ...over });
+  const item = (over: Partial<ActivityItem>): ActivityItem => ({ id: "1", executed: null, at: "2026-11-03T11:30:00Z", side: "buy", asset: "NVDA", amountUsd: 40, reason: "", decision: { status: "blocked", code: "OVER_TRADE_LIMIT", message: "$150 is over the limit." }, note: null, pending: false, ...over });
+
+  it("shows what an executed trade really moved, not the size that was asked for", () => {
+    const filled = { asset: "NVDAon", amount: "0.0294", priceUsd: 201.5 };
+    const sell = item({ side: "sell", amountUsd: 7, decision: { status: "executed", txRef: "r", filled, venue: "confidential", verification: "custody-reported" }, executed: { usd: 5.930068, realizedUsd: -0.071876 } });
+    const buy = item({ id: "2", side: "buy", amountUsd: 6, decision: { status: "executed", txRef: "r2", filled, venue: "confidential", verification: "custody-reported" }, executed: { usd: 6.001944, realizedUsd: null } });
+    const { container } = render(<ActivityList items={[sell, buy]} />);
+    const text = container.textContent ?? "";
+    expect(text).toContain("Sold NVDA, received $5.93 (realized loss $0.07)");
+    expect(text).toContain("Bought NVDA, spent $6.00");
+    expect(text).not.toContain("$7.00");
+  });
 
   it("shows refusals with their code, and the agent's reasoning labelled as owner-only", () => {
     render(<ActivityList now={Date.parse("2026-11-03T12:00:00Z")} items={[item({ reason: "momentum after earnings" })]} />);
