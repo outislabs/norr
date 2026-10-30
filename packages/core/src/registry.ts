@@ -8,6 +8,8 @@ export interface OneClickToken {
   symbol: string;
   price?: number;
   coingeckoId?: string;
+  /** Token contract on its own chain; used to look up market data. */
+  contractAddress?: string;
 }
 
 /** An equity issuer. Tokens are named `<TICKER><suffix>` (Ondo: NVDAon, xStocks: NVDAx). */
@@ -24,6 +26,7 @@ export interface RegistryEntry extends Asset {
   issuer: string | null; // null for crypto
   priceUsd: number | null;
   coingeckoId: string | null;
+  contractAddress: string | null;
 }
 
 export interface Resolution {
@@ -62,6 +65,7 @@ function toEntry(t: OneClickToken, cls: Asset["class"], issuer: EquityIssuer | n
     issuer: issuer?.id ?? null,
     priceUsd: t.price ?? null,
     coingeckoId: t.coingeckoId ?? null,
+    contractAddress: t.contractAddress ?? null,
   };
 }
 

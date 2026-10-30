@@ -1,7 +1,7 @@
+import { addRealized, applyFill, dayKey, type Book, type DayPnl, type Fill, type VaultState } from "@norr/core";
+import type { Custody } from "@norr/intents";
 import type { Decision, Policy, TradeRequest } from "@norr/shared";
 import type { PendingSettlement } from "./trade";
-import type { VaultState } from "@norr/core";
-import type { Custody } from "@norr/intents";
 
 /** One Norr vault: its private policy and state, and the custody wallet behind it. */
 export interface Vault {
@@ -11,13 +11,21 @@ export interface Vault {
   custody: Custody;
   /** The vault's Intents account id (the custody wallet's account). */
   walletAccount: string;
+  /** Average-cost positions for realized P&L. */
+  book: Book;
+  /** Net realized P&L for the current UTC day. */
+  pnl: DayPnl;
 }
 
 export interface VaultStore {
   get(id: string): Vault | undefined;
   /** The kill switch. Also used when a post-trade check fails. */
   pause(id: string, reason: string): void;
+  resume(id: string): void;
   recordTrade(id: string, atMs: number): void;
+  /** Update positions and the day's realized P&L after a verified fill. */
+  recordFill(id: string, fill: Fill, atMs: number): void;
+  refresh(id: string, patch: Partial<VaultState>): void;
 }
 
 export interface LedgerEntry {
@@ -38,6 +46,8 @@ export interface Ledger {
   get(id: string): LedgerEntry | undefined;
   list(vaultId: string): LedgerEntry[];
 }
+
+export const newVault = (v: Omit<Vault, "book" | "pnl">, nowMs: number): Vault => ({ ...v, book: {}, pnl: { day: dayKey(nowMs), netUsd: 0 } });
 
 export class MemoryVaultStore implements VaultStore {
   private readonly vaults = new Map<string, Vault>();
@@ -62,9 +72,29 @@ export class MemoryVaultStore implements VaultStore {
     this.pauseReasons.set(id, reason);
   }
 
+  resume(id: string): void {
+    const v = this.vaults.get(id);
+    if (!v) return;
+    v.policy = { ...v.policy, paused: false };
+    this.pauseReasons.delete(id);
+  }
+
   recordTrade(id: string, atMs: number): void {
     const v = this.vaults.get(id);
     if (v) v.state = { ...v.state, lastTradeAtMs: atMs };
+  }
+
+  recordFill(id: string, fill: Fill, atMs: number): void {
+    const v = this.vaults.get(id);
+    if (!v) return;
+    const r = applyFill(v.book, fill);
+    v.book = r.book;
+    v.pnl = addRealized(v.pnl, atMs, r.realizedUsd);
+  }
+
+  refresh(id: string, patch: Partial<VaultState>): void {
+    const v = this.vaults.get(id);
+    if (v) v.state = { ...v.state, ...patch };
   }
 }
 

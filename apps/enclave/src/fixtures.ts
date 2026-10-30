@@ -1,7 +1,7 @@
 import { HeuristicRiskProvider, ONDO, Registry, XSTOCKS, type OneClickToken, type RegistryEntry, type ShieldFeed } from "@norr/core";
 import { createMockRails, type MockOptions, type Quoter } from "@norr/intents";
 import type { Policy, TradeRequest } from "@norr/shared";
-import { MemoryLedger, MemoryVaultStore, type Vault } from "./state";
+import { MemoryLedger, MemoryVaultStore, newVault, type Vault } from "./state";
 import type { TradeDeps } from "./trade";
 
 const tok = (symbol: string, blockchain: string, price: number, decimals: number, coingeckoId?: string): OneClickToken => ({
@@ -49,20 +49,23 @@ export interface Harness {
 export function harness(opts: { mock?: MockOptions; policy?: Partial<Policy>; shield?: ShieldFeed | null; quoter?: (q: Quoter) => Quoter; settle?: { waitMs: number; intervalMs: number } } = {}): Harness {
   const registry = makeRegistry();
   const entries: RegistryEntry[] = registry.entries();
-  const rails = createMockRails(entries, WALLET, opts.mock);
+  const rails = createMockRails(entries, WALLET, { seed: { [USDC.assetId]: "1000000000" }, ...opts.mock });
   const clock = { t: 1_000_000 };
   const shieldCalls = { n: 0 };
-  const vault: Vault = {
-    id: "v1", policy: policy(opts.policy), custody: rails.custody, walletAccount: WALLET,
-    state: { realizedLossTodayUsd: 0, lastTradeAtMs: null, portfolioValueUsd: 1000, equityValueUsd: 0 },
-  };
+  const vault: Vault = newVault(
+    {
+      id: "v1", policy: policy(opts.policy), custody: rails.custody, walletAccount: WALLET,
+      state: { realizedLossTodayUsd: 0, lastTradeAtMs: null, portfolioValueUsd: 1000, equityValueUsd: 0 },
+    },
+    1_000_000,
+  );
   const vaults = new MemoryVaultStore([vault]);
   const ledger = new MemoryLedger();
   const risk = new HeuristicRiskProvider(async (a) =>
     a.symbol === "RUGCOIN" ? { routable: true, liquidityUsd: 3_000, marketCapUsd: 40_000, ageDays: 2 } : { routable: true, liquidityUsd: 5e6, marketCapUsd: 1e9, ageDays: 900 },
   );
   const deps: TradeDeps = {
-    registry, risk, vaults, ledger, auditor: rails.auditor,
+    registry, risk, vaults, ledger, auditor: rails.auditor, balances: rails.balances,
     quoter: opts.quoter ? opts.quoter(rails.quoter) : rails.quoter,
     quoteAsset: registry.byId(USDC.assetId)!,
     shield: async () => { shieldCalls.n++; return opts.shield === undefined ? { status: "operational" } : opts.shield; },

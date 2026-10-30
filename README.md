@@ -4,6 +4,25 @@
 
 Norr is a private trading layer for AI agents. An agent connects over MCP and trades crypto and tokenized US stocks and ETFs through NEAR Intents, while custody stays with the owner: the agent holds only a Norr token, never keys, and cannot choose where money goes. See `CLAUDE.md` for the design, `docs/ARCHITECTURE.md` for the decision record, and `docs/FINDINGS.md` for what was verified on mainnet and what was not.
 
+## Run it in 5 minutes (mock mode, no funds)
+Requires Node 20+ and pnpm.
+```
+pnpm install
+pnpm test                # 150+ tests, no network
+pnpm dev:mock            # starts the Norr service on :8787 with a funded demo vault
+```
+The server prints an agent token. Then, for example:
+```
+curl -H "Authorization: Bearer $TOKEN" localhost:8787/v1/policy
+curl -X POST localhost:8787/v1/trade -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+     -d '{"side":"buy","asset":"NVDA","amountUsd":40,"reason":"demo"}'      # executes
+curl -X POST localhost:8787/v1/trade -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+     -d '{"side":"buy","asset":"TSLA","amountUsd":150}'                       # OVER_TRADE_LIMIT
+curl -X POST localhost:8787/v1/trade -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+     -d '{"side":"buy","asset":"RUGPULL","amountUsd":5}'                      # SCAM_RISK
+```
+Mock mode stubs 1Click quotes, the custody provider and the TEE with fixed prices; nothing leaves your machine. The MCP server and dashboard are not built yet.
+
 ## Timeline & disclosure
 This repository keeps its full history. Some research and spike work happened **before** the hackathon window opened on Nov 1; it is listed here so judges can separate it from work done during the window. The project was built with Claude Code as the main implementation assistant, directed by the repository owner.
 

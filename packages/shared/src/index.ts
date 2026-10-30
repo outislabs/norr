@@ -36,6 +36,15 @@ export const TradeRequest = z.object({
 });
 export type TradeRequest = z.infer<typeof TradeRequest>;
 
+/** What an agent sends over the API. The vault comes from its token, never from the body. */
+export const TradeInput = z.object({
+  side: z.enum(["buy", "sell"]),
+  asset: z.string().min(1).max(200),
+  amountUsd: z.number().positive().max(1_000_000),
+  reason: z.string().max(2000).default(""),
+});
+export type TradeInput = z.infer<typeof TradeInput>;
+
 export const BlockCode = z.enum([
   "PAUSED",
   "OVER_TRADE_LIMIT",

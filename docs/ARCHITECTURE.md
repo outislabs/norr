@@ -29,5 +29,8 @@ agent token → Norr: resolve asset → Shield feed → risk or eligibility → 
 ## Autonomous mode (demo)
 Swaps skip approval within tight limits; `intents_withdraw` stays approval-gated and whitelisted to the owner. Details and the checks still to run are in `CLAUDE.md` §11.
 
+## Shield modes
+Default and the only production behavior: if the Shield incident feed cannot be read, trading is blocked (fail closed). A dev-only bypass (`SHIELD_MODE=dev-bypass`) exists for trying live trades while a SHIELD key is pending. It requires an explicit `NORR_ENV=dev` (unset counts as production), the service refuses to start with it under any other environment or in mock/demo mode, it covers only an unreachable feed (a reported incident still blocks), and it logs a warning on every evaluation and notes it in the ledger entry. Remove it from any demo or production config.
+
 ## Open items
 Equity execution through OutLayer (quotes work), Confidential Intents execution, limit orders, autonomous-mode policy, Phala hosting and attestation, IronClaw as demo agent, sovereign vault.

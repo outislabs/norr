@@ -20,7 +20,7 @@ describe("OneClick", () => {
   it("parses the token list and adds ?ondoTokens=true on request", async () => {
     const r = recorder(() => json([{ assetId: "nep141:a", decimals: 6, blockchain: "near", symbol: "USDC", price: 1, coingeckoId: "usd-coin" }]));
     const tokens = await new OneClick({ fetch: r.f }).tokens(true);
-    expect(tokens).toEqual([{ assetId: "nep141:a", decimals: 6, blockchain: "near", symbol: "USDC", price: 1, coingeckoId: "usd-coin" }]);
+    expect(tokens).toEqual([{ assetId: "nep141:a", decimals: 6, blockchain: "near", symbol: "USDC", price: 1, coingeckoId: "usd-coin", contractAddress: undefined }]);
     expect(r.calls[0]!.url).toContain("?ondoTokens=true");
   });
 

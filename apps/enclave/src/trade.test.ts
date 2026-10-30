@@ -24,9 +24,10 @@ describe("executeTrade: happy paths", () => {
 
   it("sells $20 of SOL back into USDC", async () => {
     const h = harness();
+    expect((await executeTrade(h.deps, req({ asset: "SOL", amountUsd: 30 }))).status).toBe("executed");
     const d = await executeTrade(h.deps, req({ side: "sell", asset: "SOL", amountUsd: 20 }));
     expect(d.status).toBe("executed");
-    expect(h.rails.swaps[0]).toMatchObject({ tokenIn: SOL.assetId, tokenOut: USDC.assetId });
+    expect(h.rails.swaps[1]).toMatchObject({ tokenIn: SOL.assetId, tokenOut: USDC.assetId });
   });
 
   it("routes a ticker to the issuer with the better quote", async () => {
@@ -168,5 +169,45 @@ describe("executeTrade: custody outcomes", () => {
     const h = harness({ mock: { swapError: new Error("socket hang up") } });
     const d = await executeTrade(h.deps, req());
     expect((d as { message: string }).message).toContain("could not be confirmed");
+  });
+});
+
+describe("realized loss feeds the daily loss cap", () => {
+  it("a round trip loses the fees; once past the cap, buying is blocked but selling still works", async () => {
+    const h = harness({ policy: { dailyLossCapUsd: 0.2, maxTradeUsd: 100 } });
+    expect((await executeTrade(h.deps, req({ asset: "SOL", amountUsd: 50 }))).status).toBe("executed");
+    // Sell the whole position (about 0.4985 SOL at $100): fees of about 0.3% each way lose about $0.30.
+    expect((await executeTrade(h.deps, req({ side: "sell", asset: "SOL", amountUsd: 49.85 }))).status).toBe("executed");
+    const vault = h.vaults.get("v1")!;
+    expect(vault.pnl.netUsd).toBeLessThan(-0.2);
+
+    h.clock.t += 60_000;
+    const again = await executeTrade(h.deps, req({ asset: "SOL", amountUsd: 5 }));
+    expect(again).toMatchObject({ status: "blocked", code: "DAILY_LOSS_CAP" });
+    expect(h.vaults.get("v1")!.state.realizedLossTodayUsd).toBeGreaterThan(0.2);
+  });
+
+  it("the loss resets on the next UTC day", async () => {
+    const h = harness({ policy: { dailyLossCapUsd: 0.2, maxTradeUsd: 100 } });
+    await executeTrade(h.deps, req({ asset: "SOL", amountUsd: 50 }));
+    await executeTrade(h.deps, req({ side: "sell", asset: "SOL", amountUsd: 49.85 }));
+    h.clock.t += 26 * 3_600_000;
+    expect((await executeTrade(h.deps, req({ asset: "SOL", amountUsd: 5 }))).status).toBe("executed");
+  });
+});
+
+describe("balances and portfolio-aware limits", () => {
+  it("the equity limit uses live balances: the first NVDA buy fits 10%, a second does not", async () => {
+    const h = harness({ policy: { maxEquityPct: 10, maxTradeUsd: 100 } });
+    expect((await executeTrade(h.deps, req({ amountUsd: 90 }))).status).toBe("executed"); // 9% of $1000
+    h.clock.t += 60_000;
+    expect(await executeTrade(h.deps, req({ amountUsd: 20 }))).toMatchObject({ status: "blocked", code: "EQUITY_LIMIT" });
+  });
+
+  it("selling more than the vault holds fails at custody without pausing it", async () => {
+    const h = harness();
+    const d = await executeTrade(h.deps, req({ side: "sell", asset: "SOL", amountUsd: 10 }));
+    expect(d.status).toBe("failed");
+    expect(h.vaults.get("v1")!.policy.paused).toBe(false);
   });
 });

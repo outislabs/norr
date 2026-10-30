@@ -41,6 +41,7 @@ export class OneClick implements Quoter, ExecutionAuditor {
         symbol: String(o.symbol),
         price: typeof o.price === "number" ? o.price : undefined,
         coingeckoId: str(o.coingeckoId),
+        contractAddress: str(o.contractAddress),
       };
     });
   }

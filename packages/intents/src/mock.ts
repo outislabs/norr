@@ -1,4 +1,5 @@
 import { unitsToNumber, usdToUnits, type ExecutedSwap, type RegistryEntry, type SwapBounds } from "@norr/core";
+import type { BalanceReader } from "./balances";
 import type { Custody, ExecutionAuditor, Quote, QuoteParams, Quoter, SwapStatus } from "./types";
 
 /**
@@ -18,6 +19,8 @@ export interface MockOptions {
   unauditable?: boolean;
   /** Make the custody call itself fail. */
   swapError?: Error;
+  /** Starting Intents balances for the vault: asset id to smallest units. */
+  seed?: Record<string, string>;
 }
 
 export function createMockRails(entries: RegistryEntry[], vaultAccount: string, o: MockOptions = {}) {
@@ -26,6 +29,7 @@ export function createMockRails(entries: RegistryEntry[], vaultAccount: string, 
   const executed = new Map<string, ExecutedSwap>();
   const requests = new Map<string, SwapStatus>();
   const swaps: SwapBounds[] = [];
+  const held: Record<string, bigint> = Object.fromEntries(Object.entries(o.seed ?? {}).map(([k, v]) => [k, BigInt(v)]));
   let n = 0;
 
   const quoter: Quoter = {
@@ -55,6 +59,11 @@ export function createMockRails(entries: RegistryEntry[], vaultAccount: string, 
       if (o.swapError) throw o.swapError;
       swaps.push(bounds);
       const id = `mock-req-${++n}`;
+      if ((held[bounds.tokenIn] ?? 0n) < BigInt(bounds.amountIn)) {
+        const st: SwapStatus = { state: "failed", requestId: id, detail: "insufficient balance" };
+        requests.set(id, st);
+        return st;
+      }
       const q = await quoter.quote({ tokenIn: bounds.tokenIn, tokenOut: bounds.tokenOut, amountIn: bounds.amountIn, recipient: vaultAccount });
       const depositAddress = `mock-deposit-${n}`;
       const real: ExecutedSwap = {
@@ -64,7 +73,12 @@ export function createMockRails(entries: RegistryEntry[], vaultAccount: string, 
         amountOut: q?.amountOut ?? "0",
         recipient: vaultAccount,
       };
-      executed.set(depositAddress, o.tamper ? o.tamper(real) : real);
+      const done = o.tamper ? o.tamper(real) : real;
+      executed.set(depositAddress, done);
+      if (!o.requireApproval) {
+        held[done.tokenIn] = (held[done.tokenIn] ?? 0n) - BigInt(done.amountIn);
+        held[done.tokenOut] = (held[done.tokenOut] ?? 0n) + BigInt(done.amountOut);
+      }
       const st: SwapStatus = o.requireApproval
         ? { state: "pending_approval", requestId: id, depositAddress }
         : { state: "success", requestId: id, depositAddress };
@@ -89,8 +103,20 @@ export function createMockRails(entries: RegistryEntry[], vaultAccount: string, 
     /** Test helper: the owner "approves" a pending request. */
     approve(requestId: string) {
       const st = requests.get(requestId);
-      if (st) requests.set(requestId, { ...st, state: "success" });
+      if (!st) return;
+      requests.set(requestId, { ...st, state: "success" });
+      const done = st.depositAddress ? executed.get(st.depositAddress) : undefined;
+      if (done) {
+        held[done.tokenIn] = (held[done.tokenIn] ?? 0n) - BigInt(done.amountIn);
+        held[done.tokenOut] = (held[done.tokenOut] ?? 0n) + BigInt(done.amountOut);
+      }
     },
+    /** The vault's balances, moved by mock swaps. */
+    balances: {
+      async holdings() {
+        return Object.fromEntries(Object.entries(held).filter(([, v]) => v > 0n).map(([k, v]) => [k, v.toString()]));
+      },
+    } as BalanceReader,
     swaps,
   };
 }
