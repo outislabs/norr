@@ -227,13 +227,14 @@ Locked decisions and every finding are in `docs/ARCHITECTURE.md` and `docs/FINDI
 
 | # | Deliverable | Done when |
 |---|---|---|
-| 1 | Norr service: OutLayer integration, swap guard, `verifyExecution` after every swap, Scam Shield, Shield feed, eligibility; **mock mode (`NORR_MOCK=1`) for judges** | Tests cover every block code and every verification outcome; whole flow runs with no funds |
-| 2 | $30 NVDAon equity round trip (Kelvin funds it) | Buy and sell back verified with `verifyExecution`; result in FINDINGS |
-| 3 | MCP server (stdio + streamable HTTP) | Claude Desktop trades through Norr end to end |
-| 4 | Phala deploy + attestation; autonomous mode with its own demo-vault policy | Attestation verifiable from outside; swaps skip approval within tight limits, withdrawals stay gated |
-| 5 | Dashboard: vaults, rules, activity with agent reasoning, kill switch, verify screen, request-vs-approval mismatch check | All screens work on mobile |
-| 6 | If time: Follow (verified PnL + viewing keys) and Aurora Intent Connect funding | Only after 1–5 are solid |
-| 7 | Demo rehearsal (~Nov 11–12), README for AI judges, demo video, X post draft, submission payload | Rehearsal runs clean 3 times; submission payload approved by Kelvin before sending |
+| 1 | Norr service: OutLayer integration, swap guard, `verifyExecution`, Scam Shield, Shield feed, eligibility, daily spend cap, **mock mode** | Done: 238 tests, runs with no funds |
+| 2 | MCP server (stdio + streamable HTTP) | Done in mock mode; tested with Claude Desktop |
+| 3 | **First live Confidential Intents trade** through OutLayer (small, from the existing balance), then fund the vault confidentially | A confidential swap executed and its limits written up honestly in `docs/PRIVACY.md` |
+| 4 | $30 NVDAon equity round trip (Kelvin funds it), confidentially if step 3 works | Buy and sell back checked with `verifyExecution`; result in FINDINGS |
+| 5 | Owner dashboard: vaults, rules, activity with agent reasoning, kill switch, verify screen, request-vs-approval mismatch check | All screens work on mobile |
+| 6 | Privacy layer: encrypted owner-only reasoning and log; Phala deploy + attestation; autonomous mode with its own demo-vault policy | Attestation verifiable from outside; swaps skip approval within tight limits, withdrawals stay gated |
+| 7 | If time: private strategy agent on IronClaw (unverified), Follow, Aurora Intent Connect | Only after 1-6 are solid |
+| 8 | Demo rehearsal (~Nov 11-12), README for AI judges (with the privacy table), demo video, X post draft, submission payload | Rehearsal runs clean 3 times; payload approved by Kelvin before sending |
 
 Submissions close Nov 14, 23:59 UTC; aim to submit with at least a day of buffer.
 
