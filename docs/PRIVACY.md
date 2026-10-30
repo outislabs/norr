@@ -48,6 +48,16 @@ Open risks:
 | Confidential swap USDC to SOL, and back | None found: the public Intents balance did not move; no NEAR transaction hash listed |
 | Confidential withdraw 1 USDC to the owner | Two public `execute_intents`: an intermediate account pays another intermediate account, which withdraws 1 USDC to the owner's account. The vault's account is not named |
 
+## Observed on mainnet (2026-10-30, demo vault, 8 USDC in, $6 NVDAon round trip)
+This is the "confidential in" design above, run on a fresh OutLayer wallet. What I checked on the public chain, and what I did not:
+
+| Step | Public footprint seen |
+|---|---|
+| Fund: 8 USDC to the per-request confidential deposit address | One plain NEP-141 `ft_transfer` from the owner's account to a hex deposit address (owner account, address and amount visible). The vault's account is not named in it. Afterwards the deposit address holds 0 USDC, so the funds were moved on; I did not trace that second movement |
+| Buy $6 NVDAon, then sell it all back (confidential) | None found where I looked: the vault's public Intents account held no tokens at any point I checked, so nothing was ever held publicly. I did not search the chain for other traces of the swaps (solver legs, relayer transactions), so "none found" means "not looked for beyond the vault's own balances" |
+
+What this shows: the vault never holds the money publicly, and the vault's account never appears in the funding transaction. What it does not show: that the owner and the vault cannot be linked. The funding transfer is a public transaction from the owner, with the amount, to an address Norr then routes into the vault's confidential balance, so a watcher who also sees the next hop could connect them. The design's advice for the exit (a different owner account, a time gap, no round amounts) applies to funding too.
+
 ## Verification limits (observed)
 After a shield, 1Click's status endpoint returned 404 for the deposit address. The only independent evidence of a confidential step is on the public side (the public balance falls, the public transaction is visible); the confidential balance and the result of confidential swaps come from OutLayer.
 
