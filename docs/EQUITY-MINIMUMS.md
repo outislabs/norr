@@ -40,6 +40,9 @@ Searched the live token lists (210 plain, 238 with `?ondoTokens=true`), includin
 - **Funding the NVDA test:** a $6 round trip on NVDAon in the confidential route would be quotable today, so a $31 top-up is no longer needed to prove it; $8-$10 would do. Quotes are not fills, so the first real one is still the proof.
 - **Suggested code change (not built):** when an equity trade returns no liquidity, probe a short ladder of larger sizes with free dry quotes and tell the agent the smallest size that quotes right now.
 
+## Serving smaller orders ourselves?
+Researched in `docs/SOLVER-FEASIBILITY.md` (Norr as a solver, PancakeSwap depth, a direct route): not recommended now.
+
 ## Question for the NEAR Intents team (draft, ready to send)
 > Hi NEAR Intents team. We're building an agent trading layer on 1Click and Ondo assets. Dry quotes for USDC (NEAR) to Ondo tokens on Fri 2026-10-30 ~15:30Z: NVDAon, TSLAon, AAPLon, QQQon, AMZNon and GOOGLon quote from about $5.05 on `CONFIDENTIAL_INTENTS` routes, but MSFTon, INTCon, HOODon, TLTon and BRAINon only from $26; on the public `INTENTS` route quotes come and go with the amount (NVDAon quotes at $9 and $10 but not $12). On Sat 2026-10-24 ~10:30Z NVDAon needed at least $28. Sells quote from about $5.25 for all of them. Could you tell us: (1) Is there a documented minimum order size for Ondo assets through 1Click, and is it set by the protocol, the solvers or Ondo? (2) Why do the two ticker groups differ ($5 vs $26), and does the floor depend on US market hours or weekends? (3) Why are public-route quotes non-monotonic in amount while confidential ones are stable? (4) Positions under about $5 can't be sold ("No liquidity available"); is that expected? (5) Could the quote API return a specific minimum-amount error instead of the generic "No liquidity available"?
 
