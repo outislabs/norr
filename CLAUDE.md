@@ -233,7 +233,7 @@ Locked decisions and every finding are in `docs/ARCHITECTURE.md` and `docs/FINDI
 | 2 | MCP server (stdio + streamable HTTP) | Done in mock mode; tested with Claude Desktop |
 | 3 | **First live Confidential Intents trade** through OutLayer (small, from the existing balance), then fund the vault confidentially | A confidential swap executed and its limits written up honestly in `docs/PRIVACY.md` |
 | 4 | $30 NVDAon equity round trip (Kelvin funds it), confidentially if step 3 works | Buy and sell back checked with `verifyExecution`; result in FINDINGS |
-| 5 | Owner dashboard: vaults, rules, activity with agent reasoning, kill switch, verify screen, request-vs-approval mismatch check | All screens work on mobile |
+| 5 | Owner dashboard: vaults, rules, activity with agent reasoning, kill switch, verify screen, request-vs-approval mismatch check | **First version built** (`apps/web`, owner API in the enclave); remaining: funding screen, real-wallet sign-in check, visual review on a phone |
 | 6 | Privacy layer: encrypted owner-only reasoning and log; Phala deploy + attestation; autonomous mode with its own demo-vault policy | Attestation verifiable from outside; swaps skip approval within tight limits, withdrawals stay gated |
 | 7 | If time: private strategy agent on IronClaw (unverified), Follow, Aurora Intent Connect | Only after 1-6 are solid |
 | 8 | Demo rehearsal (~Nov 11-12), README for AI judges (with the privacy table), demo video, X post draft, submission payload | Rehearsal runs clean 3 times; payload approved by Kelvin before sending |

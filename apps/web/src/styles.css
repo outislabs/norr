@@ -1,0 +1,41 @@
+@import "tailwindcss";
+@import "@fontsource/fraunces/400.css";
+@import "@fontsource/fraunces/600.css";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+
+/* A private bank's vault room at night: deep slate-blue, ivory paper text, one brass accent,
+   verdigris for "fine" and rust for "stopped". Hairlines instead of boxes. */
+@theme {
+  --font-display: "Fraunces", Georgia, serif;
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --color-night: #171b26;
+  --color-vault: #1e2433;
+  --color-line: #323b52;
+  --color-ivory: #efe8d8;
+  --color-mist: #a3abbd;
+  --color-brass: #c8a46a;
+  --color-brass-deep: #a9854d;
+  --color-verdigris: #7ab5a4;
+  --color-rust: #d58265;
+}
+
+:root { color-scheme: dark; }
+html { -webkit-text-size-adjust: 100%; }
+body { background: var(--color-night); color: var(--color-ivory); font-family: var(--font-sans); font-size: 16px; line-height: 1.55; margin: 0; }
+::selection { background: var(--color-brass); color: var(--color-night); }
+:focus-visible { outline: 2px solid var(--color-brass); outline-offset: 2px; border-radius: 2px; }
+
+@layer components {
+  .btn { @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-brass px-5 py-2 text-[15px] font-medium text-brass transition-colors hover:bg-brass hover:text-night disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-brass; }
+  .btn-solid { @apply bg-brass text-night hover:bg-brass-deep hover:border-brass-deep; }
+  .btn-danger { @apply border-rust text-rust hover:bg-rust hover:text-night; }
+  .btn-quiet { @apply border-line text-mist hover:border-mist hover:bg-transparent hover:text-ivory; }
+  .field { @apply min-h-11 w-full rounded-sm border border-line bg-vault px-3 py-2 font-mono text-[15px] text-ivory placeholder:text-mist/60; }
+  .label { @apply mb-1 block text-sm text-mist; }
+  .rule { @apply border-t border-line; }
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+}

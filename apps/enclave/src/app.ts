@@ -26,7 +26,8 @@ type Env = { Variables: { vaultId: string } };
 export function createApp({ deps, tokens, mock, adminToken, owner }: AppOptions): Hono<Env> {
   const app = new Hono<Env>();
 
-  app.get("/health", (c) => c.json({ ok: true, mock }));
+  // In mock mode the demo owner is public, so the dashboard can offer a one-click demo sign-in.
+  app.get("/health", (c) => c.json({ ok: true, mock, ...(mock ? { mockOwner: deps.vaults.list()[0]?.owner } : {}) }));
 
   app.use("/v1/*", async (c, next) => {
     const m = /^Bearer (.+)$/.exec(c.req.header("authorization") ?? "");

@@ -9,11 +9,12 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p apps/web/tsconfig.json",
     "check:tokens": "node scripts/check-tokens.mjs",
     "dev:mock": "NORR_MOCK=1 tsx apps/enclave/src/main.ts",
     "start": "tsx apps/enclave/src/main.ts",
-    "live:trade": "tsx scripts/live-trade.mts"
+    "live:trade": "tsx scripts/live-trade.mts",
+    "dev:web": "pnpm --filter @norr/web dev"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
