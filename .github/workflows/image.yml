@@ -53,7 +53,9 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:${{ github.sha }}
             ${{ env.IMAGE }}:latest
+      # GitHub only offers attestations for public repositories (or paid private ones), so this runs once the repo is public.
       - name: Sign the build provenance (links the digest to this repository and commit)
+        if: ${{ !github.event.repository.private }}
         uses: actions/attest-build-provenance@v2
         with:
           subject-name: ${{ env.IMAGE }}
