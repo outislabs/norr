@@ -51,3 +51,7 @@ pnpm --filter @norr/agent exec tsx src/eval.ts --models z-ai/glm-5.3-flash --sce
 NORR_AGENT_TOKEN=... pnpm --filter @norr/agent exec tsx src/cli.ts --mcp http://127.0.0.1:8788/mcp --model z-ai/glm-5.3-flash "Buy $5 of SOL"
 ```
 Needs `NEAR_AI_API_KEY` in `.env`. `NEAR_AI_EVAL_BUDGET_USD` (default 1) stops a run when the estimated spend passes it.
+
+## Response attestation is checked, not claimed (2026-10-31)
+
+The CLI verifies every completion unless run with `--no-attest`; the checks and what they do and do not prove are in FINDINGS.md ("NEAR AI Cloud: per-response attestation is verified"). It needs the model to be one NEAR AI Cloud serves from its own TEEs (the default GLM 5.3 Flash is, and passed live). Models from other owners are not covered by this check.

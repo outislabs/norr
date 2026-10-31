@@ -17,17 +17,24 @@ export function buildQuote(o: { rtmr3: Buffer; reportData: Buffer; version?: num
   return q.toString("hex");
 }
 
+/** dstack's digest for an RTMR3 event: SHA-384(event_type LE32 || ":" || event || ":" || payload). */
+export const eventDigest = (type: number, event: string, payloadHex: string): string => {
+  const t = Buffer.alloc(4);
+  t.writeUInt32LE(type);
+  return sha("sha384", Buffer.concat([t, Buffer.from(`:${event}:`), Buffer.from(payloadHex, "hex")])).toString("hex");
+};
+
 export function fixture(over: { appCompose?: string; nonce?: string } = {}) {
   const appCompose = over.appCompose ?? compose();
   const nonce = over.nonce ?? "11".repeat(32);
   const events: EventLogEntry[] = [
     { imr: 0, event_type: 1, digest: "00".repeat(48), event: "boot", event_payload: "" }, // another register: must not affect RTMR3
-    { imr: 3, event_type: 134217729, digest: sha("sha384", "app-id").toString("hex"), event: "app-id", event_payload: "abcd" },
-    { imr: 3, event_type: 134217729, digest: sha("sha384", "compose-hash").toString("hex"), event: "compose-hash", event_payload: sha("sha256", appCompose).toString("hex") },
-    { imr: 3, event_type: 134217729, digest: sha("sha384", "instance-id").toString("hex"), event: "instance-id", event_payload: "ff" },
+    { imr: 3, event_type: 134217729, digest: eventDigest(134217729, "app-id", "abcd"), event: "app-id", event_payload: "abcd" },
+    { imr: 3, event_type: 134217729, digest: eventDigest(134217729, "compose-hash", sha("sha256", appCompose).toString("hex")), event: "compose-hash", event_payload: sha("sha256", appCompose).toString("hex") },
+    { imr: 3, event_type: 134217729, digest: eventDigest(134217729, "instance-id", "ff"), event: "instance-id", event_payload: "ff" },
   ];
   let rtmr = Buffer.alloc(48);
-  for (const e of events) if (e.imr === 3) rtmr = sha("sha384", Buffer.concat([rtmr, Buffer.from(e.digest, "hex")]));
+  for (const e of events) if (e.imr === 3) rtmr = sha("sha384", Buffer.concat([rtmr, Buffer.from(e.digest, "hex")])); // digests above are already the full 48 bytes
   const reportData = Buffer.alloc(64);
   Buffer.from(nonce, "hex").copy(reportData);
   const evidence: AttestationEvidence = { quote: buildQuote({ rtmr3: rtmr, reportData }), eventLog: JSON.stringify(events) };

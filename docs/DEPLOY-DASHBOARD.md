@@ -2,13 +2,31 @@
 
 The dashboard is a static site (`apps/web`). It holds no secrets: it talks to the Norr service over HTTPS, signs in with the owner's NEAR wallet, and keeps its session in the tab.
 
-## Build and deploy
+## Cloudflare Pages: exact settings
 
-1. In Cloudflare Pages, connect the repo (or `wrangler pages deploy apps/web/dist`).
-2. Build command: `pnpm install --frozen-lockfile && pnpm --filter @norr/web build`. Output directory: `apps/web/dist`.
-3. Build variable: `VITE_NORR_API_URL=https://<your-service>.<phala-host>`. It must be `https`; the build refuses plain `http` for anything but localhost. Routing is hash-based, so no rewrite rules are needed.
-4. Custom domain: `app.norr.finance`.
-5. `apps/web/public/_headers` is served as-is (no sniffing, no framing, no referrer, no camera/mic/location). A strict Content-Security-Policy is deliberately not set: the wallet selector opens wallet pages and popups, and a wrong policy would break sign-in. Add one only after testing it with HOT and Meteor.
+Create the project now, before the CVM exists: with `VITE_NORR_API_URL` unset the build falls back to the same-origin `/api` and still succeeds, and the project's address (which the service must allow) is known the moment it is created.
+
+Workers & Pages, Create application, **Pages**, Connect to Git, pick `outislabs/norr` (the Cloudflare GitHub app needs access to that private repository), then:
+
+| Setting | Value |
+|---|---|
+| Project name | `norr` (the address becomes `https://norr.pages.dev`; if the name is taken Cloudflare appends letters, so copy the real address) |
+| Production branch | `main` |
+| Framework preset | None |
+| Root directory | leave empty (the repository root: the build needs the workspace lockfile) |
+| Build command | `pnpm install --frozen-lockfile && pnpm --filter @norr/web build` |
+| Build output directory | `apps/web/dist` |
+| Environment variable `NODE_VERSION` | `22` |
+| Environment variable `PNPM_VERSION` | `10.18.0` (matches `packageManager` in `package.json`) |
+| Environment variable `VITE_NORR_API_URL` | leave unset until the CVM exists; then `https://<service-host>` (https only, no trailing path). It is read at build time, so changing it needs a new deployment (Deployments, Retry, or push a commit) |
+
+Then:
+
+1. **Preview deployments:** in Settings, Builds, set preview deployments to None (or accept that only the production address can sign in: the service allows exactly the origins in `NORR_ALLOWED_ORIGINS`, and every preview has its own address).
+2. **Origin for the service:** put the production address, with no trailing slash, in `NORR_ALLOWED_ORIGINS` in `deploy/.env.phala` (for example `https://norr.pages.dev`). A custom domain later (`app.norr.finance`) means adding it to that list and redeploying the CVM's environment.
+3. **Headers and routing:** `apps/web/public/_headers` is served as-is and routing is hash-based, so there are no redirect or rewrite rules to set.
+4. **Without Git access:** build locally and upload instead: `VITE_NORR_API_URL=https://<service-host> pnpm --filter @norr/web build && pnpm dlx wrangler pages deploy apps/web/dist --project-name norr`.
+5. Not set on purpose: a strict Content-Security-Policy. The wallet selector opens wallet pages and popups; add one only after testing it with HOT and Meteor.
 
 ## The service side
 

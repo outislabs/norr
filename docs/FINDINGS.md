@@ -248,7 +248,7 @@ Option C from the funding decision, tested live with 1 USDC from the owner's acc
 - **Visibility.** The owner's transfer is a plain public NEP-141 `ft_transfer` to a one-time address: the sender, address and amount are visible. The vault's account is not named in it.
 - **OutLayer's stale label.** The earlier deposit intent created through OutLayer's endpoint still lists as `pending_deposit` though its funds arrived.
 
-## Attestation checks (2026-10-31): built, not yet run against a real quote
+## Attestation checks (2026-10-31): built; see the real-data results below
 
 The service exposes public `GET /attestation?nonce=` and `GET /info` (503 with an honest message when there is no TEE). `packages/shared/src/attestation.ts` holds the checks the dashboard's Verify screen and `scripts/verify-attestation.mts` both run: the quote's report data equals our nonce; SHA-256 of the app configuration equals the `compose-hash` event; replaying the RTMR3 events reproduces the quote's RTMR3; every image is pinned by digest; and, on request, Phala's verification API confirms the quote's signature chain.
 
@@ -259,3 +259,34 @@ The service exposes public `GET /attestation?nonce=` and `GET /info` (503 with a
 ## Image build in CI (2026-10-31)
 
 First CI build of the Dockerfile succeeded (commit `ddd2b5d`, digest `sha256:9eb9338adcd4e8a826859bfd437830cbc9229414b7665ad52f2d7053934d54be`). Replaying the image's install in a scratch directory first caught an undeclared `zod` dependency. GitHub does not offer build-provenance attestations for a private personal repository ("Feature not available for user-owned private repositories"), so that step runs only once the repository is public.
+
+## Attestation checks against real dstack data, and a bug it found (2026-10-31)
+
+No Phala CVM exists yet, but NEAR AI Cloud runs on dstack too, and its public attestation reports carry a real TDX quote, event log and `app_compose`. Running `checkAttestation` on them (gateway and model reports) gave:
+
+- **Quote layout confirmed.** `parseQuote` (v4, RTMR3 and REPORTDATA offsets) reads real quotes; MRCONFIGID (body offset 184) and TDATTRIBUTES (120) were added and used.
+- **compose-hash confirmed.** SHA-256 of `tcb_info.app_compose` equals the `compose-hash` event.
+- **Bug found and fixed: the RTMR3 replay.** It used each event's `digest` field as stored. Real logs need the digest recomputed as SHA-384(event_type as 4 little-endian bytes, ":", event, ":", payload), and then SHA-384(rtmr, digest). The old replay failed on real data while passing on our own synthetic fixtures, which had encoded the same wrong assumption. Fixed in `packages/shared/src/attestation.ts`; the synthetic builder now uses the real formula, a stated digest that does not match its content is refused, and a real gateway report is kept as a regression fixture (`attestation.real.fixture.json`, public evidence only) with tamper tests.
+- **Phala's verification service** (`/api/v1/attestations/verify`) returned `verified` for the real NEAR AI quotes, so the call shape is right. Phala's bundled 2025 sample quote did not verify (stale), which fails closed as intended.
+- **Still unverified:** a quote from our own CVM (first deployment), and the SDK call on the dstack socket. Phala's simulator could not run here: the CLI downloads an aarch64 build and this Mac is Intel (`spawn ... -86`, bad CPU type). Its bundled sample files are mutually inconsistent (its compose-hash event matches none of its own `app-compose.json` forms), so they test nothing about the compose check.
+- **Note for the compose check:** an image written as `${VAR:-name@sha256:...}` (as NEAR AI's model compose does) is reported as not pinned, because the variable can override the pin at runtime. Norr's own compose uses plain digests.
+
+## NEAR AI Cloud: per-response attestation is verified (2026-10-31)
+
+`apps/agent/src/verify.ts` no longer takes "private model" on trust. For each completion it hashes the exact request and response bytes, fetches a nonce-fresh attestation report for the model and the gateway, and checks: the quote's report data binds the signer's key and our nonce, TDX debug is off, MRCONFIGID commits to `app_compose`, the RTMR3 event log replays to the quote, Phala's service confirms the quote's signature chain, and NVIDIA's service accepts the GPU evidence (model reports). Then it fetches `/v1/signature/{id}`, requires the signed text to be built from our exact bytes (`model:request_hash:response_hash` for the model's key, two hashes for the gateway's), recovers the EIP-191 signer, and requires that signer to be vouched for by a report that passed. The client sends `x-no-aliasing: true` so the signature is bound to the canonical model.
+
+- **Live result:** a GLM 5.3 Flash completion came back `attested` with every check passing (gateway and model reports, both quote chains, GPU evidence, signature, signer).
+- **What it does not prove:** which code is in the measured configuration (compose hashes are reported, and enforced only if an allowlist is given), and that the same serving instance answered (instances of a model share one signing key). It sends each quote to Phala and the GPU payload to NVIDIA, which is a trust assumption on both; `dcap-qvl` locally would remove the first.
+
+## Autonomy on the demo wallet: not separable, approvals kept (2026-10-31)
+
+Read-only (`scripts/autonomy-check.mts`; the agent key can read the policy but only the owner can change it, and there is no swap dry-run route, both candidates answer 404):
+
+- The demo wallet's policy has approval threshold 1 (approver `norrfi.near`), **no `excluded_types`**, `transaction_types: ["confidential"]`, capability `confidential` on, and an address whitelist of `legalalienx.near` plus the controller key. Plain `withdraw` is not an allowed type at all (its dry-run is denied).
+- From earlier live runs: a confidential **swap** and a confidential **withdraw** are both gated as the single type `confidential` (the withdraw dry-run was denied with "Transaction type 'confidential' is not allowed by policy"). An approval exemption for `confidential` would therefore skip approval for withdrawals too. They cannot be separated by type.
+- **Decision: keep approvals** for the demo. What an exemption would still leave in place: the whitelist (funds can only go to the owner's own accounts), per-transaction and daily limits, and the rate limit; what it would remove is the owner's signature on withdrawals. If wanted anyway, the owner can add `excluded_types: ["confidential"]` in OutLayer's dashboard; the check to run afterwards is a confidential withdraw dry-run, which would show whether it still says it requires approval.
+- Note: the whitelist holds `legalalienx.near`, not `norrfi.near`, so a withdrawal from the demo wallet goes to `legalalienx.near`.
+
+## Real "rug" token for the live demo (2026-10-31)
+
+`scripts/rug-scan.mts` scores the live registry with the service's own risk provider (read-only). Of 120 symbols tried, 62 were high risk. Good candidates with real reasons: **GNEAR** (liquidity about $8.4k, market cap about $14k), NearKat, mpDAO, ABG, BLACKDRAGON. Side finding: several legitimate assets (ZEC, FRAX, AURORA, JAMBO) also score high only because DexScreener returns nothing for them, so Scam Shield blocks them (it fails closed on unknown data). That is safe but means an owner cannot trade them without an allowlist or a better data source; listed as a known limitation.

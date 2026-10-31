@@ -11,10 +11,10 @@ Do not start a CVM until every item here is done, or the hours are wasted.
 | # | Item | Who | Why it blocks |
 |---|---|---|---|
 | 1 | **`SHIELD_API_KEY` approved and in `deploy/.env.phala`** | owner | The deployed service cannot use the dev bypass (and must not). Without the key every trade is blocked by the fail-closed Shield check: the demo could not trade. This is the biggest dependency. |
-| 2 | **Autonomy decision, tested.** Either demo trades wait for norrfi.near to approve each swap in OutLayer's dashboard (visible in the video), or the OutLayer policy lets swaps skip approval while withdrawals stay gated. The second is untested; test it on the demo wallet (no CVM needed). | owner + me | Otherwise the agent's trades sit at `pending_approval` during the recording. |
-| 3 | **Fund the demo vault for the script.** It holds about $8.93 USDC. The script as written ($40 NVDA, $50 limit, $5 SOL) needs roughly $60 to $100, or the script is rescaled to $5 to $6 trades (the NVDA floor is $5.10 for liquid stocks). | owner | A $40 buy fails for lack of funds. |
-| 4 | **GHCR package `norr` set to public**, and the image built from the exact commit to deploy (CI does it on every push to main; the digest is in the run's summary). | owner | The CVM cannot pull a private image; the compose must pin the digest. |
-| 5 | **Cloudflare Pages project created** (empty is fine) so its origin is known, for example `https://norr.pages.dev` or `https://app.norr.finance`. | owner | `NORR_ALLOWED_ORIGINS` is baked into the CVM's sealed environment and the sign-in is bound to it. |
+| 2 | ~~Autonomy decision~~ **Decided 2026-10-31: approvals kept.** Swaps and withdrawals share the one OutLayer type `confidential`, so they cannot be exempted separately (FINDINGS.md, "Autonomy"). Each live demo swap waits for norrfi.near to approve in OutLayer's dashboard, shown on camera. | done | Nothing blocks. |
+| 3 | ~~Fund the demo vault~~ **Decided 2026-10-31: no extra funding; the script is rescaled** to $5.50 NVDA, $20 TSLA (blocked at the $10 limit), $5 GNEAR (blocked, a real low-liquidity token), $3 USDC to SOL (`docs/DEMO.md`). The vault's $8.93 cannot fund a $5 swap after a $5.50 buy, hence $3. | done | Nothing blocks. |
+| 4 | ~~GHCR package public~~ done (package-level, so new digests stay public). **The image must still be built from the exact commit to deploy**: CI does it on every push to main; the digest is in the run's summary. | me | The CVM cannot pull a private image; the compose must pin the digest. |
+| 5 | **Cloudflare Pages project created** with the settings in `DEPLOY-DASHBOARD.md` ("Cloudflare Pages: exact settings") so its origin is known, for example `https://norr.pages.dev`. | owner | `NORR_ALLOWED_ORIGINS` is baked into the CVM's sealed environment and the sign-in is bound to it. |
 | 6 | **Phala account ready:** `phala login` done, a payment method or credit in place, and the cheapest instance type chosen with `phala instance-types`. | owner | Deploy needs it. |
 | 7 | **`deploy/.env.phala` filled in** from `deploy/env.phala.example`: `NORR_DATA_KEY` generated with `openssl rand -base64 32` and **a copy kept offline**, the OutLayer demo credentials, the 1Click key, the Shield key, `NORR_OWNER_ACCOUNT`, `NORR_ALLOWED_ORIGINS`, and `NORR_POLICY_JSON` (the policy from `config/policy.demo.local.json` as one line). Never pasted into chat, never committed (it is gitignored). | owner + me | These become sealed environment variables. |
 | 8 | **`deploy/docker-compose.yml`** with both `REPLACE_WITH_DIGEST` values replaced by the digest from CI. | me | The attestation only means something if images are pinned by digest. |
@@ -52,7 +52,7 @@ Rough totals for 72 hours, using the two instance prices Phala's pages quote (ch
    pnpm exec tsx scripts/verify-attestation.mts https://<service-url>
    phala cvms attestation --cvm-id norr-demo
    ```
-   Expect five PASS plus the Phala signature check. These checks have only been run against quotes built to the documented layout, so a failure here is most likely a layout detail; the failing check's message says which. Compare the compose hash with Phala's own view.
+   Expect five PASS plus the Phala signature check. The checks have been run against real dstack quotes (NEAR AI Cloud's, see FINDINGS.md) but not yet against one from our own CVM, so a failure here is most likely a detail specific to Phala's setup; the failing check's message says which. Compare the compose hash with Phala's own view.
 7. **Dashboard.** Build and deploy the Pages site with `VITE_NORR_API_URL=https://<service-url>`. Open it, sign in with HOT as norrfi.near, check Vaults, Verify (run "Check attestation"), Fund.
 8. **Agent token.** Create one in the dashboard (Vaults, your agent). The token the service prints at startup is in the logs: revoke that one.
 9. **Agent run:**
@@ -67,7 +67,7 @@ Rough totals for 72 hours, using the two instance prices Phala's pages quote (ch
 ## Part D. Known risks, and what we do about them
 
 - **First container run.** Nothing has run the image. Mitigation: the 2-hour smoke deploy before anything depends on it.
-- **Attestation checks never saw a real quote.** Mitigation: step 6 on the smoke deploy; the checks print what they compared.
+- **Attestation checks never saw a quote from our own CVM.** They pass on real dstack quotes from NEAR AI Cloud (one bug was found and fixed that way). Mitigation: step 6 on the smoke deploy; the checks print what they compared. Phala's simulator does not run on this Intel Mac (aarch64 build only).
 - **Shield key late.** Without it the live demo cannot trade. Mitigation: ask now; if it does not arrive, the demo shows blocked trades (which are the interesting ones) and mock mode shows the rest, stated honestly in the README.
 - **Judges arrive while the CVM is stopped.** Mitigation: README lists the live windows; mock mode (`NORR_MOCK=1`) runs the whole flow locally at any time.
 - **`NORR_DATA_KEY` lost.** The saved ledger and counters become unreadable and the service refuses to start (by design). Mitigation: offline copy. After a loss, delete the CVM's volume to start clean; caps then start from zero, so do it only between sessions.

@@ -131,15 +131,22 @@ export function parseEventLog(eventLog: string): EventLogEntry[] {
   });
 }
 
-/** RTMR3 as the platform extends it: start from 48 zero bytes, then SHA-384(rtmr || digest) for each IMR 3 event. */
+/**
+ * RTMR3 as dstack extends it: each IMR 3 event's digest is SHA-384(event_type as 4 little-endian bytes || ":" || event
+ * || ":" || payload), and RTMR3 starts at 48 zero bytes and becomes SHA-384(rtmr || digest) per event. The digest is
+ * recomputed here, never trusted from the log; a digest the log states must match it. (Checked against the live
+ * attestation reports of NEAR AI Cloud, which run on dstack.)
+ */
 export async function replayRtmr3(events: EventLogEntry[]): Promise<string> {
   let rtmr: Uint8Array = new Uint8Array(48);
+  const enc = new TextEncoder();
   for (const e of events) {
     if (e.imr !== 3) continue;
-    const d = hexToBytes(e.digest);
-    const padded = new Uint8Array(48);
-    padded.set(d.subarray(0, 48)); // shorter digests are zero-padded, as in the TCG event-log rules
-    rtmr = await digest("SHA-384", concat(rtmr, padded));
+    const type = new Uint8Array(4);
+    new DataView(type.buffer).setUint32(0, e.event_type ?? 0, true);
+    const d = await digest("SHA-384", concat(type, enc.encode(":"), enc.encode(e.event), enc.encode(":"), hexToBytes(e.event_payload)));
+    if (e.digest && bytesToHex(d) !== e.digest.toLowerCase()) throw new Error(`event "${e.event}" does not hash to its stated digest`);
+    rtmr = await digest("SHA-384", concat(rtmr, d));
   }
   return bytesToHex(rtmr);
 }

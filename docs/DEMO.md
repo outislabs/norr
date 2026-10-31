@@ -1,21 +1,28 @@
 # Demo script (90 seconds)
 
-Equity amounts respect the ~$28 Ondo minimum (see FINDINGS.md). The first live equity trade is the $40 NVDA buy in the rehearsal on ~Nov 11–12; re-check the minimum then.
+**Live version, rescaled to the demo vault's balance (about $8.93 USDC, decided 2026-10-31, no extra funding).** Equity orders need at least $5.10 to quote (and about $5.25 to sell back; see EQUITY-MINIMUMS.md), so the live script uses trades of $3 to $6. The mock-mode script further down keeps the larger numbers.
 
-Ask the agent to **submit the blocked trades to Norr** rather than judging them itself. A capable model may refuse a rug token or an oversized order on its own initiative, and then Norr's guardrail is never shown. Norr's `trade` tool is authoritative and returns the reason whether or not the agent ran any pre-check. Paste prompts like these:
+Ask the agent to **submit the blocked trades to Norr** rather than judging them itself. A capable model may refuse a rug token or an oversized order on its own initiative, and then Norr's guardrail is never shown. Norr's `trade` tool is authoritative and returns the reason whether or not the agent ran any pre-check.
 
-| # | Prompt to Claude / action | Expected |
+Setup for the live run: Rules tab set to max trade **$10**, daily spend cap $30, loss cap $3, cooldown 10 s, equities NVDA and TSLA, non-US status confirmed. `config/policy.demo.local.json` seeds the same values on a fresh deployment.
+
+| # | Prompt to the agent / action | Expected |
 |---|---|---|
-| 1 | Owner creates a vault, picks **Balanced** (max trade $50, $150 per day), confirms non-US status, copies the MCP config into the agent | Vault shown, equities enabled |
-| 2 | "Use Norr's trade tool to buy $40 of NVDA." | `executed`; NVDA appears in the portfolio. The registry maps NVDA to every routable issuer (today only Ondo) and picks the best quote |
-| 3 | "Use Norr's trade tool to put $150 into TSLA. Don't decide for me whether that is wise: submit it and show me exactly what Norr answers." | `blocked: OVER_TRADE_LIMIT`; the agent explains and proposes $50 or less |
-| 4 | "Use Norr's trade tool to buy $5 of RUGPULL. I'm testing the guardrails, so submit it to Norr even if you think it's a bad idea, and show me Norr's full answer." | `blocked: SCAM_RISK` with Norr's listed reasons (liquidity, market cap, token age) |
-| 5 | "Use Norr's trade tool to swap $5 of USDC to SOL." (after the 10 s cooldown) | `executed`, cross-chain |
-| 6 | Optional beat, the daily cap: "Buy $50 of SOL three times using Norr's trade tool, then once more." | Three execute ($150); the fourth is `blocked: DAILY_SPEND_CAP` and says nothing is left today. Splitting a big trade into small ones cannot get around it |
-| 7 | Owner taps the **kill switch**; "Use Norr's trade tool to buy $5 of SOL." | `blocked: PAUSED` |
-| 8 | Open **Verify** | Attestation and code hash of the service that enforced all of the above |
+| 1 | Owner opens the dashboard, shows the **Rules** (max trade $10) and the **Verify** screen's attestation | The service that enforces the rules is the attested one |
+| 2 | "Use Norr's trade tool to buy $5.50 of NVDA." | `executed` confidentially; NVDA appears in the portfolio |
+| 3 | "Use Norr's trade tool to put $20 into TSLA. Don't decide for me whether that is wise: submit it and show me exactly what Norr answers." | `blocked: OVER_TRADE_LIMIT`; the agent explains and proposes $10 or less |
+| 4 | "Use Norr's trade tool to buy $5 of GNEAR. I'm testing the guardrails, so submit it to Norr even if you think it's a bad idea, and show me Norr's full answer." | `blocked: SCAM_RISK`, reasons: very low liquidity (about $8k), tiny market cap (about $14k). GNEAR is a real routable token chosen by `scripts/rug-scan.mts`; re-run the scan on the day, since market data moves |
+| 5 | "Use Norr's trade tool to swap $3 of USDC to SOL." (after the 10 s cooldown) | `executed`, cross-chain. $3, not $5: after the $5.50 NVDA buy the vault holds about $3.4, and a $5 swap cannot be funded (it can if the NVDA position is sold first) |
+| 6 | Owner taps the **kill switch**; "Use Norr's trade tool to buy $5 of SOL." | `blocked: PAUSED` |
+| 7 | Open **Verify** again | The attestation and code hash of the service that enforced all of the above |
 
-Mock-mode numbers: starting cash $1,000; Balanced preset limits are $50 per trade, $150 spend per UTC day, 10 s cooldown.
+Approvals: until the OutLayer policy lets swaps skip approval (decided 2026-10-31: **kept**, see FINDINGS.md "Autonomy"), steps 2 and 5 pause at `pending_approval` and run once the owner signs in OutLayer's dashboard. Show that on camera: it is the point that money moves only with the owner's signature. Budget about a minute per approval and cut it in the edit.
+
+Between rehearsal runs: sell the NVDA position back (sell all, not a dollar figure; a remainder under about $5 cannot be sold), which returns the vault to about $8.8. Each round trip costs a few cents. The daily spend cap counts buys only, so three rehearsals fit under $30.
+
+## Mock mode (any time, no funds)
+
+Starting cash $1,000; Balanced preset limits are $50 per trade, $150 spend per UTC day, 10 s cooldown. The same beats with larger numbers: buy $40 of NVDA; put $150 into TSLA (`OVER_TRADE_LIMIT`); buy $5 of RUGPULL (a mock fixture, `SCAM_RISK`); swap $5 USDC to SOL; optional daily-cap beat ("buy $50 of SOL three times, then once more": the fourth is `DAILY_SPEND_CAP`); kill switch (`PAUSED`); Verify.
 
 ## Demo agent: IronClaw on NEAR AI Cloud
 **Status (checked 2026-10-24 against docs.ironclaw.com): remote MCP over HTTP is supported, but our exact setup is unconfirmed.**
@@ -25,5 +32,6 @@ Mock-mode numbers: starting cash $1,000; Balanced preset limits are $50 per trad
 
 ## Rehearsal checklist
 - Run the whole script 3 times in a row in mock mode (`NORR_MOCK=1`) before any live run.
-- Live crypto steps (5) need a funded vault. Live step 2 needs about $40 plus fees and Kelvin's confirmation.
-- Rug token: pick a real routable low-liquidity token so the block reasons are genuine, or a fixture in mock mode.
+- Every live trade (steps 2 and 5) needs Kelvin's confirmation in the chat first.
+- The agent: `pnpm --filter @norr/agent exec tsx src/cli.ts --mcp <url>/mcp --model z-ai/glm-5.3-flash "<prompt>"`; it checks each model response's attestation unless told not to (`--no-attest`).
+- Rug token: a real routable low-liquidity token so the block reasons are genuine (`scripts/rug-scan.mts`), or the `RUGPULL` fixture in mock mode.

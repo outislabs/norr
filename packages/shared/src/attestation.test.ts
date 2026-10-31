@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { DIGEST, buildQuote, compose, fixture, sha } from "./attestation.fixture";
+import { DIGEST, buildQuote, compose, eventDigest, fixture, sha } from "./attestation.fixture";
+import real from "./attestation.real.fixture.json";
 import { allPass, bytesToHex, checkAttestation, composeImages, hexToBytes, parseEventLog, parseQuote, replayRtmr3, verifyQuoteWithPhala, type EventLogEntry } from "./attestation";
 
 const byId = (checks: Awaited<ReturnType<typeof checkAttestation>>) => Object.fromEntries(checks.map((c) => [c.id, c.status]));
@@ -69,11 +70,32 @@ describe("parsing", () => {
     expect(() => parseQuote("00")).toThrow(/too short/);
   });
 
-  it("replays RTMR3 from zeros, only over IMR 3, and pads a short digest", async () => {
+  it("replays RTMR3 from zeros and only over IMR 3, recomputing each digest", async () => {
     expect(await replayRtmr3([])).toBe("00".repeat(48));
-    const short: EventLogEntry = { imr: 3, digest: "abcd", event: "x", event_payload: "" };
-    const padded = Buffer.concat([Buffer.from("abcd", "hex"), Buffer.alloc(46)]);
-    expect(await replayRtmr3([short, { imr: 1, digest: "ff".repeat(48), event: "y", event_payload: "" }])).toBe(sha("sha384", Buffer.concat([Buffer.alloc(48), padded])).toString("hex"));
+    const e: EventLogEntry = { imr: 3, event_type: 7, digest: eventDigest(7, "x", "ab"), event: "x", event_payload: "ab" };
+    const expected = sha("sha384", Buffer.concat([Buffer.alloc(48), Buffer.from(e.digest, "hex")])).toString("hex");
+    expect(await replayRtmr3([e, { imr: 1, digest: "ff".repeat(48), event: "y", event_payload: "" }])).toBe(expected);
+    expect(await replayRtmr3([{ ...e, digest: "" }])).toBe(expected); // a log may omit the digest: it is recomputed anyway
+  });
+
+  it("refuses an event whose stated digest is not the hash of its content", async () => {
+    await expect(replayRtmr3([{ imr: 3, event_type: 7, digest: "00".repeat(48), event: "x", event_payload: "ab" }])).rejects.toThrow(/stated digest/);
+  });
+
+  it("passes the checks that do not need our nonce on a real dstack report (NEAR AI Cloud gateway), and fails when it is tampered with", async () => {
+    const { quote, eventLog, appCompose } = real as { quote: string; eventLog: string; appCompose: string };
+    const nonce = parseQuote(quote).reportData.slice(0, 64);
+    const ok = await checkAttestation(nonce, { quote, eventLog }, { appCompose });
+    const by = (cs: typeof ok, id: string) => cs.find((c) => c.id === id)?.status;
+    expect(by(ok, "quote-format")).toBe("pass");
+    expect(by(ok, "compose-hash")).toBe("pass");
+    expect(by(ok, "event-log")).toBe("pass");
+    const tampered = await checkAttestation(nonce, { quote, eventLog }, { appCompose: appCompose.replace("image:", "image :") });
+    expect(by(tampered, "compose-hash")).toBe("fail");
+    const log = JSON.parse(eventLog) as EventLogEntry[];
+    const i = log.findIndex((x) => x.imr === 3 && x.event_payload);
+    log[i] = { ...log[i]!, event_payload: "00" + log[i]!.event_payload.slice(2) };
+    expect(by(await checkAttestation(nonce, { quote, eventLog: JSON.stringify(log) }, { appCompose }), "event-log")).toBe("fail");
   });
 
   it("validates hex and the event log shape", () => {
