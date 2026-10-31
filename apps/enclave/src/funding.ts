@@ -12,6 +12,8 @@ export interface FundingRequest {
   minAmount: string;
   address: string;
   intentId: string;
+  /** Where the address came from: Norr's own 1Click quote, or the custody provider. */
+  source: "1click" | "custody";
   /** The vault's confidential balance of the token when the address was requested. */
   baseline: string;
   requestedAt: number;

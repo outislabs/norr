@@ -78,6 +78,7 @@ export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed
     shield: async () => (o.shield === undefined ? { status: "operational" } : o.shield),
     quoter: rails.quoter,
     auditor: rails.auditor,
+    funder: rails.funder,
     balances: rails.balances,
     vaults,
     ledger: sealing,

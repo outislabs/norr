@@ -126,6 +126,25 @@ describe("confidential layer", () => {
     expect(r.calls).toHaveLength(0);
   });
 
+  it("1Click: a funding quote is real (not dry), pays the vault's confidential account, refunds to the funder, and returns the one-time address", async () => {
+    const r = recorder(() => json({ quote: { depositAddress: "abc123def456", amountIn: "1000000", amountOut: "1000000", minAmountOut: "990000", deadline: "2026-11-01T12:30:00Z" } }));
+    const oc = new OneClick({ fetch: r.f, now: () => Date.UTC(2026, 10, 1, 12, 0) });
+    expect(await oc.requestDeposit({ token: "nep141:usdc", amount: "1000000", recipient: "vaultacct", refundTo: "funder.near" })).toEqual({ depositAddress: "abc123def456", amountIn: "1000000", amountOut: "1000000", minAmountOut: "990000", deadline: "2026-11-01T12:30:00Z" });
+    expect(r.calls[0]!.url).toBe("https://1click.chaindefuser.com/v0/quote");
+    expect(JSON.parse(String(r.calls[0]!.init.body))).toMatchObject({
+      dry: false, swapType: "EXACT_INPUT", originAsset: "nep141:usdc", destinationAsset: "nep141:usdc", amount: "1000000",
+      depositType: "ORIGIN_CHAIN", recipient: "vaultacct", recipientType: "CONFIDENTIAL_INTENTS", refundTo: "funder.near", refundType: "ORIGIN_CHAIN",
+      confidentiality: "basic", deadline: "2026-11-01T12:30:00.000Z",
+    });
+  });
+
+  it("1Click: refuses a funding offer with no address, or one that would lose more than 1%", async () => {
+    const quote = (q: object) => new OneClick({ fetch: recorder(() => json({ quote: q })).f });
+    const p = { token: "nep141:usdc", amount: "1000000", recipient: "v", refundTo: "f.near" };
+    await expect(quote({ amountIn: "1000000", amountOut: "1000000", minAmountOut: "1", deadline: "x" }).requestDeposit(p)).rejects.toThrow(/unexpected/);
+    await expect(quote({ depositAddress: "a", amountIn: "1000000", amountOut: "980000", minAmountOut: "970000", deadline: "x" }).requestDeposit(p)).rejects.toThrow(/lose more than 1%/);
+  });
+
   it("OutLayer: asks for a confidential deposit address with the source asset and amount, and rejects a reply without one", async () => {
     const r = recorder(() => json({ intent_id: "i1", deposit_address: "49e108dd", amount: "8000000", amount_out: "8000000", min_amount_out: "7920000", expires_at: "2026-11-02T17:49:39Z" }));
     expect(await ol(r).requestConfidentialDeposit("nep141:usdc", "8000000")).toEqual({ intentId: "i1", depositAddress: "49e108dd", amount: "8000000", minAmountOut: "7920000", expiresAt: "2026-11-02T17:49:39Z" });

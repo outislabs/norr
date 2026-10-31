@@ -12,8 +12,9 @@ const left = (iso: string, now: number): string => {
  * wallet, watch for it to arrive. The address comes from the custody provider through the Norr service;
  * the agent has no way to ask for one.
  */
-export function FundingPanel({ api, vaultId, pollMs = 5000, onArrived }: { api: Api; vaultId: string; pollMs?: number; onArrived?: () => void }) {
+export function FundingPanel({ api, vaultId, account = "", pollMs = 5000, onArrived }: { api: Api; vaultId: string; account?: string; pollMs?: number; onArrived?: () => void }) {
   const [amount, setAmount] = useState("5");
+  const [from, setFrom] = useState(account);
   const [offer, setOffer] = useState<FundingOffer | null>(null);
   const [status, setStatus] = useState<FundingStatus | null>(null);
   const [busy, setBusy] = useState(false);
@@ -47,7 +48,7 @@ export function FundingPanel({ api, vaultId, pollMs = 5000, onArrived }: { api: 
     setBusy(true);
     try {
       const n = Number(amount);
-      setOffer(await api.requestFunding(vaultId, n));
+      setOffer(await api.requestFunding(vaultId, n, from.trim() || undefined));
       setStatus(null);
       setCopied(false);
     } catch (e) {
@@ -89,6 +90,10 @@ export function FundingPanel({ api, vaultId, pollMs = 5000, onArrived }: { api: 
             Amount in USDC (1 to 1000)
             <input className="field w-40" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Amount in USDC" />
           </label>
+          <label className="flex min-w-60 flex-col gap-1 text-sm text-mist">
+            Account you will send from (refunds go here)
+            <input className="field" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="Account you will send from" placeholder="yourname.near" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+          </label>
           <button type="submit" className="btn" disabled={busy}>
             {busy ? "Asking…" : offer ? "Get a new address" : "Get a deposit address"}
           </button>
@@ -101,7 +106,8 @@ export function FundingPanel({ api, vaultId, pollMs = 5000, onArrived }: { api: 
         <div className="flex flex-col gap-4 border-t border-line pt-5">
           {state === "arrived" ? (
             <p className="text-verdigris" role="status">
-              Arrived: {usd(status!.receivedUsdc)} USDC is in the vault&apos;s confidential balance (now {usd(status!.balanceUsdc)}). This is the custody provider&apos;s report.
+              Arrived: {usd(status!.receivedUsdc)} USDC is in the vault&apos;s confidential balance (now {usd(status!.balanceUsdc)}). The balance is the custody provider&apos;s report.
+              {status!.independentlyConfirmed ? " 1Click, which issued the address, independently confirms the delivery." : ""}
             </p>
           ) : (
             <>

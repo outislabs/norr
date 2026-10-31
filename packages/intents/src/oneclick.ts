@@ -1,6 +1,6 @@
 import type { ExecutedSwap, OneClickToken } from "@norr/core";
 import { obj, requestJson, str, type FetchLike } from "./http";
-import { IntentsApiError, type ExecutionAuditor, type Quote, type QuoteParams, type Quoter } from "./types";
+import { IntentsApiError, type DepositOffer, type DepositParams, type DepositQuoter, type ExecutionAuditor, type Quote, type QuoteParams, type Quoter } from "./types";
 
 export interface OneClickOptions {
   baseUrl?: string;
@@ -11,7 +11,7 @@ export interface OneClickOptions {
 }
 
 /** 1Click client: token list, dry quotes (Norr's own price source) and the independent status check. */
-export class OneClick implements Quoter, ExecutionAuditor {
+export class OneClick implements Quoter, ExecutionAuditor, DepositQuoter {
   private readonly baseUrl: string;
   private readonly f: FetchLike;
   private readonly now: () => number;
@@ -78,6 +78,40 @@ export class OneClick implements Quoter, ExecutionAuditor {
       if (e instanceof IntentsApiError && e.status === 400 && /no liquidity/i.test(e.message)) return null;
       throw e;
     }
+  }
+
+  /**
+   * A real (not dry) quote for funding: public USDC on NEAR in, the same asset out into the vault's confidential
+   * balance. Returns 1Click's one-time deposit address. Moves nothing by itself; the owner sends the funds.
+   * Refuses an offer that would lose more than 1% on the way.
+   */
+  async requestDeposit(p: DepositParams): Promise<DepositOffer> {
+    const body = {
+      dry: false,
+      depositMode: "SIMPLE",
+      swapType: "EXACT_INPUT",
+      slippageTolerance: this.slippageBps,
+      originAsset: p.token,
+      depositType: "ORIGIN_CHAIN",
+      destinationAsset: p.token,
+      amount: p.amount,
+      recipient: p.recipient,
+      recipientType: "CONFIDENTIAL_INTENTS",
+      refundTo: p.refundTo,
+      refundType: "ORIGIN_CHAIN",
+      confidentiality: "basic",
+      deadline: new Date(this.now() + 30 * 60_000).toISOString(),
+    };
+    const res = obj(await requestJson(this.f, `${this.baseUrl}/v0/quote`, { method: "POST", headers: this.headers, body: JSON.stringify(body) }, "1Click deposit quote"));
+    const q = obj(res.quote);
+    const depositAddress = str(q.depositAddress);
+    const amountIn = str(q.amountIn);
+    const amountOut = str(q.amountOut);
+    const minAmountOut = str(q.minAmountOut);
+    const deadline = str(q.deadline);
+    if (!depositAddress || !amountIn || !amountOut || !minAmountOut || !deadline) throw new IntentsApiError(502, "1Click deposit quote: unexpected response");
+    if (BigInt(amountOut) * 100n < BigInt(amountIn) * 99n) throw new IntentsApiError(502, "1Click deposit quote: the route would lose more than 1%, so it is not offered");
+    return { depositAddress, amountIn, amountOut, minAmountOut, deadline };
   }
 
   /** What 1Click says happened for a deposit address. Null unless the swap succeeded. */

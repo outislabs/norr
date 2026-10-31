@@ -341,6 +341,36 @@ describe("owner routes", () => {
     expect((await m.app.request("/v1/funding", { method: "POST", headers: { authorization: `Bearer ${m.agentToken}` } })).status).toBe(404);
   });
 
+  it("funding: the address comes from Norr's own 1Click quote, pays the vault, refunds to the account named, and 1Click can confirm independently", async () => {
+    const { m, req, token } = await boot();
+    const vault = m.deps.vaults.get("demo")!;
+    const asked: unknown[] = [];
+    const real = m.deps.funder!.requestDeposit.bind(m.deps.funder);
+    m.deps.funder!.requestDeposit = async (p) => (asked.push(p), real(p));
+    vault.custody.requestConfidentialDeposit = async () => { throw new Error("the custody provider must not be asked when 1Click can answer"); };
+
+    const offer = await (await req("/owner/v1/vaults/demo/funding", { token, body: { amountUsdc: 1, fromAccount: "funder.near" } })).json();
+    expect(asked).toEqual([{ token: m.deps.quoteAsset.id, amount: "1000000", recipient: vault.walletAccount, refundTo: "funder.near" }]);
+    expect(offer.address).toMatch(/^mockdep/);
+
+    m.rails.creditConfidential(m.deps.quoteAsset.id, "1000000");
+    expect((await (await req(`/owner/v1/vaults/demo/funding/${offer.id}`, { token })).json())).toMatchObject({ state: "arrived", independentlyConfirmed: false });
+    m.deps.auditor.audit = async () => ({ tokenIn: m.deps.quoteAsset.id, tokenOut: m.deps.quoteAsset.id, amountIn: "1000000", amountOut: "1000000", recipient: vault.walletAccount });
+    expect((await (await req(`/owner/v1/vaults/demo/funding/${offer.id}`, { token })).json()).independentlyConfirmed).toBe(true);
+    m.deps.auditor.audit = async () => ({ tokenIn: "x", tokenOut: "x", amountIn: "1", amountOut: "1", recipient: "somebody-else" });
+    expect((await (await req(`/owner/v1/vaults/demo/funding/${offer.id}`, { token })).json()).independentlyConfirmed).toBe(false);
+  });
+
+  it("funding: the refund account defaults to the owner, and anything that is not an account id is refused", async () => {
+    const { m, req, token } = await boot();
+    const asked: { refundTo: string }[] = [];
+    const real = m.deps.funder!.requestDeposit.bind(m.deps.funder);
+    m.deps.funder!.requestDeposit = async (p) => (asked.push(p), real(p));
+    await req("/owner/v1/vaults/demo/funding", { token, body: { amountUsdc: 1 } });
+    expect(asked[0]!.refundTo).toBe(MOCK_OWNER);
+    for (const fromAccount of ["", "A B", "x", "UPPER.near", "a".repeat(70), "evil/../x"]) expect((await req("/owner/v1/vaults/demo/funding", { token, body: { amountUsdc: 1, fromAccount } })).status).toBe(400);
+  });
+
   it("funding: expires after the window if nothing arrives, bad amounts are refused, and open requests are limited", async () => {
     const { req, token, clock } = await boot();
     for (const amountUsdc of [0, 0.5, 5000, "5", null]) expect((await req("/owner/v1/vaults/demo/funding", { token, body: { amountUsdc } })).status).toBe(400);
@@ -352,8 +382,9 @@ describe("owner routes", () => {
     expect((await req("/owner/v1/vaults/demo/funding", { token, body: { amountUsdc: 5 } })).status).toBe(200);
   });
 
-  it("funding: when the custody policy blocks the request, the owner is told why and what to change", async () => {
+  it("funding (custody fallback): when the custody policy blocks the request, the owner is told why and what to change", async () => {
     const { m, req, token } = await boot();
+    m.deps.funder = undefined; // no 1Click funder configured, so the custody provider is asked
     m.deps.vaults.get("demo")!.custody.requestConfidentialDeposit = async () => {
       throw new Error("OutLayer confidential deposit address: Transaction type 'call' is not allowed by policy");
     };
@@ -362,13 +393,28 @@ describe("owner routes", () => {
     expect((await r.json()).error).toMatch(/custody policy does not allow.*"call"/);
   });
 
-  it("funding: an address that does not look like one is never shown", async () => {
+  it("funding: an address that does not look like one is never shown, from either source", async () => {
     const { m, req, token } = await boot();
-    const custody = m.deps.vaults.get("demo")!.custody;
-    custody.requestConfidentialDeposit = async () => ({ intentId: "i", depositAddress: "send it to <script>", amount: "5000000", minAmountOut: "5000000" });
+    m.deps.funder!.requestDeposit = async () => ({ depositAddress: "send it to <script>", amountIn: "5000000", amountOut: "5000000", minAmountOut: "5000000", deadline: "x" });
+    const viaOneClick = await req("/owner/v1/vaults/demo/funding", { token, body: { amountUsdc: 5 } });
+    expect(viaOneClick.status).toBe(502);
+    expect(await viaOneClick.text()).not.toContain("script");
+
+    m.deps.funder = undefined;
+    m.deps.vaults.get("demo")!.custody.requestConfidentialDeposit = async () => ({ intentId: "i", depositAddress: "send it to <script>", amount: "5000000", minAmountOut: "5000000" });
+    const viaCustody = await req("/owner/v1/vaults/demo/funding", { token, body: { amountUsdc: 5 } });
+    expect(viaCustody.status).toBe(502);
+    expect(await viaCustody.text()).not.toContain("script");
+  });
+
+  it("funding: if 1Click cannot give an address, the owner gets a plain retry message and nothing is recorded", async () => {
+    const { m, req, token } = await boot();
+    m.deps.funder!.requestDeposit = async () => { throw new Error("1Click deposit quote: HTTP 503"); };
     const r = await req("/owner/v1/vaults/demo/funding", { token, body: { amountUsdc: 5 } });
-    expect(r.status).toBe(502);
-    expect(await r.text()).not.toContain("script");
+    expect(r.status).toBe(503);
+    expect(await r.text()).not.toContain("HTTP 503"); // provider details are not passed through
+    m.deps.funder!.requestDeposit = async () => ({ depositAddress: "okaddress1234", amountIn: "5000000", amountOut: "5000000", minAmountOut: "4950000", deadline: "x" });
+    for (let i = 0; i < 3; i++) expect((await req("/owner/v1/vaults/demo/funding", { token, body: { amountUsdc: 5 } })).status).toBe(200); // failures did not use up the open-request limit
   });
 
   it("the verify screen says honestly that there is no attestation yet", async () => {

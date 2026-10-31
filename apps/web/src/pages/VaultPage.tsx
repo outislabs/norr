@@ -100,7 +100,7 @@ export function VaultPage({ api, account, id, tab, onChanged }: { api: Api; acco
             </div>
           </div>
         )}
-        {tab === "fund" && <FundingPanel api={api} vaultId={id} onArrived={() => vault.reload()} />}
+        {tab === "fund" && <FundingPanel api={api} vaultId={id} account={account} onArrived={() => vault.reload()} />}
         {tab === "rules" && <PolicyForm key={JSON.stringify(v.policy)} policy={v.policy} onSave={save} />}
         {tab === "activity" && (activity.error ? <p role="alert" className="text-rust">{activity.error}</p> : activity.data ? <ActivityTab api={api} account={account} vaultId={id} items={activity.data.activity} reload={activity.reload} /> : <p className="text-mist">Loading…</p>)}
         {tab === "approvals" && (

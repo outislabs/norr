@@ -168,7 +168,7 @@ describe("FundingPanel", () => {
     expect(text).toContain(offer.asset.contract);
     expect(text).toContain("character by character");
     expect(text).toContain("normal public transaction");
-    expect(api.requestFunding).toHaveBeenCalledWith("demo", 8);
+    expect(api.requestFunding).toHaveBeenCalledWith("demo", 8, undefined);
 
     s = { ...s, state: "arrived", receivedUsdc: 8, balanceUsdc: 15.93 };
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Arrived: $8.00 USDC"));

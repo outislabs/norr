@@ -28,6 +28,32 @@ export interface Quoter {
   quote(p: QuoteParams): Promise<Quote | null>;
 }
 
+/** What the owner is funding: public USDC on NEAR into the vault's confidential balance. */
+export interface DepositParams {
+  token: string;
+  /** Smallest units the owner will send. */
+  amount: string;
+  /** The vault's own Intents account: the confidential balance the money lands in. Always set by Norr, never by a caller. */
+  recipient: string;
+  /** Where 1Click returns the money if the deposit cannot complete: the account the owner sends from. */
+  refundTo: string;
+}
+
+export interface DepositOffer {
+  /** The one-time address to send to, from 1Click's own quote. */
+  depositAddress: string;
+  amountIn: string;
+  amountOut: string;
+  minAmountOut: string;
+  /** When 1Click starts refunding an incomplete deposit. */
+  deadline: string;
+}
+
+/** Norr's own source of deposit addresses, independent of the custody provider's policy. */
+export interface DepositQuoter {
+  requestDeposit(p: DepositParams): Promise<DepositOffer>;
+}
+
 export type SwapState = "pending_approval" | "in_progress" | "success" | "failed";
 
 export interface SwapStatus {

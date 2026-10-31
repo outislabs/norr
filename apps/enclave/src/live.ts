@@ -70,6 +70,7 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env) {
     onShieldBypass: (vaultId) => console.warn(bypassWarning(vaultId)),
     quoter: oneclick,
     auditor: oneclick,
+    funder: oneclick,
     balances: new NearIntentsBalances(),
     vaults,
     ledger,

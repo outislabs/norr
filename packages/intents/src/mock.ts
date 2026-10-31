@@ -1,6 +1,6 @@
 import { unitsToNumber, usdToUnits, type ExecutedSwap, type RegistryEntry, type SwapBounds } from "@norr/core";
 import type { BalanceReader } from "./balances";
-import type { Custody, DepositRequest, ExecutionAuditor, Quote, QuoteParams, Quoter, SwapStatus, Venue, WithdrawParams } from "./types";
+import type { Custody, DepositOffer, DepositParams, DepositQuoter, DepositRequest, ExecutionAuditor, Quote, QuoteParams, Quoter, SwapStatus, Venue, WithdrawParams } from "./types";
 
 /**
  * Mock rails for NORR_MOCK=1: prices come from the registry, fees are fixed, nothing leaves the process.
@@ -145,8 +145,16 @@ export function createMockRails(entries: RegistryEntry[], vaultAccount: string, 
     },
   };
 
+  const funder: DepositQuoter = {
+    async requestDeposit(p: DepositParams): Promise<DepositOffer> {
+      const k = ++n;
+      return { depositAddress: `mockdep${k.toString(16).padStart(56, "0")}`, amountIn: p.amount, amountOut: p.amount, minAmountOut: ((BigInt(p.amount) * 99n) / 100n).toString(), deadline: new Date(Date.now() + 30 * 60_000).toISOString() };
+    },
+  };
+
   return {
     quoter,
+    funder,
     custody,
     auditor,
     /** Test helper: the owner "approves" a pending request. */

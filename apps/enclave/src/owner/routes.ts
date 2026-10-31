@@ -111,7 +111,7 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
 
   // Funding: the owner asks for a one-time confidential deposit address, sends USDC to it from their own wallet,
   // and watches for it to arrive. The address always comes from the custody provider; nothing here takes one from a caller.
-  const FundBody = z.object({ amountUsdc: z.number().min(1).max(1000) });
+  const FundBody = z.object({ amountUsdc: z.number().min(1).max(1000), fromAccount: z.string().regex(/^[a-z0-9][a-z0-9._-]{1,63}$/).optional() });
   const cash = () => deps.quoteAsset;
   const SAFE_ADDRESS = /^[A-Za-z0-9._-]{8,128}$/;
 
@@ -126,11 +126,17 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
     try {
       const baseline = (await v.custody.confidentialHoldings())[cash().id] ?? "0";
       const amount = usdToUnits(body.data.amountUsdc, CASH_USD, cash().decimals);
-      const req = await v.custody.requestConfidentialDeposit(cash().id, amount);
-      if (!SAFE_ADDRESS.test(req.depositAddress)) return c.json({ error: "The custody provider returned an address that does not look valid, so it is not shown." }, 502);
+      // Norr's own 1Click quote is the source (nothing depends on the custody policy); the custody provider is the fallback.
+      // Either way the recipient is the vault itself, set here, and the refund goes to the account the owner sends from.
+      const refundTo = body.data.fromAccount ?? owner;
+      const source = deps.funder ? "1click" : "custody";
+      const req = deps.funder
+        ? await deps.funder.requestDeposit({ token: cash().id, amount, recipient: v.walletAccount, refundTo }).then((o) => ({ intentId: o.depositAddress, depositAddress: o.depositAddress, amount: o.amountIn, minAmountOut: o.minAmountOut }))
+        : await v.custody.requestConfidentialDeposit(cash().id, amount);
+      if (!SAFE_ADDRESS.test(req.depositAddress)) return c.json({ error: "The address returned does not look valid, so it is not shown." }, 502);
       const id = `fund-${now.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
       const expiresAt = now + FUNDING_WINDOW_MS;
-      funding.add({ id, vaultId: v.id, token: cash().id, amount: req.amount, minAmount: req.minAmountOut, address: req.depositAddress, intentId: req.intentId, baseline, requestedAt: now, expiresAt });
+      funding.add({ id, vaultId: v.id, token: cash().id, amount: req.amount, minAmount: req.minAmountOut, address: req.depositAddress, intentId: req.intentId, source, baseline, requestedAt: now, expiresAt });
       note(owner, `requested a deposit address for ${body.data.amountUsdc} USDC`, v.id);
       return c.json({ id, address: req.depositAddress, amountUsdc: unitsToNumber(req.amount, cash().decimals), asset: { symbol: cash().symbol, chain: "NEAR", contract: cash().id.replace(/^nep141:/, "") }, expiresAt: new Date(expiresAt).toISOString() });
     } catch (e) {
@@ -149,7 +155,10 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
     try {
       const balance = (await v.custody.confidentialHoldings())[r.token] ?? "0";
       const s = fundingState(r, balance, deps.now());
-      return c.json({ state: s.state, receivedUsdc: unitsToNumber(s.received, cash().decimals), balanceUsdc: unitsToNumber(balance, cash().decimals), expiresAt: new Date(r.expiresAt).toISOString(), reportedBy: "custody provider" });
+      // 1Click's own status is an independent witness for a deposit address it issued; the balance is the custody provider's report.
+      const executed = r.source === "1click" ? await deps.auditor.audit(r.address).catch(() => null) : null;
+      const independentlyConfirmed = executed !== null && executed.recipient === v.walletAccount && executed.tokenOut === r.token && BigInt(executed.amountOut) >= BigInt(r.minAmount);
+      return c.json({ state: s.state, receivedUsdc: unitsToNumber(s.received, cash().decimals), balanceUsdc: unitsToNumber(balance, cash().decimals), expiresAt: new Date(r.expiresAt).toISOString(), reportedBy: "custody provider", independentlyConfirmed });
     } catch {
       return c.json({ error: "Could not read the vault's balance right now." }, 503);
     }

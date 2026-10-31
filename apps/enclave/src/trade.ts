@@ -24,7 +24,7 @@ import {
   type ShieldFeed,
   type SwapBounds,
 } from "@norr/core";
-import { IntentsApiError, type BalanceReader, type ExecutionAuditor, type Quote, type Quoter, type SwapStatus, type Venue } from "@norr/intents";
+import { IntentsApiError, type BalanceReader, type DepositQuoter, type ExecutionAuditor, type Quote, type Quoter, type SwapStatus, type Venue } from "@norr/intents";
 import type { Decision, TradeRequest } from "@norr/shared";
 import { KeyedMutex } from "./mutex";
 import { CASH_USD, valueLayers } from "./portfolio";
@@ -41,6 +41,8 @@ export interface TradeDeps {
   onShieldBypass?: (vaultId: string) => void;
   quoter: Quoter;
   auditor: ExecutionAuditor;
+  /** Where the owner gets a deposit address for funding the vault (1Click). When absent, the custody provider is asked. */
+  funder?: DepositQuoter;
   vaults: VaultStore;
   ledger: Ledger;
   /** Reads the vault's public-layer Intents balances. Without it, portfolio values in the vault state are used as is. */
