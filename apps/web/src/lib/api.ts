@@ -32,6 +32,7 @@ export interface PendingItem {
   recipient: string;
   check: string;
 }
+import type { AppInfo, AttestationEvidence } from "@norr/shared";
 import type { SealedReason } from "./seal";
 export interface FundingOffer { id: string; address: string; amountUsdc: number; asset: { symbol: string; chain: string; contract: string }; expiresAt: string }
 export interface FundingStatus { state: "waiting" | "arrived" | "expired"; receivedUsdc: number; balanceUsdc: number; expiresAt: string; reportedBy: string; independentlyConfirmed?: boolean }
@@ -91,6 +92,9 @@ export function createApi(o: ApiOptions) {
     fundingStatus: (id: string, fid: string) => call<FundingStatus>(`/owner/v1/vaults/${encodeURIComponent(id)}/funding/${encodeURIComponent(fid)}`),
     sealKey: () => call<{ publicKey: string | null }>("/owner/v1/seal-key"),
     enrollSealKey: (publicKey: string) => call<{ publicKey: string; resealed: number }>("/owner/v1/seal-key", { method: "PUT", body: { publicKey } }),
+    /** Public endpoints: the service proves what it is to anyone, so no session is needed. */
+    attestation: (nonceHex: string) => call<AttestationEvidence & { attested: true; commit: string | null }>(`/attestation?nonce=${nonceHex}`),
+    appInfo: () => call<AppInfo & { attested: true }>("/info"),
     audit: () => call<{ audit: AuditItem[] }>("/owner/v1/audit"),
     verify: () => call<VerifyInfo>("/owner/v1/verify"),
   };

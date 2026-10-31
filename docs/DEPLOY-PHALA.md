@@ -50,7 +50,12 @@ The dashboard can instead be hosted as static files elsewhere; it holds no secre
 
 ## Status (2026-10-31)
 
-Written and checked: the `Dockerfile`, `.dockerignore`, `deploy/docker-compose.yml`, the CI workflow (`.github/workflows/image.yml`), the inline policy (`NORR_POLICY_JSON`), CORS and origin-bound sign-in for a separately hosted dashboard (`docs/DEPLOY-DASHBOARD.md`). The filtered production install the Dockerfile performs was replayed in a scratch directory and the service booted from it; that caught an undeclared `zod` dependency, now fixed. **The Dockerfile has not been built yet** (no Docker on the development machine): the first CI run is its first real build. Not yet written: the `/attestation` and `/info` endpoints and the Verify screen checks.
+Built and tested: the `Dockerfile` (first CI build succeeded; digest in FINDINGS.md), `.dockerignore`, `deploy/docker-compose.yml`, the CI workflow, the inline policy (`NORR_POLICY_JSON`), CORS and origin-bound sign-in for a separately hosted dashboard (`docs/DEPLOY-DASHBOARD.md`), the public `/attestation` and `/info` endpoints, and the checks in `packages/shared/src/attestation.ts` used by the dashboard's Verify screen and `scripts/verify-attestation.mts`.
+
+Not yet done, and what it needs:
+- **Run against a real quote.** The checks have only seen quotes built to the documented layout (see FINDINGS.md). The first CVM is the first real test.
+- **Attestation provenance** (linking the image digest to this repository's commit) needs the repository to be public.
+- **First deployment** needs the owner's Phala login, a public GHCR package, and the secrets entered locally.
 
 ## Needed from the owner
 

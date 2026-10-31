@@ -35,6 +35,9 @@ importers:
       '@norr/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@phala/dstack-sdk':
+        specifier: ^0.5.8
+        version: 0.5.8(@noble/curves@1.9.7)(@noble/hashes@1.8.0)(@solana/web3.js@1.99.0(bufferutil@4.1.0)(typescript@5.9.3))
       hono:
         specifier: ^4.13.14
         version: 4.13.14
@@ -594,6 +597,22 @@ packages:
 
   '@oxc-project/types@0.156.0':
     resolution: {integrity: sha512-1Duyg48TdJNdyhEB8Xn1L36bT9Pv6GUtlKjHxOys8xkaF/rQq3XJE+bAurSK/AgIz5mGFsb77cn9Pb20+WCScw==}
+
+  '@phala/dstack-sdk@0.5.8':
+    resolution: {integrity: sha512-VANlyo0Jj6pxmJl3zksHJ4/5y3VflApVmgsfcfmokk3KYKRBkW5oMkexBTR6lZaGVPOqJ48QGOLP/7CF3IEvFg==}
+    engines: {node: '>=18.0.0'}
+    peerDependencies:
+      '@noble/curves': ^1.8.1
+      '@noble/hashes': ^1.6.1
+      '@solana/web3.js': ^1.98.4
+      viem: ^2.43.3
+    peerDependenciesMeta:
+      '@noble/curves':
+        optional: true
+      '@solana/web3.js':
+        optional: true
+      viem:
+        optional: true
 
   '@rolldown/binding-android-arm-eabi@1.2.16':
     resolution: {integrity: sha512-ia3DwAs0OsMGS7+IConptSiyk9pEXkOx/AbJ2n/lAGxH3QkWQus1t8d7gnAT38FCU2sQu8lUbeR6AiZFv4JxaA==}
@@ -2912,6 +2931,13 @@ snapshots:
   '@noble/hashes@1.8.0': {}
 
   '@oxc-project/types@0.156.0': {}
+
+  '@phala/dstack-sdk@0.5.8(@noble/curves@1.9.7)(@noble/hashes@1.8.0)(@solana/web3.js@1.99.0(bufferutil@4.1.0)(typescript@5.9.3))':
+    dependencies:
+      '@noble/hashes': 1.8.0
+    optionalDependencies:
+      '@noble/curves': 1.9.7
+      '@solana/web3.js': 1.99.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
 
   '@rolldown/binding-android-arm-eabi@1.2.16':
     optional: true

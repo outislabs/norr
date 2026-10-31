@@ -8,6 +8,7 @@
     "@norr/core": "workspace:*",
     "@norr/intents": "workspace:*",
     "@norr/shared": "workspace:*",
+    "@phala/dstack-sdk": "^0.5.8",
     "hono": "^4.13.14",
     "tsx": "^4.23.15",
     "zod": "^3.25.76"

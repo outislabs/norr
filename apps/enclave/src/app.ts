@@ -3,6 +3,7 @@ import { TradeInput, type Decision, type TradeRequest } from "@norr/shared";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { resolveBuildInfo, type BuildInfo } from "./build-info";
+import { rateLimiter, type Attestor } from "./attestation";
 import type { SealKeyStore, SealingLedger } from "./seal";
 import { mountOwnerRoutes, type OwnerAuditEntry } from "./owner/routes";
 import type { OwnerAuth } from "./owner/auth";
@@ -24,6 +25,8 @@ export interface AppOptions {
   seal?: { keys: SealKeyStore; ledger: SealingLedger };
   /** Dashboard origins (for example https://app.norr.finance). Enables CORS for the owner API from exactly these and binds sign-in to them. */
   allowedOrigins?: string[];
+  /** The TEE this service runs in, if any. Enables the public /attestation and /info endpoints. */
+  attestor?: Attestor | null;
 }
 
 type Env = { Variables: { vaultId: string } };
@@ -32,7 +35,7 @@ type Env = { Variables: { vaultId: string } };
  * The agent-facing API. There is deliberately no route that moves funds out, changes policy, or
  * accepts a destination. The vault always comes from the agent token. Request bodies are never logged.
  */
-export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, allowedOrigins }: AppOptions): Hono<Env> {
+export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, allowedOrigins, attestor }: AppOptions): Hono<Env> {
   const app = new Hono<Env>();
 
   // CORS for the separately hosted dashboard: the owner API answers browsers on exactly the configured origins and
@@ -42,6 +45,32 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
     app.use("/owner/v1/*", cors({ origin: (o) => (allowedOrigins.includes(o) ? o : null), allowHeaders: ["authorization", "content-type"], allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], maxAge: 600 }));
   }
   app.use("/health", cors({ origin: "*", allowMethods: ["GET"] })); // reveals nothing the dashboard does not need to know the service is up
+
+  // Public attestation: anyone can ask the running service to prove what it is, and check the answer themselves
+  // (packages/shared/src/attestation.ts, the Verify screen, scripts/verify-attestation.mts). Nothing here is secret.
+  const build0 = build ?? resolveBuildInfo();
+  const quotaOk = rateLimiter(20, 60_000, deps.now);
+  app.use("/attestation", cors({ origin: "*", allowMethods: ["GET"] }));
+  app.use("/info", cors({ origin: "*", allowMethods: ["GET"] }));
+  app.get("/attestation", async (c) => {
+    if (!attestor) return c.json({ attested: false, error: "This service is not running in a TEE: there is no attestation device to ask." }, 503);
+    const nonce = c.req.query("nonce") ?? "";
+    if (!/^[0-9a-f]{2,128}$/i.test(nonce) || nonce.length % 2 !== 0) return c.json({ error: "nonce must be 1 to 64 bytes of hex" }, 400);
+    if (!quotaOk()) return c.json({ error: "too many attestation requests; try again in a minute" }, 429);
+    try {
+      return c.json({ attested: true, nonce: nonce.toLowerCase(), ...(await attestor.evidence(nonce.toLowerCase())), commit: build0.commit });
+    } catch {
+      return c.json({ attested: false, error: "The TEE did not produce a quote." }, 502);
+    }
+  });
+  app.get("/info", async (c) => {
+    if (!attestor) return c.json({ attested: false, error: "This service is not running in a TEE: there is no attestation device to ask." }, 503);
+    try {
+      return c.json({ attested: true, ...(await attestor.info()), commit: build0.commit });
+    } catch {
+      return c.json({ attested: false, error: "The TEE did not return its configuration." }, 502);
+    }
+  });
 
   // In mock mode the demo owner is public, so the dashboard can offer a one-click demo sign-in.
   app.get("/health", (c) => c.json({ ok: true, mock, ...(mock ? { mockOwner: deps.vaults.list()[0]?.owner } : {}) }));
@@ -176,7 +205,7 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
     });
   });
 
-  if (owner) mountOwnerRoutes(app, { deps, tokens, auth: owner, mock, build: build ?? resolveBuildInfo(), seal, allowedOrigins, audit: [] as OwnerAuditEntry[] });
+  if (owner) mountOwnerRoutes(app, { deps, tokens, auth: owner, mock, build: build ?? resolveBuildInfo(), seal, allowedOrigins, attestor: attestor ?? null, audit: [] as OwnerAuditEntry[] });
 
   if (adminToken) {
     const admin = (c: { req: { header(n: string): string | undefined } }) => safeEqual(c.req.header("x-admin-token") ?? "", adminToken);

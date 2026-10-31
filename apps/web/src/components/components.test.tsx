@@ -8,6 +8,8 @@ import { KillSwitch } from "./KillSwitch";
 import { PendingChecks } from "./PendingChecks";
 import { fromForm, PolicyForm, toForm } from "./PolicyForm";
 import { FundingPanel } from "./FundingPanel";
+import { AttestationPanel } from "./AttestationPanel";
+import { fixture } from "../../../../packages/shared/src/attestation.fixture";
 import type { Api, FundingOffer, FundingStatus } from "../lib/api";
 
 afterEach(cleanup);
@@ -182,5 +184,62 @@ describe("FundingPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Get a deposit address" }));
     expect((await screen.findByRole("alert")).textContent).toContain("custody provider");
     expect(screen.queryByTestId("deposit-address")).toBeNull();
+  });
+});
+
+describe("AttestationPanel", () => {
+  /** A service that answers any nonce the way an honest TEE would, or with a swapped configuration. */
+  const apiFor = (tamper = false) => {
+    const swapped = JSON.stringify({ docker_compose_file: "services:\n  a:\n    image: x/a:latest\n" });
+    return {
+      attestation: vi.fn(async (nonce: string) => ({ attested: true as const, commit: "abc123", ...fixture({ nonce }).evidence })),
+      appInfo: vi.fn(async () => ({ attested: true as const, ...fixture().info, ...(tamper ? { appCompose: swapped } : {}), appId: "app-1" })),
+    } as unknown as Api;
+  };
+
+  it("runs the checks in the browser against a fresh nonce and shows each result", async () => {
+    const api = apiFor();
+    render(<AttestationPanel api={api} />);
+    fireEvent.click(screen.getByRole("button", { name: "Check attestation" }));
+    await waitFor(() => expect(screen.getByText("Every image is pinned by digest")).toBeTruthy());
+    const text = document.body.textContent ?? "";
+    for (const label of ["The quote is a TDX quote", "The quote answers the nonce we just sent", "The configuration is the one that was measured", "The event log is the one the hardware measured"]) expect(text).toContain(label);
+    expect(text).not.toMatch(/✕|fail:/);
+    expect(text).toContain("signature chain is genuine"); // listed as not run until verified
+    expect(text).toContain("Not run");
+    expect(text).toContain("abc123");
+    const nonce = (api.attestation as unknown as { mock: { calls: string[][] } }).mock.calls[0]![0]!;
+    expect(nonce).toMatch(/^[0-9a-f]{64}$/); // 32 random bytes, hex
+  });
+
+  it("shows a swapped configuration as failed, not as a pass", async () => {
+    render(<AttestationPanel api={apiFor(true)} />);
+    fireEvent.click(screen.getByRole("button", { name: "Check attestation" }));
+    await waitFor(() => expect(screen.getByText("The configuration is the one that was measured")).toBeTruthy());
+    expect(document.body.textContent).toContain("✕");
+    expect(document.body.textContent).toContain("Not pinned by digest");
+  });
+
+  it("verifies the signature with Phala only when asked, and says so when Phala cannot be reached", async () => {
+    const f = vi.fn(async () => { throw new Error("offline"); });
+    vi.stubGlobal("fetch", f);
+    try {
+      render(<AttestationPanel api={apiFor()} />);
+      fireEvent.click(screen.getByRole("button", { name: "Check attestation" }));
+      await waitFor(() => expect(screen.getByText("Every image is pinned by digest")).toBeTruthy());
+      expect(f).not.toHaveBeenCalled(); // the quote does not leave the browser unless you ask
+      fireEvent.click(screen.getByRole("button", { name: /verify the signature with Phala/ }));
+      await waitFor(() => expect(document.body.textContent).toContain("Could not reach Phala"));
+      expect(f).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("reports a service with no TEE instead of showing checks", async () => {
+    const api = { attestation: vi.fn(async () => { throw new Error("This service is not running in a TEE"); }), appInfo: vi.fn(async () => { throw new Error("x"); }) } as unknown as Api;
+    render(<AttestationPanel api={api} />);
+    fireEvent.click(screen.getByRole("button", { name: "Check attestation" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("not running in a TEE");
   });
 });

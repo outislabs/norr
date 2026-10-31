@@ -235,3 +235,27 @@ First live equity trade, in the fresh demo vault, funded with 8 USDC from the ow
 - OutLayer's list still shows the deposit intent `57678451-0351-43d1-bed4-f442783c4d7a` as `pending_deposit` although the funds arrived: a stale label on their side. Requests carry no `request_hash` in the list or detail view.
 - Shield feed ran in dev-bypass (key still pending). Not valid for the demo.
 - Tooling: the live runner gained `--all` (`sellAll`), selling the exact held balance with the USD figure as a ceiling. Operator-only; the agent API cannot reach it.
+
+## Funding the confidential layer through Norr's own 1Click quote (2026-10-31)
+
+Option C from the funding decision, tested live with 1 USDC from the owner's account into the demo vault.
+
+- **Why not the custody provider's endpoint.** OutLayer's `confidential/deposit/cross-chain` is gated by the wallet policy as transaction type `call` (`Transaction type 'call' is not allowed by policy`), which the confidential-only policy excludes. Allowing it would widen the policy for a convenience.
+- **What Norr does instead.** A real (not dry) 1Click quote: origin and destination asset both USDC on NEAR, `depositType: ORIGIN_CHAIN`, `recipientType: CONFIDENTIAL_INTENTS` with the vault's Intents account as recipient (set by the service, never by a caller), `refundType: ORIGIN_CHAIN` with `refundTo` the account the owner sends from, `confidentiality: basic`. The response carries a one-time `depositAddress`. The adapter refuses an offer that would lose more than 1%.
+- **Result.** Sent 1.000000 USDC to the fresh address (an earlier address from a missed window was not used). 1Click's status for that address: `SUCCESS`, amountIn 1000000, amountOut 1000000, recipient type `CONFIDENTIAL_INTENTS`, recipient the vault, refund to the sender. The vault's confidential balance went from 7.928124 to 8.928124 USDC (exactly +1.000000, no fee on this same-asset route).
+- **Evidence quality.** This is better than the first funding. Delivery is witnessed by 1Click's own status (independent of the custody provider) and by the custody provider's balance. The dashboard shows both, and labels the balance as the provider's report.
+- **Deadlines.** Requesting a 30-minute deadline returned a deadline about 3 days out (as OutLayer's own `expires_at` did). The Fund tab therefore tells the owner to send within 30 minutes (Norr's own window, because the quote was priced then) while an earlier address would still work.
+- **Visibility.** The owner's transfer is a plain public NEP-141 `ft_transfer` to a one-time address: the sender, address and amount are visible. The vault's account is not named in it.
+- **OutLayer's stale label.** The earlier deposit intent created through OutLayer's endpoint still lists as `pending_deposit` though its funds arrived.
+
+## Attestation checks (2026-10-31): built, not yet run against a real quote
+
+The service exposes public `GET /attestation?nonce=` and `GET /info` (503 with an honest message when there is no TEE). `packages/shared/src/attestation.ts` holds the checks the dashboard's Verify screen and `scripts/verify-attestation.mts` both run: the quote's report data equals our nonce; SHA-256 of the app configuration equals the `compose-hash` event; replaying the RTMR3 events reproduces the quote's RTMR3; every image is pinned by digest; and, on request, Phala's verification API confirms the quote's signature chain.
+
+- Verified here: against quotes built to the documented TDX v4 layout (header 48 bytes; RTMR3 and REPORTDATA at fixed offsets), through the real HTTP endpoints with a stand-in TEE, honest (exit 0) and tampered (exit 1). Every individual tampering (wrong nonce, edited event log, swapped configuration, tag instead of digest) is caught.
+- Not verified: the offsets and event-log format against a real quote from Phala, and the SDK's behaviour on the dstack socket. The first deployment is the first real test; if a check fails there, the likeliest cause is a layout detail, and the failure message will say which check.
+- A passing result shows the pieces agree and (with the Phala check) that genuine hardware produced them. It does not show what the secrets are.
+
+## Image build in CI (2026-10-31)
+
+First CI build of the Dockerfile succeeded (commit `ddd2b5d`, digest `sha256:9eb9338adcd4e8a826859bfd437830cbc9229414b7665ad52f2d7053934d54be`). Replaying the image's install in a scratch directory first caught an undeclared `zod` dependency. GitHub does not offer build-provenance attestations for a private personal repository ("Feature not available for user-owned private repositories"), so that step runs only once the repository is public.

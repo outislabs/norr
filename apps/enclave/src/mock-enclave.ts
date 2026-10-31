@@ -1,6 +1,7 @@
 import { HeuristicRiskProvider, ONDO, Registry, presetPolicy, type CryptoSignals, type OneClickToken, type ShieldFeed } from "@norr/core";
 import { createMockRails } from "@norr/intents";
 import { createApp } from "./app";
+import type { Attestor } from "./attestation";
 import { OwnerAuth, type AccessKeyChecker } from "./owner/auth";
 import { DataCipher, MemorySealKeys, SealingLedger } from "./seal";
 import { MemoryLedger, MemoryVaultStore, newVault } from "./state";
@@ -48,7 +49,7 @@ export interface MockEnclave {
  * It starts with a demo vault holding its cash in the confidential layer, on the Balanced preset,
  * owner-confirmed for equities, so trades run confidentially by default.
  */
-export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed | null; now?: () => number; agentToken?: string; keys?: AccessKeyChecker; allowedOrigins?: string[] } = {}): MockEnclave {
+export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed | null; now?: () => number; agentToken?: string; keys?: AccessKeyChecker; allowedOrigins?: string[]; attestor?: Attestor | null } = {}): MockEnclave {
   const registry = new Registry({ crypto: [DEMO.USDC, DEMO.SOL, DEMO.wNEAR, DEMO.RUG], equities: [{ issuer: ONDO, tokens: [DEMO.NVDAon, DEMO.TSLAon, DEMO.SPYon] }] });
   const now = o.now ?? Date.now;
   const vaultId = "demo";
@@ -97,5 +98,5 @@ export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed
   const adminToken = `norr_admin_mock_${Math.random().toString(36).slice(2)}`;
   // Mock mode accepts any key for an account (it holds no funds and listens on localhost); live mode checks the chain.
   const ownerAuth = new OwnerAuth({ keys: o.keys ?? { hasKey: async () => true }, now });
-  return { app: createApp({ deps, tokens, mock: true, adminToken, owner: ownerAuth, allowedOrigins: o.allowedOrigins, seal: { keys: sealKeys, ledger: sealing } }), deps, vaults, tokens, agentToken, adminToken, vaultId, ownerAuth, rails, sealKeys, sealing };
+  return { app: createApp({ deps, tokens, mock: true, adminToken, owner: ownerAuth, allowedOrigins: o.allowedOrigins, attestor: o.attestor, seal: { keys: sealKeys, ledger: sealing } }), deps, vaults, tokens, agentToken, adminToken, vaultId, ownerAuth, rails, sealKeys, sealing };
 }

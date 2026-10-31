@@ -1,5 +1,6 @@
 import { HeuristicRiskProvider, ONDO, Registry, extraTokens } from "@norr/core";
 import { DexScreenerSignals, NearIntentsBalances, OneClick, OutLayerCustody, ShieldClient } from "@norr/intents";
+import { dstackAttestor } from "./attestation";
 import { loadPolicy, parseOrigins } from "./config";
 import { createApp } from "./app";
 import { OwnerAuth, RpcAccessKeyChecker } from "./owner/auth";
@@ -86,7 +87,7 @@ export async function buildLive(env: NodeJS.ProcessEnv = process.env) {
   const tokens = new AgentTokens();
   const agentToken = tokens.issue(l.vaultId);
   return {
-    app: createApp({ deps: l.deps, tokens, mock: false, adminToken: env.NORR_ADMIN_TOKEN, owner: new OwnerAuth({ keys: new RpcAccessKeyChecker() }), allowedOrigins: parseOrigins(env.NORR_ALLOWED_ORIGINS), seal: { keys: l.sealKeys, ledger: l.ledger } }),
+    app: createApp({ deps: l.deps, tokens, mock: false, adminToken: env.NORR_ADMIN_TOKEN, owner: new OwnerAuth({ keys: new RpcAccessKeyChecker() }), allowedOrigins: parseOrigins(env.NORR_ALLOWED_ORIGINS), attestor: dstackAttestor(env), seal: { keys: l.sealKeys, ledger: l.ledger } }),
     agentToken,
     vaultId: l.vaultId,
     shieldConfigured: l.shieldConfigured,

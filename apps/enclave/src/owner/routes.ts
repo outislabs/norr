@@ -1,5 +1,6 @@
 import { applyFill, lossToday, sumToday, unitsToNumber, usdToUnits, type Book } from "@norr/core";
 import type { BuildInfo } from "../build-info";
+import type { Attestor } from "../attestation";
 import type { SealKeyStore, SealingLedger } from "../seal";
 import { FUNDING_WINDOW_MS, FundingTracker, MAX_OPEN_FUNDING, fundingState } from "../funding";
 import { CASH_USD } from "../portfolio";
@@ -29,6 +30,7 @@ export interface OwnerRouteContext {
   seal?: { keys: SealKeyStore; ledger: SealingLedger };
   /** Dashboard origins allowed to sign in. When set, sign-in must come from one of them and is bound to it. */
   allowedOrigins?: string[];
+  attestor?: Attestor | null;
   audit: OwnerAuditEntry[];
 }
 
@@ -322,12 +324,15 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
     return c.json({ audit: ctx.audit.filter((a) => a.owner === owner).slice(-100).reverse() });
   });
 
-  // Honest status: no TEE attestation exists yet.
+  // `attested` only says the service has a TEE to ask. It proves nothing: the dashboard fetches the evidence and
+  // checks it itself (packages/shared/src/attestation.ts), and so can anyone else.
   app.get("/owner/v1/verify", (c) =>
     c.json({
       mode: ctx.mock ? "mock" : "live",
-      attested: false,
-      note: "This service is not running inside a TEE yet, so there is no hardware attestation to show. When it is deployed, this screen will show the attestation quote and the code hash.",
+      attested: Boolean(ctx.attestor),
+      note: ctx.attestor
+        ? "This service is running in a TEE and can produce an attestation. Do not take this label on trust: run the checks below, which your browser performs on the evidence itself."
+        : "This service is not running inside a TEE, so there is no hardware attestation to show.",
       ...ctx.build,
     }),
   );

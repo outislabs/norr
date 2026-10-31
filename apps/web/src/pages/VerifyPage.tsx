@@ -1,3 +1,4 @@
+import { AttestationPanel } from "../components/AttestationPanel";
 import type { Api } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 
@@ -25,6 +26,7 @@ export function VerifyPage({ api }: { api: Api }) {
           </dl>
         </div>
       )}
+      {data?.attested && <AttestationPanel api={api} />}
       <h2 className="mt-10 font-display text-xl">What you have done here</h2>
       {audit.data && audit.data.audit.length === 0 && <p className="mt-2 text-mist">No actions yet.</p>}
       <ul className="mt-2">
