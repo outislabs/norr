@@ -8,7 +8,9 @@
     "@norr/core": "workspace:*",
     "@norr/intents": "workspace:*",
     "@norr/shared": "workspace:*",
-    "hono": "^4.13.14"
+    "hono": "^4.13.14",
+    "tsx": "^4.23.15",
+    "zod": "^3.25.76"
   },
   "main": "src/index.ts",
   "types": "src/index.ts"

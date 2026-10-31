@@ -38,6 +38,12 @@ importers:
       hono:
         specifier: ^4.13.14
         version: 4.13.14
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
 
   apps/mcp:
     dependencies:

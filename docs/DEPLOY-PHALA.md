@@ -48,11 +48,15 @@ The dashboard can instead be hosted as static files elsewhere; it holds no secre
 - Whether `getQuote()` reportData is accepted at 64 bytes as a raw nonce (the docs say yes up to 64 bytes).
 - CLI flags for region and disk, and the attestation CLI command: not documented on the reference page; use `--help`.
 
+## Status (2026-10-31)
+
+Written and checked: the `Dockerfile`, `.dockerignore`, `deploy/docker-compose.yml`, the CI workflow (`.github/workflows/image.yml`), the inline policy (`NORR_POLICY_JSON`), CORS and origin-bound sign-in for a separately hosted dashboard (`docs/DEPLOY-DASHBOARD.md`). The filtered production install the Dockerfile performs was replayed in a scratch directory and the service booted from it; that caught an undeclared `zod` dependency, now fixed. **The Dockerfile has not been built yet** (no Docker on the development machine): the first CI run is its first real build. Not yet written: the `/attestation` and `/info` endpoints and the Verify screen checks.
+
 ## Needed from the owner
 
 1. A Phala Cloud account with a payment card or balance, and the monthly spend you accept.
 2. An API key (profile, API Keys) in `.env` as `PHALA_CLOUD_API_KEY`, or run `phala login` yourself.
-3. Decisions: GHCR package public or private (public gives a stronger attestation story); dashboard hosted statically elsewhere or served by the service.
+3. Decided: GHCR package public (set it public in the package settings after the first CI push; GitHub keeps new packages private by default), dashboard on Cloudflare Pages (`docs/DEPLOY-DASHBOARD.md`). Budget cap about $50 for the hackathon: use the smallest instance that runs the service.
 4. The secrets above, entered into `.env` locally (never pasted into chat), plus the Shield key when it arrives.
 5. A decision on the OutLayer policy for funding (see the Fund tab): the deposit-address request is gated as transaction type `call`.
 
