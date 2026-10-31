@@ -1,5 +1,5 @@
 # Norr service (apps/enclave). Built in CI and deployed to a Phala Cloud CVM by digest; see docs/DEPLOY-PHALA.md.
-# Only the service and the packages it imports are installed (no dashboard, no tests, no dev tooling).
+# Only the service, the MCP endpoint and the packages they import are installed (no dashboard, no tests, no dev tooling).
 FROM node:22-bookworm-slim
 
 ENV PNPM_HOME=/pnpm
@@ -18,11 +18,12 @@ COPY packages/shared/package.json packages/shared/
 COPY apps/enclave/package.json apps/enclave/
 COPY apps/mcp/package.json apps/mcp/
 COPY apps/web/package.json apps/web/
-RUN pnpm install --frozen-lockfile --prod --filter "@norr/enclave..."
+RUN pnpm install --frozen-lockfile --prod --filter "@norr/enclave..." --filter "@norr/mcp..."
 
 COPY tsconfig.json ./
 COPY packages packages
 COPY apps/enclave apps/enclave
+COPY apps/mcp apps/mcp
 
 # The git commit the image was built from, shown on the dashboard's Verify screen.
 ARG NORR_COMMIT=unknown

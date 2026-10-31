@@ -1,0 +1,20 @@
+{
+  "name": "@norr/agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Demo agent: an OpenAI-compatible model (NEAR AI Cloud) driving Norr through MCP.",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2"
+  },
+  "devDependencies": {
+    "@norr/enclave": "workspace:*",
+    "@norr/mcp": "workspace:*"
+  },
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "run": "tsx src/cli.ts",
+    "eval": "tsx src/eval.ts"
+  }
+}

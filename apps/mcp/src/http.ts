@@ -6,7 +6,10 @@ import { createNorrServer } from "./tools";
 export interface HttpOptions {
   apiUrl: string;
   fetch?: FetchLike;
-  /** Extra Host header values to accept, besides localhost. Guards against DNS rebinding. */
+  /**
+   * Extra Host header values to accept, besides localhost. Guards a localhost-bound server against DNS rebinding.
+   * "*" accepts any host, for a public deployment behind a gateway, where every request needs the agent's bearer token anyway.
+   */
   allowedHosts?: string[];
 }
 
@@ -23,9 +26,10 @@ function reject(res: ServerResponse, status: number, message: string) {
  */
 export function createHttpServer(o: HttpOptions) {
   const allowed = new Set([...LOCAL, ...(o.allowedHosts ?? [])]);
+  const anyHost = allowed.has("*");
   return createServer(async (req, res) => {
     const host = (req.headers.host ?? "").replace(/:\d+$/, "");
-    if (!allowed.has(host)) return reject(res, 403, "host not allowed");
+    if (!anyHost && !allowed.has(host)) return reject(res, 403, "host not allowed");
     if (req.url === "/health") return void res.writeHead(200, { "content-type": "application/json" }).end('{"ok":true}');
     if (req.url !== "/mcp") return reject(res, 404, "not found");
 

@@ -2,9 +2,11 @@
 
 Plan written 2026-10-30 from Phala's current docs (links at the end). Nothing here has been run yet: no account, CVM or image exists. Items the docs did not settle are listed under "Not settled".
 
+> The step-by-step checklist, session plan and cost for the first deployment are in [FIRST-DEPLOY.md](FIRST-DEPLOY.md). This file is the design; that one is the procedure.
+
 ## What runs where
 
-One confidential VM (CVM) running one `docker-compose.yml`: the Norr service (`apps/enclave`, which also serves the MCP-over-HTTP endpoint if we mount it) plus, optionally, the static dashboard. Everything in one compose file runs in the same CVM.
+One confidential VM (CVM) running one `docker-compose.yml`: the Norr service (`apps/enclave`) and, as a second container from the same image, the MCP-over-HTTP endpoint (`apps/mcp`) that remote agents connect to plus, optionally, the static dashboard. Everything in one compose file runs in the same CVM.
 
 The dashboard can instead be hosted as static files elsewhere; it holds no secrets and talks to the service over HTTPS. That is the simpler choice (see decisions).
 

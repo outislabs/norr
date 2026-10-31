@@ -47,6 +47,8 @@ Arithmetic for the $50 cap if there is no credit: a `tdx.medium` run for the who
 
 ## Recommendation
 
+> **Update 2026-10-31:** the owner decided that Norr runs inside a TEE for the demo and for judging, so step 1 below (run outside a TEE) is not used, and step 3 (Phala) is the plan rather than an upgrade. Steps 2 and 4 stand: NEAR AI Cloud for the agent's model (measured in `AGENT-MODELS.md`), no OutLayer compute. The deployment plan, costs for about 72 hours and the checklist are in `FIRST-DEPLOY.md`. The research above is unchanged.
+
 1. **Now, at $0: run the service outside a TEE and say so.** The Verify screen already reports "not running in a TEE" and the attestation endpoints answer 503 with that message; the README's limitations say the same. Keep the image digest and commit visible. Judges see an honest "not attested" rather than a claim.
 2. **Spend the small money where the product story gains most: NEAR AI Cloud for the agent's model** (about $5 budget). It makes the agent's reasoning private and attested per request without Phala, and fits the Private AI track.
 3. **Phala as an upgrade gated on free credit, decided about Nov 10.** Create the workspace and look at what the dashboard offers (gifted or welcome credit) before putting down a card for anything beyond that. If a credit covers roughly $10 or more, deploy the smallest instance that runs the service, only for rehearsal through judging, and stop it between sessions. If not, stay on step 1; the $50 cap would cover the run-only-when-needed plan anyway.

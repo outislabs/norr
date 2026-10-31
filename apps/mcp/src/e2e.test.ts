@@ -105,3 +105,23 @@ describe("real streamable HTTP endpoint", () => {
     }
   }, 30_000);
 });
+
+describe("public deployments", () => {
+  const request = (port: number, host: string) =>
+    new Promise<number>((resolve, reject) => {
+      const req = httpRequest({ port, host: "127.0.0.1", path: "/health", headers: { host } }, (res) => (res.resume(), resolve(res.statusCode ?? 0)));
+      req.on("error", reject).end();
+    });
+
+  it('accepts any Host only when told to with "*", and still rejects an unlisted host otherwise', async () => {
+    for (const [allowedHosts, host, want] of [[undefined, "norr.example.com", 403], [["norr.example.com"], "norr.example.com", 200], [["norr.example.com"], "other.example.com", 403], [["*"], "anything.example.org", 200]] as const) {
+      const s = createHttpServer({ apiUrl: "http://127.0.0.1:1", allowedHosts: allowedHosts as string[] | undefined });
+      await new Promise<void>((r) => s.listen(0, "127.0.0.1", r));
+      try {
+        expect(await request((s.address() as import("node:net").AddressInfo).port, host)).toBe(want);
+      } finally {
+        await new Promise<void>((r) => s.close(() => r()));
+      }
+    }
+  });
+});

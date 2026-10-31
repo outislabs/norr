@@ -27,5 +27,23 @@ services:
       # Lets the service ask the TEE for an attestation quote.
       - /var/run/dstack.sock:/var/run/dstack.sock
 
+  # The MCP endpoint remote agents connect to (https://<this CVM>/mcp). It holds no state and no tokens: each request
+  # forwards the caller's own agent token to the service. It runs in the same CVM so what handles agent traffic is attested too.
+  mcp:
+    image: ghcr.io/outislabs/norr@sha256:REPLACE_WITH_DIGEST
+    restart: unless-stopped
+    working_dir: /app/apps/mcp
+    command: ["../enclave/node_modules/.bin/tsx", "src/http.ts"]
+    ports:
+      - "8788:8788"
+    environment:
+      NORR_API_URL: http://norr:8787
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: "8788"
+      # Behind Phala's gateway every request must carry the agent's bearer token; the Host allow-list is for localhost servers.
+      MCP_ALLOWED_HOSTS: "*"
+    depends_on:
+      - norr
+
 volumes:
   norr-data: {}
