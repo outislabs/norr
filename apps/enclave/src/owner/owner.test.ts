@@ -426,3 +426,57 @@ describe("owner routes", () => {
     expect(typeof v.dirty).toBe("boolean");
   });
 });
+
+describe("a separately hosted dashboard", () => {
+  const APP = "https://app.norr.finance";
+  const boot = () => {
+    const m = createMockEnclave({ allowedOrigins: [APP] });
+    const get = (path: string, headers: Record<string, string> = {}) => m.app.request(path, { headers });
+    const post = (path: string, body: unknown, headers: Record<string, string> = {}) => m.app.request(path, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
+    return { m, get, post };
+  };
+
+  it("answers browsers on the configured origin only, and never opens the agent API", async () => {
+    const { m } = boot();
+    const preflight = (path: string, origin: string) => m.app.request(path, { method: "OPTIONS", headers: { origin, "access-control-request-method": "POST", "access-control-request-headers": "authorization,content-type" } });
+    const ok = await preflight("/owner/v1/login", APP);
+    expect(ok.headers.get("access-control-allow-origin")).toBe(APP);
+    expect(ok.headers.get("access-control-allow-headers")?.toLowerCase()).toContain("authorization");
+    expect(ok.headers.get("access-control-allow-credentials")).toBeNull(); // sessions are bearer tokens, not cookies
+    expect((await preflight("/owner/v1/login", "https://evil.example")).headers.get("access-control-allow-origin")).toBeNull();
+    expect((await preflight("/v1/trade", APP)).headers.get("access-control-allow-origin")).toBeNull();
+    const real = await m.app.request("/owner/v1/me", { headers: { origin: APP } });
+    expect(real.status).toBe(401);
+    expect(real.headers.get("access-control-allow-origin")).toBe(APP);
+  });
+
+  it("only issues sign-in challenges to the configured origin, and names it in the message the wallet shows", async () => {
+    const { get } = boot();
+    expect((await get("/owner/v1/challenge")).status).toBe(403);
+    expect((await get("/owner/v1/challenge", { origin: "https://evil.example" })).status).toBe(403);
+    const c = await (await get("/owner/v1/challenge", { origin: APP })).json();
+    expect(c.message).toContain(`Sign in to Norr at ${APP}`);
+  });
+
+  it("a challenge issued to the dashboard cannot be used from anywhere else", async () => {
+    const { m, get, post } = boot();
+    const key = newKey();
+    const login = async (loginOrigin: string | undefined) => {
+      const c = await (await get("/owner/v1/challenge", { origin: APP })).json();
+      const signature = signNep413(key.privateKey, { message: c.message, nonce: Buffer.from(c.nonce, "base64"), recipient: c.recipient });
+      return post("/owner/v1/login", { accountId: MOCK_OWNER, publicKey: key.publicKey, signature, nonce: c.nonce }, loginOrigin ? { origin: loginOrigin } : {});
+    };
+    expect((await login(undefined)).status).toBe(401);
+    expect((await login("https://evil.example")).status).toBe(401);
+    const ok = await login(APP);
+    expect(ok.status).toBe(200);
+    expect((await ok.json()).accountId).toBe(MOCK_OWNER);
+    expect(m.tokens).toBeTruthy();
+  });
+
+  it("without configured origins nothing changes: the same-origin dev proxy and mock demo still sign in", async () => {
+    const m = createMockEnclave();
+    const c = await (await m.app.request("/owner/v1/challenge")).json();
+    expect(c.message).not.toContain(" at ");
+  });
+});

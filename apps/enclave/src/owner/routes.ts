@@ -27,6 +27,8 @@ export interface OwnerRouteContext {
   /** The code version shown on the Verify screen. */
   build: BuildInfo;
   seal?: { keys: SealKeyStore; ledger: SealingLedger };
+  /** Dashboard origins allowed to sign in. When set, sign-in must come from one of them and is bound to it. */
+  allowedOrigins?: string[];
   audit: OwnerAuditEntry[];
 }
 
@@ -49,12 +51,25 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
 
   const funding = new FundingTracker();
 
-  app.get("/owner/v1/challenge", (c) => c.json(auth.challenge()));
+  // With allowed origins configured, only those dashboards can sign in, and the challenge is bound to the one asking.
+  const origins = ctx.allowedOrigins ?? [];
+  const signInOrigin = (c: { req: { header(n: string): string | undefined } }): { ok: true; origin?: string } | { ok: false } => {
+    if (origins.length === 0) return { ok: true };
+    const o = c.req.header("origin");
+    return o && origins.includes(o) ? { ok: true, origin: o } : { ok: false };
+  };
+
+  app.get("/owner/v1/challenge", (c) => {
+    const o = signInOrigin(c);
+    return o.ok ? c.json(auth.challenge(o.origin)) : c.json({ error: "origin not allowed" }, 403);
+  });
 
   app.post("/owner/v1/login", async (c) => {
     const parsed = LoginBody.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "sign-in failed" }, 401);
-    const session = await auth.login(parsed.data);
+    const o = signInOrigin(c);
+    if (!o.ok) return c.json({ error: "sign-in failed" }, 401);
+    const session = await auth.login(parsed.data, o.origin);
     if (!session) return c.json({ error: "sign-in failed" }, 401);
     note(session.accountId, "signed in");
     return c.json(session);

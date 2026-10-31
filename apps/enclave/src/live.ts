@@ -1,7 +1,6 @@
 import { HeuristicRiskProvider, ONDO, Registry, extraTokens } from "@norr/core";
 import { DexScreenerSignals, NearIntentsBalances, OneClick, OutLayerCustody, ShieldClient } from "@norr/intents";
-import { Policy } from "@norr/shared";
-import { readFileSync } from "node:fs";
+import { loadPolicy, parseOrigins } from "./config";
 import { createApp } from "./app";
 import { OwnerAuth, RpcAccessKeyChecker } from "./owner/auth";
 import { BYPASS_BANNER, bypassWarning, resolveShieldMode } from "./shield-mode";
@@ -31,7 +30,7 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env) {
   const shieldMode = resolveShieldMode(env);
   if (shieldMode.bypass) console.warn(BYPASS_BANNER);
   // Read all configuration before any network call, so a missing value fails fast.
-  const policy = Policy.parse(JSON.parse(readFileSync(need(env, "NORR_POLICY_FILE"), "utf8")));
+  const policy = loadPolicy(env);
   const { apiKey: outlayerKey, accountId: walletAccount } = walletCredentials(env);
   const oneclick = new OneClick({ apiKey: env.ONECLICK_API_KEY, baseUrl: env.ONECLICK_BASE_URL });
   const [plain, withOndo] = await Promise.all([oneclick.tokens(false), oneclick.tokens(true)]);
@@ -87,7 +86,7 @@ export async function buildLive(env: NodeJS.ProcessEnv = process.env) {
   const tokens = new AgentTokens();
   const agentToken = tokens.issue(l.vaultId);
   return {
-    app: createApp({ deps: l.deps, tokens, mock: false, adminToken: env.NORR_ADMIN_TOKEN, owner: new OwnerAuth({ keys: new RpcAccessKeyChecker() }), seal: { keys: l.sealKeys, ledger: l.ledger } }),
+    app: createApp({ deps: l.deps, tokens, mock: false, adminToken: env.NORR_ADMIN_TOKEN, owner: new OwnerAuth({ keys: new RpcAccessKeyChecker() }), allowedOrigins: parseOrigins(env.NORR_ALLOWED_ORIGINS), seal: { keys: l.sealKeys, ledger: l.ledger } }),
     agentToken,
     vaultId: l.vaultId,
     shieldConfigured: l.shieldConfigured,

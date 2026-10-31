@@ -1,6 +1,7 @@
 import { checkShield, EQUITY_DISCLAIMER, equityMinimum, MINIMUMS_NOTE, sumToday, unitsToNumber, type RiskResult } from "@norr/core";
 import { TradeInput, type Decision, type TradeRequest } from "@norr/shared";
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { resolveBuildInfo, type BuildInfo } from "./build-info";
 import type { SealKeyStore, SealingLedger } from "./seal";
 import { mountOwnerRoutes, type OwnerAuditEntry } from "./owner/routes";
@@ -21,6 +22,8 @@ export interface AppOptions {
   build?: BuildInfo;
   /** Where owners enroll the key their private reasoning is sealed to. Needed for the owner API's reasoning endpoints. */
   seal?: { keys: SealKeyStore; ledger: SealingLedger };
+  /** Dashboard origins (for example https://app.norr.finance). Enables CORS for the owner API from exactly these and binds sign-in to them. */
+  allowedOrigins?: string[];
 }
 
 type Env = { Variables: { vaultId: string } };
@@ -29,8 +32,16 @@ type Env = { Variables: { vaultId: string } };
  * The agent-facing API. There is deliberately no route that moves funds out, changes policy, or
  * accepts a destination. The vault always comes from the agent token. Request bodies are never logged.
  */
-export function createApp({ deps, tokens, mock, adminToken, owner, build, seal }: AppOptions): Hono<Env> {
+export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, allowedOrigins }: AppOptions): Hono<Env> {
   const app = new Hono<Env>();
+
+  // CORS for the separately hosted dashboard: the owner API answers browsers on exactly the configured origins and
+  // nobody else. The agent API (/v1) is never opened to browsers. Sessions travel as a bearer header, not a cookie,
+  // so no credentials are shared across origins.
+  if (allowedOrigins && allowedOrigins.length > 0) {
+    app.use("/owner/v1/*", cors({ origin: (o) => (allowedOrigins.includes(o) ? o : null), allowHeaders: ["authorization", "content-type"], allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], maxAge: 600 }));
+  }
+  app.use("/health", cors({ origin: "*", allowMethods: ["GET"] })); // reveals nothing the dashboard does not need to know the service is up
 
   // In mock mode the demo owner is public, so the dashboard can offer a one-click demo sign-in.
   app.get("/health", (c) => c.json({ ok: true, mock, ...(mock ? { mockOwner: deps.vaults.list()[0]?.owner } : {}) }));
@@ -165,7 +176,7 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal }
     });
   });
 
-  if (owner) mountOwnerRoutes(app, { deps, tokens, auth: owner, mock, build: build ?? resolveBuildInfo(), seal, audit: [] as OwnerAuditEntry[] });
+  if (owner) mountOwnerRoutes(app, { deps, tokens, auth: owner, mock, build: build ?? resolveBuildInfo(), seal, allowedOrigins, audit: [] as OwnerAuditEntry[] });
 
   if (adminToken) {
     const admin = (c: { req: { header(n: string): string | undefined } }) => safeEqual(c.req.header("x-admin-token") ?? "", adminToken);

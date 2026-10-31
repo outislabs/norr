@@ -33,6 +33,8 @@ export interface Challenge {
   message: string;
   recipient: string;
   expiresAt: number;
+  /** The dashboard origin this challenge was issued to and is signed for. Absent when the service is not configured with origins. */
+  origin?: string;
 }
 
 export interface Session {
@@ -71,24 +73,27 @@ export class OwnerAuth {
     this.sessionTtl = o.sessionTtlMs ?? 12 * 3_600_000;
   }
 
-  challenge(): Challenge {
+  /** With an origin, the signed message names the site, and the login must come from the same one. */
+  challenge(origin?: string): Challenge {
     const nonce = randomBytes(32).toString("base64");
     const issued = new Date(this.now()).toISOString();
     const c: Challenge = {
       nonce,
       recipient: this.recipient,
-      message: `Sign in to Norr\nThis proves you control this NEAR account. It does not move funds or give Norr any access to them.\nIssued: ${issued}`,
+      message: `Sign in to Norr${origin ? ` at ${origin}` : ""}\nThis proves you control this NEAR account. It does not move funds or give Norr any access to them.\nIssued: ${issued}`,
       expiresAt: this.now() + this.challengeTtl,
+      ...(origin ? { origin } : {}),
     };
     this.challenges.set(nonce, c);
     return c;
   }
 
   /** Returns a session token, or null for any failure (no detail is leaked). Challenges are single-use. */
-  async login(req: { accountId: string; publicKey: string; signature: string; nonce: string; callbackUrl?: string }): Promise<{ token: string; accountId: string; expiresAt: number } | null> {
+  async login(req: { accountId: string; publicKey: string; signature: string; nonce: string; callbackUrl?: string }, origin?: string): Promise<{ token: string; accountId: string; expiresAt: number } | null> {
     const c = this.challenges.get(req.nonce);
     this.challenges.delete(req.nonce); // single-use even if the rest fails
     if (!c || c.expiresAt < this.now()) return null;
+    if (c.origin !== undefined && c.origin !== origin) return null; // issued to one site, presented by another
     const nonce = Buffer.from(c.nonce, "base64");
     const valid = verifyNep413({ message: c.message, nonce, recipient: c.recipient, callbackUrl: req.callbackUrl }, req.publicKey, req.signature);
     if (!valid) return null;
