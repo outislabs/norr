@@ -3,6 +3,7 @@
 // The agent token comes from NORR_AGENT_TOKEN, never from the command line.
 import { parseArgs } from "node:util";
 import { ChatClient, costUsd, listModels } from "./llm";
+import { Attestor, summarize } from "./verify";
 import { runAgent } from "./loop";
 import { connectNorr } from "./mcp-tools";
 import { SYSTEM_PROMPT } from "./prompts";
@@ -16,7 +17,7 @@ for (const file of [".env", "../../.env"]) {
     /* not here */
   }
 }
-const { values, positionals } = parseArgs({ allowPositionals: true, options: { mcp: { type: "string" }, model: { type: "string" } } });
+const { values, positionals } = parseArgs({ allowPositionals: true, options: { mcp: { type: "string" }, model: { type: "string" }, "no-attest": { type: "boolean" } } });
 const apiKey = process.env.NEAR_AI_API_KEY ?? "";
 const token = process.env.NORR_AGENT_TOKEN ?? "";
 const task = positionals.join(" ").trim();
@@ -34,6 +35,12 @@ try {
   const run = await runAgent({ llm: new ChatClient({ apiKey }), model: model.id, system: SYSTEM_PROMPT, task, tools: conn.tools });
   for (const c of run.toolCalls) console.log(`tool  ${c.name}(${JSON.stringify(c.args)})\n      -> ${c.result.slice(0, 300)}`);
   console.log(`\n${run.stopped === "answer" ? run.finalText : `[${run.stopped}] ${run.error ?? ""}`}`);
+  if (!values["no-attest"]) {
+    const attestor = new Attestor({ apiKey });
+    const verdicts = await Promise.all(run.exchanges.map((x) => attestor.verifyCompletion(x.id, x)));
+    console.log(`\nattestation: ${summarize(verdicts)}`);
+    for (const c of verdicts.flatMap((v) => v.checks.filter((c) => c.status === "fail"))) console.log(`  FAIL ${c.label}: ${c.detail}`);
+  }
   console.log(`\n${run.turns} turns, ${run.usage.promptTokens}+${run.usage.completionTokens} tokens, about $${costUsd(run.usage, model.price).toFixed(4)}`);
 } finally {
   await conn.close();

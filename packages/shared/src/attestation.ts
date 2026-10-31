@@ -48,6 +48,10 @@ export interface ParsedQuote {
   version: number;
   teeType: number;
   mrtd: string;
+  /** MRCONFIGID: the platform's commitment to the app configuration (NEAR AI Cloud binds SHA-256 of app_compose here). */
+  mrConfigId: string;
+  /** TDATTRIBUTES; bit 0 of the first byte is TDX debug mode. */
+  tdAttributes: string;
   rtmr0: string;
   rtmr1: string;
   rtmr2: string;
@@ -107,6 +111,8 @@ export function parseQuote(quoteHex: string): ParsedQuote {
     version,
     teeType,
     mrtd: field(136, 48),
+    mrConfigId: field(184, 48),
+    tdAttributes: field(120, 8),
     rtmr0: field(328, 48),
     rtmr1: field(376, 48),
     rtmr2: field(424, 48),

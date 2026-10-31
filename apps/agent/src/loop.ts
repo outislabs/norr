@@ -27,6 +27,8 @@ export interface RunResult {
   error?: string;
   /** Completion ids, for fetching each response's signature. */
   chatIds: string[];
+  /** The hashes each response signature covers, one per completion that carried them. */
+  exchanges: { id: string; model: string; requestHash: string; responseHash: string }[];
 }
 
 export const toToolDefs = (tools: AgentTool[]): ToolDef[] => tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } }));
@@ -46,7 +48,7 @@ export async function runAgent(o: { llm: Chat; model: string; system: string; ta
     { role: "system", content: o.system },
     { role: "user", content: o.task },
   ];
-  const out: RunResult = { finalText: "", turns: 0, toolCalls: [], usage: { promptTokens: 0, completionTokens: 0 }, invalidArgs: 0, unknownTools: 0, stopped: "max_turns", chatIds: [] };
+  const out: RunResult = { finalText: "", turns: 0, toolCalls: [], usage: { promptTokens: 0, completionTokens: 0 }, invalidArgs: 0, unknownTools: 0, stopped: "max_turns", chatIds: [], exchanges: [] };
   const maxTurns = o.maxTurns ?? 10;
 
   for (let turn = 0; turn < maxTurns; turn++) {
@@ -61,6 +63,7 @@ export async function runAgent(o: { llm: Chat; model: string; system: string; ta
     }
     out.usage = addUsage(out.usage, reply.usage);
     out.chatIds.push(reply.id);
+    if (reply.exchange) out.exchanges.push({ id: reply.id, ...reply.exchange });
     messages.push(reply.message);
 
     const calls = reply.message.tool_calls ?? [];

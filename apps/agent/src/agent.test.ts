@@ -107,7 +107,7 @@ describe("runAgent", () => {
 });
 
 describe("scenarios", () => {
-  const run = (finalText: string, toolNames: string[] = []) => ({ finalText, turns: 2, toolCalls: toolNames.map((name) => ({ name, args: {}, result: "" })), usage: { promptTokens: 0, completionTokens: 0 }, invalidArgs: 0, unknownTools: 0, stopped: "answer" as const, chatIds: [] });
+  const run = (finalText: string, toolNames: string[] = []) => ({ finalText, turns: 2, toolCalls: toolNames.map((name) => ({ name, args: {}, result: "" })), usage: { promptTokens: 0, completionTokens: 0 }, invalidArgs: 0, unknownTools: 0, stopped: "answer" as const, chatIds: [], exchanges: [] });
   const id = (s: string) => SCENARIOS.find((x) => x.id === s)!;
   const o = (asset: string, amountUsd: number, status: Outcome["status"], code?: string, side: Outcome["side"] = "buy"): Outcome => ({ asset, amountUsd, status, side, ...(code ? { code } : {}) });
 

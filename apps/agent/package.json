@@ -5,7 +5,10 @@
   "type": "module",
   "description": "Demo agent: an OpenAI-compatible model (NEAR AI Cloud) driving Norr through MCP.",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.2"
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@noble/curves": "1.9.7",
+    "@noble/hashes": "1.8.0",
+    "@norr/shared": "workspace:*"
   },
   "devDependencies": {
     "@norr/enclave": "workspace:*",
