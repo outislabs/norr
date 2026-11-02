@@ -43,8 +43,11 @@ This repository keeps its full history. Some research and spike work happened **
 These are researched, not built (details in `docs/`):
 - **Norr as a NEAR Intents solver** for orders under $5 (`docs/SOLVER-FEASIBILITY.md`). Needs a solver API key, which is gated by KYC/KYB of the operating entity (feasible post-hackathon with a registered company), binding quotes with indemnity, inventory and a hedging plan. Rebalancing would go through NEAR Intents itself, not a DEX.
 - **Order pooling** to serve $1-$5 stock orders (`docs/ROADMAP-POOLING.md`): batch small orders into one on-chain trade and track each user's share in a ledger. It changes the custody model and raises licensing questions, so it needs legal review first.
-- **Encrypted owner-only reasoning and activity log**, and a TEE attestation of the exact code (Phala), shown on the Verify screen. The attestation does not exist yet.
+- **Owning a vault from an EVM or Solana wallet.** Today the owner is a NEAR account: sign-in is a NEP-413 message, and swap approvals happen in OutLayer's dashboard, which needs a NEAR login. NEAR's Ethereum-wallets module does not implement `signMessage`/NEP-413, so it cannot replace that sign-in. Funding the vault from any chain already works; a wallet-connected funding flow through Aurora's Intents widget is planned (`docs/AURORA.md`).
 - Smaller minimums if NEAR Intents or Ondo confirm the roughly $5 floor is configurable (`docs/EQUITY-MINIMUMS.md`).
 
 ## Known limitations (so far)
-See `docs/FINDINGS.md`. Notably: OutLayer's swap endpoint ignores `min_amount_out`, its gateway builds swap routes that its TEE does not re-verify, and limit orders are out of v1 because two test orders never filled.
+See `docs/FINDINGS.md`. Notably: **owning a vault needs a NEAR account** (EVM and Solana users can fund a vault from their own chain but cannot sign in or approve swaps yet); OutLayer's swap endpoint ignores `min_amount_out`, its gateway builds swap routes that its TEE does not re-verify, and limit orders are out of v1 because two test orders never filled.
+
+## License
+MIT, see `LICENSE`.

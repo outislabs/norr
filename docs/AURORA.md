@@ -30,6 +30,6 @@ NEAR Intents itself already accepts EVM (ERC-191) and Solana (ed25519) signature
 
 **C. Skip: Intents Connect for trading.** It runs actions on non-NEAR chains.
 
-## Decisions for you
-1. Go ahead with A, and get an Intents Studio key (set as `VITE_AURORA_API_KEY`; it is public by design).
-2. Accept B as a documented limitation for the hackathon.
+## Decisions (2026-11-03)
+1. **A approved.** The owner supplies an Intents Studio key in `.env` (`VITE_AURORA_API_KEY`; public by design) and confirms each mainnet test transaction.
+2. **B accepted as a documented limitation and roadmap item** (README). NEAR's Ethereum-wallets module (`@near-wallet-selector/ethereum-wallets` 10.1.4) does not implement `signMessage`/NEP-413, so it cannot replace our sign-in; whether OutLayer's approval screen accepts such an account was not found in any source.

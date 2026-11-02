@@ -1,6 +1,7 @@
 {
   "name": "norr",
   "private": true,
+  "license": "MIT",
   "version": "0.0.0",
   "description": "Private trading layer for AI agents on NEAR Intents",
   "packageManager": "pnpm@10.18.0",

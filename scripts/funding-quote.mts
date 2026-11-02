@@ -1,6 +1,6 @@
 // Ask 1Click for a one-time deposit address that credits the demo vault's confidential balance.
 // This only REQUESTS the address; nothing is sent. The owner sends the USDC from their own wallet.
-//   pnpm exec tsx scripts/funding-quote.mts --usdc 1 --from legalalienx.near
+//   pnpm exec tsx scripts/funding-quote.mts --usdc 1 --from <your-account>.near
 import { OneClick } from "../packages/intents/src/oneclick";
 import { parseArgs } from "node:util";
 

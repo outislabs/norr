@@ -1,5 +1,7 @@
 # Day-1 gating findings
 
+> `<owner-account>` stands for the owner's personal NEAR account, which is the approver and withdrawal whitelist of the first test wallet. The name is left out of this public file; `norrfi.near` is the project account.
+
 Checked 2026-10-24 (updated after the API key was added). All checks were read-only calls or `dry: true` quotes. **No mainnet transaction was sent.** Everything built before Nov 1 is a spike; see `docs/CARRYOVER.md`.
 
 | # | Check | Result |
@@ -62,7 +64,7 @@ All dry quotes failed with HTTP 400 `Quoting for this pair is not available`, fo
 - **OutLayer's docs** (CUSTODY.md and the agent-custody page, both fetched today) say the opposite: "Multisig covers Trusted ops too", and that swap, confidential, cross_chain_withdraw and limit_order "execute only after the approvers confirm". They also describe a per-capability `requires_approval` flag and `approval.excluded_types`, and do not reconcile them.
 - **Our own history:** this morning (about 08:00-09:30Z) every swap, the withdraw and both limit orders went to `pending_approval` and ran only after the owner signed.
 - **Dry runs now:** the public `intents/withdraw/dry-run` still says "Operation would require multisig approval". The `confidential/withdraw/dry-run` returns a quote-shaped answer (`amount_out`, `min_amount_out`) with no approval message at all, which fits the dashboard banner but does not prove it.
-- **Unresolved.** The live policy's `approval` section is unchanged (threshold 1, approver `legalalienx.near`). The first trusted op (the 1.5 USDC shield) will show the answer: the response says `pending_approval`, or the op simply runs. If trusted ops execute immediately, the controls for swaps and confidential ops are the capability, the allowed tokens, the limits and the whitelist, plus Norr's own checks; plain withdrawals stay approval-gated. This also changes the autonomous-mode plan: it would no longer need an approval exemption for swaps.
+- **Unresolved.** The live policy's `approval` section is unchanged (threshold 1, approver `<owner-account>`). The first trusted op (the 1.5 USDC shield) will show the answer: the response says `pending_approval`, or the op simply runs. If trusted ops execute immediately, the controls for swaps and confidential ops are the capability, the allowed tokens, the limits and the whitelist, plus Norr's own checks; plain withdrawals stay approval-gated. This also changes the autonomous-mode plan: it would no longer need an approval exemption for swaps.
 
 ### First confidential op: shield 1.5 USDC (2026-10-30, request `e6d343bd-…`)
 - **Whitelist:** the first attempt was refused: "Address '2005d442…4046' is not in whitelist" (the wallet's own account must be listed, because a shield pays the wallet's own confidential identity). After adding it the request was accepted.
@@ -84,7 +86,7 @@ All dry quotes failed with HTTP 400 `Quoting for this pair is not available`, fo
 
 ### Confidential withdraw: 1 USDC to the owner (2026-10-30, request `f37ff54c-…`)
 - `POST /wallet/v1/confidential/withdraw` with `{to, amount, token, chain}`; it paused for approval, then completed in about 90 seconds. The owner's account rose from 6.244794 to 7.244794 USDC on-chain (exact, no fee); the wallet's public Intents balance stayed at 0.497728; the confidential balance fell to 0.486643 (OutLayer-reported). A dry run to a non-whitelisted account was refused ("not in whitelist").
-- **What the public chain shows (two `execute_intents` calls on `intents.near`, readable by anyone):** (1) a `transfer` of 1 USDC from an intermediate account `51e8f94d…` to another intermediate account `1a3cfe89…`; (2) an `ft_withdraw` signed by `1a3cfe89…` sending 1 USDC to `legalalienx.near`. **The vault wallet's own account (`2005d442…`) appears in neither transaction.** An observer sees that some intermediate account paid 1 USDC to the owner, with no on-chain link to the vault's account. (This wallet's account is still publicly linked to the owner through the earlier public deposit and withdrawal; the test shows the withdrawal path itself does not leak it.)
+- **What the public chain shows (two `execute_intents` calls on `intents.near`, readable by anyone):** (1) a `transfer` of 1 USDC from an intermediate account `51e8f94d…` to another intermediate account `1a3cfe89…`; (2) an `ft_withdraw` signed by `1a3cfe89…` sending 1 USDC to `<owner-account>`. **The vault wallet's own account (`2005d442…`) appears in neither transaction.** An observer sees that some intermediate account paid 1 USDC to the owner, with no on-chain link to the vault's account. (This wallet's account is still publicly linked to the owner through the earlier public deposit and withdrawal; the test shows the withdrawal path itself does not leak it.)
 - Timing and amount can still correlate: the withdrawal (1 USDC, 15:09Z) is visible, and a funding deposit of a similar amount shortly before would be matched by an observer.
 
 ## 1. Assets and multi-issuer routing
@@ -165,9 +167,9 @@ From the current OutLayer docs (CUSTODY.md and the agent-custody page):
 5. README wording (proposed): "Keys live in OutLayer's TEE wallet, and the agent never touches them. The owner sets spending limits, a withdrawal whitelist and approvals in OutLayer, enforced inside its TEE. Known limitation: for swaps, OutLayer's gateway builds the route and deposit address and its TEE does not independently re-check the token, amount or deposit address, so these limits assume an honest OutLayer gateway. Norr adds its own pre-trade checks and a post-trade comparison against its own quote to catch tampering."
 
 ### OutLayer policy actually stored (checked 2026-10-24 via `GET /wallet/v1/policy`)
-- Approval threshold 1, approver `legalalienx.near` (admin), no excluded types, so every fund-moving operation waits for that approval (`/wallet/approvals`).
+- Approval threshold 1, approver `<owner-account>` (admin), no excluded types, so every fund-moving operation waits for that approval (`/wallet/approvals`).
 - Native limits: per-tx 0.5 NEAR, daily 1, monthly 1, hourly 10 (the hourly value is higher than the daily one, so daily binds).
-- Whitelist `legalalienx.near`; transaction types `transfer`, `call`, `intents_withdraw`, `intents_swap` (the dashboard writes `intents_*`, the docs say `swap`/`withdraw`); capabilities: `swap` allowed, `evm_sign` and `solana_sign` off, the rest default-deny.
+- Whitelist `<owner-account>`; transaction types `transfer`, `call`, `intents_withdraw`, `intents_swap` (the dashboard writes `intents_*`, the docs say `swap`/`withdraw`); capabilities: `swap` allowed, `evm_sign` and `solana_sign` off, the rest default-deny.
 - **No `rate_limit` is stored.** The "10 tx/hour" intent landed in the native hourly limit (10 NEAR) instead.
 - No token-specific limits and no `allowed_tokens` yet.
 
@@ -185,7 +187,7 @@ Requesting a cross-chain deposit address (`POST /intents/deposit/cross-chain`, `
 
 ### OutLayer funded test: results so far (2026-10-30)
 - **Funding worked.** 3.0 USDC reached the wallet's Intents balance (`mt_balance_of` on `intents.near` for the wallet's implicit account), confirmed on-chain; the deposit status endpoint reports `success`. The three temporary policy entries were removed afterwards.
-- **Withdraw dry-runs on the final policy:** to the whitelisted `legalalienx.near`: `would_succeed: true`, "would require multisig approval", `address_allowed: true`, `within_limits: true`, `estimated_fee: "0.002"` in NEAR. To a non-whitelisted address: `policy_denied`, "Address … is not in whitelist". So the whitelist binds withdrawals and `intents_withdraw` is recognised as the withdraw type. Whether `intents_swap` is recognised as swap is still unconfirmed.
+- **Withdraw dry-runs on the final policy:** to the whitelisted `<owner-account>`: `would_succeed: true`, "would require multisig approval", `address_allowed: true`, `within_limits: true`, `estimated_fee: "0.002"` in NEAR. To a non-whitelisted address: `policy_denied`, "Address … is not in whitelist". So the whitelist binds withdrawals and `intents_withdraw` is recognised as the withdraw type. Whether `intents_swap` is recognised as swap is still unconfirmed.
 - **Open cost question:** the withdraw fee is quoted in NEAR (about 0.002 NEAR) and the wallet holds 0 NEAR. Unknown whether it is taken from the wallet's NEAR, from the Intents balance, or makes the withdraw fail.
 - **Quote agreement is close, not exact:** for 1.5 USDC to SOL, OutLayer quoted 15429356 (min 15275062) and Norr's own 1Click quote 15430264 (min 15275961), a 0.006% gap seconds apart, whereas the first comparison was identical. `verifyExecution` should therefore check the executed output against a tolerance band around Norr's quote, not exact equality with OutLayer's quote.
 
@@ -282,10 +284,10 @@ No Phala CVM exists yet, but NEAR AI Cloud runs on dstack too, and its public at
 
 Read-only (`scripts/autonomy-check.mts`; the agent key can read the policy but only the owner can change it, and there is no swap dry-run route, both candidates answer 404):
 
-- The demo wallet's policy has approval threshold 1 (approver `norrfi.near`), **no `excluded_types`**, `transaction_types: ["confidential"]`, capability `confidential` on, and an address whitelist of `legalalienx.near` plus the controller key. Plain `withdraw` is not an allowed type at all (its dry-run is denied).
+- The demo wallet's policy has approval threshold 1 (approver `norrfi.near`), **no `excluded_types`**, `transaction_types: ["confidential"]`, capability `confidential` on, and an address whitelist of `<owner-account>` plus the controller key. Plain `withdraw` is not an allowed type at all (its dry-run is denied).
 - From earlier live runs: a confidential **swap** and a confidential **withdraw** are both gated as the single type `confidential` (the withdraw dry-run was denied with "Transaction type 'confidential' is not allowed by policy"). An approval exemption for `confidential` would therefore skip approval for withdrawals too. They cannot be separated by type.
 - **Decision: keep approvals** for the demo. What an exemption would still leave in place: the whitelist (funds can only go to the owner's own accounts), per-transaction and daily limits, and the rate limit; what it would remove is the owner's signature on withdrawals. If wanted anyway, the owner can add `excluded_types: ["confidential"]` in OutLayer's dashboard; the check to run afterwards is a confidential withdraw dry-run, which would show whether it still says it requires approval.
-- Note: the whitelist holds `legalalienx.near`, not `norrfi.near`, so a withdrawal from the demo wallet goes to `legalalienx.near`. **Confirmed by the owner 2026-11-02 as intended; the whitelist stays as is.**
+- Note: the whitelist holds `<owner-account>`, not `norrfi.near`, so a withdrawal from the demo wallet goes to `<owner-account>`. **Confirmed by the owner 2026-11-02 as intended; the whitelist stays as is.**
 
 ## Real "rug" token for the live demo (2026-10-31)
 
