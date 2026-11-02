@@ -1,10 +1,10 @@
 # Phala Cloud CVM deployment. Everything here is measured by the attestation, so:
 #  - the image is pinned by digest (CI prints it); a mutable tag would defeat verification;
 #  - secrets are NOT in this file. They are set as encrypted environment variables and arrive as ${...} below.
-# Replace REPLACE_WITH_DIGEST with the digest from the CI run for the commit you are deploying.
+# Pinned to the image CI built from commit babc7bc (NORR_COMMIT inside it says so). After any code change, take the new digest from the CI run summary.
 services:
   norr:
-    image: ghcr.io/outislabs/norr@sha256:REPLACE_WITH_DIGEST
+    image: ghcr.io/outislabs/norr@sha256:71837e30222aca2d39235ccc7944bf1f5a17f31e3e678d3cad6b822ebbe07047
     restart: unless-stopped
     ports:
       - "8787:8787"
@@ -30,7 +30,7 @@ services:
   # The MCP endpoint remote agents connect to (https://<this CVM>/mcp). It holds no state and no tokens: each request
   # forwards the caller's own agent token to the service. It runs in the same CVM so what handles agent traffic is attested too.
   mcp:
-    image: ghcr.io/outislabs/norr@sha256:REPLACE_WITH_DIGEST
+    image: ghcr.io/outislabs/norr@sha256:71837e30222aca2d39235ccc7944bf1f5a17f31e3e678d3cad6b822ebbe07047
     restart: unless-stopped
     working_dir: /app/apps/mcp
     command: ["../enclave/node_modules/.bin/tsx", "src/http.ts"]
