@@ -85,6 +85,10 @@ export const isBlock = (r: PreTradePass | Block): r is Block => r.ok === false;
 export const privacyUnavailable = (detail: string): Block =>
   block("PRIVACY_UNAVAILABLE", `This vault trades confidentially only, and that is not possible right now: ${detail}`);
 
+/** The asset list has not loaded (the market data service was unreachable at startup); the service is retrying. */
+export const pricingUnavailable = (): Block =>
+  block("PRICING_UNAVAILABLE", "Pricing is unavailable right now: the market data service could not be reached at startup. Norr is retrying in the background. Try again in a minute.");
+
 /** No candidate returned a quote. */
 export const noLiquidity = (): Block =>
   block("NO_LIQUIDITY", "No liquidity is available for this trade right now. Smaller trades in tokenized stocks can fail; try a larger amount or another asset.");

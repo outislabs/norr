@@ -62,7 +62,7 @@ export interface ParsedQuote {
 
 export type CheckStatus = "pass" | "fail" | "skipped";
 export interface Check {
-  id: "quote-format" | "fresh" | "compose-hash" | "event-log" | "images-pinned" | "quote-signature";
+  id: "quote-format" | "fresh" | "compose-hash" | "event-log" | "os-image" | "images-pinned" | "quote-signature";
   label: string;
   status: CheckStatus;
   detail: string;
@@ -166,6 +166,19 @@ export function composeImages(appCompose: string): { image: string; pinned: bool
 const result = (id: Check["id"], label: string, status: CheckStatus, detail: string): Check => ({ id, label, status, detail });
 
 /**
+ * dstack OS images Phala offers (`phala os-images`, 2026-11-03). A "dev" image allows SSH and debugging access to the VM,
+ * so an attestation from one proves nothing about what the operator can see. Hashes are the `os-image-hash` the guest
+ * measures into RTMR3. Not exhaustive: an image missing here is reported as unrecognised, never as production.
+ */
+export const OS_IMAGES: Record<string, { name: string; dev: boolean }> = {
+  e866e987221db357129ebc3f066b6706ef955889ea95e5510acbdf3d3055186b: { name: "dstack-dev-0.5.12", dev: true },
+  e0c9312d9a2a7cdc54fdd86264474f502a97282b464b6cdba4544b1e8a211734: { name: "dstack-nvidia-dev-0.5.12", dev: true },
+  "8db40cb23008d6213668b5816702d100b37b859a8a5bfd18d938ae3a1b3715bd": { name: "dstack-0.5.12", dev: false },
+  "91fd5d69ccee3e5ea4f2aeb8c9b632c4358c4ecfc29ba1aa6fb1e402af209829": { name: "dstack-nvidia-0.5.12", dev: false },
+  ec43cb8c5e04b6bb6c53b33b16076a01d83d01f7f4b703f2f78a0d947d6247e6: { name: "dstack-0.6.1", dev: false },
+};
+
+/**
  * Run checks 1 to 4 on what a service returned for `nonceHex`. Never throws: anything unparseable is a failed
  * check with the reason, so a damaged or hostile response cannot read as success.
  */
@@ -214,6 +227,18 @@ export async function checkAttestation(nonceHex: string, evidence: AttestationEv
       checks.push(result("event-log", "The event log is the one the hardware measured", ok ? "pass" : "fail", ok ? "Replaying the RTMR3 events reproduces the RTMR3 in the quote." : "Replaying the events does not reproduce the quote's RTMR3: the log was altered or is for another machine."));
     } catch (e) {
       checks.push(result("event-log", "The event log is the one the hardware measured", "fail", e instanceof Error ? e.message : "unreadable"));
+    }
+
+    const label = "The VM runs a production OS image, not a debug one";
+    try {
+      const hash = events.find((e) => e.event === "os-image-hash")?.event_payload.toLowerCase();
+      const known = hash ? OS_IMAGES[hash] : undefined;
+      if (!hash) checks.push(result("os-image", label, "fail", "The event log has no os-image-hash event, so the OS image is unknown."));
+      else if (known?.dev) checks.push(result("os-image", label, "fail", `This is ${known.name}, a DEBUG image (${hash.slice(0, 16)}…): the operator can open a shell in the VM. Do not treat this attestation as production.`));
+      else if (known) checks.push(result("os-image", label, "pass", `${known.name} (${hash.slice(0, 16)}…), a production image.`));
+      else checks.push(result("os-image", label, "skipped", `OS image ${hash.slice(0, 16)}… is not one this checker recognises, so it cannot say whether it is a debug image. Compare with \`phala os-images\`.`));
+    } catch (e) {
+      checks.push(result("os-image", label, "fail", e instanceof Error ? e.message : "unreadable"));
     }
   }
 

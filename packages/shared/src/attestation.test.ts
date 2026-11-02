@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DIGEST, buildQuote, compose, eventDigest, fixture, sha } from "./attestation.fixture";
+import { DEV_OS, DIGEST, PROD_OS, buildQuote, compose, eventDigest, fixture, sha } from "./attestation.fixture";
 import real from "./attestation.real.fixture.json";
 import { allPass, bytesToHex, checkAttestation, composeImages, hexToBytes, parseEventLog, parseQuote, replayRtmr3, verifyQuoteWithPhala, type EventLogEntry } from "./attestation";
 
@@ -9,7 +9,7 @@ describe("attestation checks", () => {
   it("passes when the quote, event log and configuration agree", async () => {
     const f = fixture();
     const checks = await checkAttestation(f.nonce, f.evidence, f.info);
-    expect(byId(checks)).toEqual({ "quote-format": "pass", fresh: "pass", "compose-hash": "pass", "event-log": "pass", "images-pinned": "pass" });
+    expect(byId(checks)).toEqual({ "quote-format": "pass", fresh: "pass", "compose-hash": "pass", "event-log": "pass", "os-image": "pass", "images-pinned": "pass" });
     expect(allPass(checks)).toBe(true);
   });
 
@@ -36,6 +36,26 @@ describe("attestation checks", () => {
     const edited = f.events.map((e) => (e.event === "instance-id" ? { ...e, digest: sha("sha384", "other").toString("hex") } : e));
     const c = byId(await checkAttestation(f.nonce, { ...f.evidence, eventLog: JSON.stringify(edited) }, f.info));
     expect(c["event-log"]).toBe("fail");
+  });
+
+  it("fails a debug OS image, naming it, so the attestation cannot pass as production", async () => {
+    const f = fixture({ osImage: DEV_OS });
+    const c = await checkAttestation(f.nonce, f.evidence, f.info);
+    expect(byId(c)["os-image"]).toBe("fail");
+    expect(c.find((x) => x.id === "os-image")!.detail).toMatch(/dstack-dev-0\.5\.12.*DEBUG/);
+    expect(byId(c)["event-log"]).toBe("pass"); // genuinely measured, just not production
+    expect(allPass(c)).toBe(false);
+  });
+
+  it("does not call an unrecognised OS image production (skipped), and fails when the event is missing", async () => {
+    const unknown = fixture({ osImage: "ab".repeat(32) });
+    const cu = await checkAttestation(unknown.nonce, unknown.evidence, unknown.info);
+    expect(byId(cu)["os-image"]).toBe("skipped");
+    expect(allPass(cu)).toBe(false);
+    const none = fixture({ osImage: null });
+    expect(byId(await checkAttestation(none.nonce, none.evidence, none.info))["os-image"]).toBe("fail");
+    const prod = fixture({ osImage: PROD_OS.toUpperCase() });
+    expect(byId(await checkAttestation(prod.nonce, prod.evidence, prod.info))["os-image"]).toBe("pass");
   });
 
   it("rejects an image referenced by a tag instead of a digest", async () => {

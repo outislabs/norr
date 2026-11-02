@@ -73,7 +73,7 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
   });
 
   // In mock mode the demo owner is public, so the dashboard can offer a one-click demo sign-in.
-  app.get("/health", (c) => c.json({ ok: true, mock, ...(mock ? { mockOwner: deps.vaults.list()[0]?.owner } : {}) }));
+  app.get("/health", (c) => c.json({ ok: true, mock, pricing: deps.pricingReady?.() === false ? "retrying" : "ready", ...(mock ? { mockOwner: deps.vaults.list()[0]?.owner } : {}) }));
 
   app.use("/v1/*", async (c, next) => {
     const m = /^Bearer (.+)$/.exec(c.req.header("authorization") ?? "");
@@ -87,6 +87,7 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
     const cls = c.req.query("class");
     if (cls !== undefined && cls !== "crypto" && cls !== "equity") return c.json({ error: "class must be crypto or equity" }, 400);
     const out: Record<string, unknown> = {};
+    if (deps.pricingReady?.() === false) out.notice = "The asset list is not loaded yet (the market data service was unreachable at startup). Norr is retrying; trades are blocked until it loads.";
     if (cls !== "equity") {
       out.crypto = deps.registry.entries("crypto").map((e) => ({ symbol: e.symbol, chain: e.chain, id: e.id }));
     }

@@ -156,7 +156,7 @@ type BlockCode =
   | "PAUSED" | "OVER_TRADE_LIMIT" | "DAILY_LOSS_CAP" | "COOLDOWN"
   | "ASSET_NOT_ALLOWED" | "EQUITY_LIMIT" | "SCAM_RISK" | "INELIGIBLE"
   | "PRICE_SANITY" | "UNKNOWN_ASSET" | "NO_LIQUIDITY" | "SHIELD_INCIDENT"
-  | "DAILY_SPEND_CAP" | "PRIVACY_UNAVAILABLE";
+  | "DAILY_SPEND_CAP" | "PRIVACY_UNAVAILABLE" | "PRICING_UNAVAILABLE";
 ```
 
 Tokenized markets trade 24/7, so there is no market-closed code. A quote failing with "No liquidity" maps to `NO_LIQUIDITY`.

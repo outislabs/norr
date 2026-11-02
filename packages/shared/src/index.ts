@@ -69,6 +69,7 @@ export const BlockCode = z.enum([
   "SHIELD_INCIDENT",
   "DAILY_SPEND_CAP",
   "PRIVACY_UNAVAILABLE",
+  "PRICING_UNAVAILABLE",
 ]);
 export type BlockCode = z.infer<typeof BlockCode>;
 

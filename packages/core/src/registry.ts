@@ -74,6 +74,12 @@ export class Registry {
   private readonly byIdMap = new Map<string, RegistryEntry>();
 
   constructor(input: RegistryInput) {
+    this.load(input);
+  }
+
+  /** Replaces the whole list, for a service that starts before the token list is reachable and fills the registry once it is. */
+  load(input: RegistryInput): void {
+    this.byIdMap.clear();
     for (const t of input.crypto) this.byIdMap.set(t.assetId, toEntry(t, "crypto", null));
     // Equity entries win if an id appears in both lists.
     for (const { issuer, tokens } of input.equities ?? []) {

@@ -25,10 +25,11 @@ describe("shared schemas", () => {
   });
 
   it("defines all fourteen block codes (no market-closed) and validates a blocked decision", () => {
-    expect(BlockCode.options).toHaveLength(14);
+    expect(BlockCode.options).toHaveLength(15);
     expect(BlockCode.options).toContain("NO_LIQUIDITY");
     expect(BlockCode.options).toContain("DAILY_SPEND_CAP");
     expect(BlockCode.options).toContain("PRIVACY_UNAVAILABLE");
+    expect(BlockCode.options).toContain("PRICING_UNAVAILABLE");
     expect(BlockCode.options).not.toContain("MARKET_CLOSED");
     const d = { status: "blocked", code: "PAUSED", message: "Vault is paused" };
     expect(Decision.safeParse(d).success).toBe(true);

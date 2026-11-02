@@ -1,5 +1,6 @@
-import { HeuristicRiskProvider, ONDO, Registry, extraTokens } from "@norr/core";
+import { HeuristicRiskProvider, type RegistryEntry } from "@norr/core";
 import { DexScreenerSignals, NearIntentsBalances, OneClick, OutLayerCustody, ShieldClient } from "@norr/intents";
+import { PricingFeed } from "./pricing";
 import { dstackAttestor } from "./attestation";
 import { loadPolicy, parseOrigins } from "./config";
 import { createApp } from "./app";
@@ -26,7 +27,7 @@ const need = (env: NodeJS.ProcessEnv, k: string): string => {
  * trading to be allowed at all, SHIELD_API_KEY (without it the Shield check fails closed, unless the
  * dev-only bypass is on). Not exercised against mainnet by the automated tests.
  */
-export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env) {
+export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env, opts: { pricingRetryBaseMs?: number } = {}) {
   // Resolved first, before any network call: an illegal bypass request must stop startup.
   const shieldMode = resolveShieldMode(env);
   if (shieldMode.bypass) console.warn(BYPASS_BANNER);
@@ -34,12 +35,26 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env) {
   const policy = loadPolicy(env);
   const { apiKey: outlayerKey, accountId: walletAccount } = walletCredentials(env);
   const oneclick = new OneClick({ apiKey: env.ONECLICK_API_KEY, baseUrl: env.ONECLICK_BASE_URL });
-  const [plain, withOndo] = await Promise.all([oneclick.tokens(false), oneclick.tokens(true)]);
-  const registry = new Registry({ crypto: plain, equities: [{ issuer: ONDO, tokens: extraTokens(plain, withOndo) }] });
-  const quoteAsset = registry.byId(USDC_NEAR);
-  if (!quoteAsset) throw new Error("USDC on NEAR is missing from the 1Click token list");
-
+  // Not awaited: 1Click being down must not stop the service from starting (see pricing.ts).
   const now = Date.now;
+  const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+  const pricing = new PricingFeed(async () => {
+    const [plain, withOndo] = await Promise.all([oneclick.tokens(false), oneclick.tokens(true)]);
+    return { plain, withOndo };
+  }, {
+    cashAssetId: USDC_NEAR,
+    sleep,
+    baseDelayMs: opts.pricingRetryBaseMs,
+    onFailure: (n, m) => console.warn(`  pricing: 1Click token list unavailable (attempt ${n}): ${m}. Trades are blocked until it loads; retrying.`),
+    onReady: (n) => console.log(`  pricing: token list loaded (attempt ${n}). Trades are allowed.`),
+  });
+  void pricing.start();
+  const registry = pricing.registry;
+  // Until the list loads, USDC is not in the registry; this placeholder keeps read paths working and trades are blocked by the gate.
+  const quoteAsset = new Proxy({ id: USDC_NEAR, symbol: "USDC", name: "USDC", class: "crypto", chain: "near", decimals: 6, ticker: "USDC", issuer: null, priceUsd: 1, coingeckoId: null, contractAddress: null } as RegistryEntry, {
+    get: (fallback, prop) => ((registry.byId(USDC_NEAR) ?? fallback) as never)[prop as never],
+  });
+
   // Durable: the service and the live runner share this directory, and a restart does not reset the caps.
   const dir = dataDir(env);
   const cipher = DataCipher.load(env, dir);
@@ -75,10 +90,11 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env) {
     vaults,
     ledger,
     quoteAsset,
+    pricingReady: () => pricing.ready(),
     now,
-    sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+    sleep,
   };
-  return { deps, ledger, sealKeys, vaultId: policy.vaultId, walletAccount, shieldMode, shieldConfigured: Boolean(env.SHIELD_API_KEY) };
+  return { deps, pricing, ledger, sealKeys, vaultId: policy.vaultId, walletAccount, shieldMode, shieldConfigured: Boolean(env.SHIELD_API_KEY) };
 }
 
 /** The live HTTP service: the same API as mock mode, on real rails. */

@@ -39,12 +39,17 @@ Rough totals for 72 hours, using the two instance prices Phala's pages quote (ch
 
 1. **Authenticate and look.** `phala login` (you enter the API key; it is stored by the CLI), `phala status`, `phala instance-types`. Note the cheapest type and its price.
 2. **Dry check of inputs.** Compose has digests, not tags. `deploy/.env.phala` has every key in the example. The Pages origin is final.
-3. **Deploy:**
+3. **Deploy.** Use a **production OS image**. Without `--image`, Phala's CLI picked the **debug** image `dstack-dev-0.5.12` for the smoke test (SSH-capable, so not a meaningful attestation). `phala os-images` lists them; `DEV = no` is production.
    ```
    phala deploy -n norr-demo -c deploy/docker-compose.yml -e deploy/.env.phala \
-     -t <cheapest-type> --disk-size 20G --no-public-logs --no-public-sysinfo --wait
+     -t tdx.small --disk-size 20G --image dstack-0.5.12 \
+     --public-logs --no-public-sysinfo --public-tcbinfo --wait
    ```
-   `--no-public-logs` matters: **the CLI makes logs, system info and TCB info public by default**. Keep TCB info public (it lets anyone check the app configuration). Defaults not changed: KMS `phala`, filesystem `zfs`. Read the flags again with `phala deploy --help` if the CLI has updated.
+   `--public-logs` is **only for this first production deploy**, so a failure is visible (the production image has no shell). The CLI makes logs, system info and TCB info public by default; keep TCB info public (it lets anyone check the app configuration). Public logs include the agent token printed at startup. As soon as the service is healthy:
+   ```
+   phala deploy --cvm-id norr-demo -c deploy/docker-compose.yml -e deploy/.env.phala --no-public-logs --wait
+   ```
+   then **revoke the startup token** in the dashboard (Vaults) after creating your own. Defaults not changed: KMS `phala`, filesystem `zfs`. Re-read `phala deploy --help` if the CLI has updated. The Verify screen and `scripts/verify-attestation.mts` now fail an attestation from a known debug OS image (`os-image` check).
 4. **Find the addresses.** `phala cvms get --cvm-id norr-demo` and `phala ps --cvm-id norr-demo`. Two public URLs: the service (port 8787) and the MCP endpoint (port 8788). Check `phala logs --cvm-id norr-demo -n 100` for a clean start (only you can read them).
 5. **Health.** `curl https://<service-url>/health` should say `{"ok":true,"mock":false}`. `curl https://<mcp-url>/health` should say `{"ok":true}`.
 6. **Attestation, the real test of our checks:**

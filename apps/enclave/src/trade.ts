@@ -8,6 +8,7 @@ import {
   sumToday,
   noLiquidity,
   preTradeChecks,
+  pricingUnavailable,
   privacyUnavailable,
   probeSizes,
   requireSwapBounds,
@@ -49,6 +50,8 @@ export interface TradeDeps {
   balances?: BalanceReader;
   /** The asset vault cash is held in (USDC). Buys spend it, sells return it. */
   quoteAsset: RegistryEntry;
+  /** Live service only: false while the asset list has not loaded yet (1Click was unreachable at boot). Absent means ready. */
+  pricingReady?: () => boolean;
   now: () => number;
   sleep: (ms: number) => Promise<void>;
   /** How long to wait on a swap before reporting it as pending, and the poll interval. */
@@ -135,6 +138,11 @@ export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeReq
   // A paused vault does no work and makes no outbound calls.
   if (vault.policy.paused) {
     return { decision: blocked("PAUSED", "This vault is paused by its owner. No trades are allowed until it is resumed."), shieldBypassed: false };
+  }
+
+  if (deps.pricingReady && !deps.pricingReady()) {
+    const b = pricingUnavailable();
+    return { decision: blocked(b.code, b.message), shieldBypassed: false };
   }
 
   const layers = await refreshState(deps, vault);
