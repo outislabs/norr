@@ -155,13 +155,38 @@ describe("owner routes", () => {
     expect(me).toMatchObject({ accountId: MOCK_OWNER, vaults: 1, mock: true });
   });
 
+  it("status says whether pricing, Shield and the enclave are up, and how many vaults are paused", async () => {
+    const { m, req, token } = await boot();
+    expect(await (await req("/owner/v1/status", { token })).json()).toMatchObject({ mock: true, pricing: "ready", shield: "ok", vaults: { total: 1, paused: 0 } });
+    m.deps.pricingReady = () => false;
+    m.deps.shield = async () => null;
+    expect(await (await req("/owner/v1/status", { token })).json()).toMatchObject({ pricing: "retrying", shield: "unavailable" });
+    m.deps.shield = async () => ({ status: "incidents", incidents: [] });
+    expect(await (await req("/owner/v1/status", { token })).json()).toMatchObject({ shield: "incidents" });
+  });
+
+  it("opening a vault records a value reading, at most one per ten minutes, visible only to its owner", async () => {
+    const { req, loginAs, token, clock } = await boot();
+    expect((await (await req("/owner/v1/vaults/demo/history", { token })).json()).points).toEqual([]);
+    await req("/owner/v1/vaults/demo", { token });
+    await req("/owner/v1/vaults/demo", { token }); // too soon: not recorded again
+    clock.t += 11 * 60_000;
+    await req("/owner/v1/vaults/demo", { token });
+    const { points } = await (await req("/owner/v1/vaults/demo/history", { token })).json();
+    expect(points).toHaveLength(2);
+    expect(points[0]).toMatchObject({ t: T0 });
+    expect(points[0].totalUsd).toBeGreaterThan(0);
+    const other = await loginAs("mallory.near");
+    expect((await req("/owner/v1/vaults/demo/history", { token: other.token })).status).toBe(404);
+  });
+
   it("rejects bad logins with no detail, and every route needs a session", async () => {
     const { req } = await boot();
     const bad = await req("/owner/v1/login", { body: { accountId: "x.near", publicKey: "ed25519:abc", signature: "AAAA", nonce: "AAAA" } });
     expect(bad.status).toBe(401);
     expect(await bad.json()).toEqual({ error: "sign-in failed" });
     expect((await req("/owner/v1/login", { body: {} })).status).toBe(401);
-    for (const path of ["/owner/v1/me", "/owner/v1/vaults", "/owner/v1/audit", "/owner/v1/verify", "/owner/v1/vaults/demo"]) {
+    for (const path of ["/owner/v1/me", "/owner/v1/vaults", "/owner/v1/audit", "/owner/v1/verify", "/owner/v1/status", "/owner/v1/vaults/demo", "/owner/v1/vaults/demo/history"]) {
       expect((await req(path)).status).toBe(401);
       expect((await req(path, { token: "norr_owner_forged" })).status).toBe(401);
     }

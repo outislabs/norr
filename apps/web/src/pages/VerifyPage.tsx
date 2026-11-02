@@ -2,14 +2,20 @@ import { AttestationPanel } from "../components/AttestationPanel";
 import type { Api } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 
-export function VerifyPage({ api }: { api: Api }) {
-  const { data, error, loading } = useAsync(() => api.verify(), "verify");
-  const audit = useAsync(() => api.audit(), "audit");
+export function VerifyPage({ api, signedIn }: { api: Api; signedIn: boolean }) {
+  // The owner-only parts (mode label, what you have done here) need a session; the attestation checks do not.
+  const { data, error, loading } = useAsync(() => (signedIn ? api.verify() : Promise.resolve(null)), `verify-${signedIn}`);
+  const audit = useAsync(() => (signedIn ? api.audit() : Promise.resolve(null)), `audit-${signedIn}`);
   return (
     <section>
       <h1 className="font-display text-3xl">Verify</h1>
       <div className="rule mt-3" />
-      {loading && <p className="mt-6 text-mist">Loading…</p>}
+      {!signedIn && (
+        <p className="mt-6 text-mist">
+          You do not need an account for this. Your browser asks the running service to prove which code and images it booted, on genuine Intel TDX hardware, and checks the answer itself.
+        </p>
+      )}
+      {loading && signedIn && <p className="mt-6 text-mist">Loading…</p>}
       {error && <p role="alert" className="mt-6 text-rust">{error}</p>}
       {data && (
         <div className="mt-6">
@@ -26,17 +32,21 @@ export function VerifyPage({ api }: { api: Api }) {
           </dl>
         </div>
       )}
-      {data?.attested && <AttestationPanel api={api} />}
-      <h2 className="mt-10 font-display text-xl">What you have done here</h2>
-      {audit.data && audit.data.audit.length === 0 && <p className="mt-2 text-mist">No actions yet.</p>}
-      <ul className="mt-2">
-        {audit.data?.audit.map((a, i) => (
-          <li key={`${a.at}-${i}`} className="flex justify-between gap-3 border-t border-line py-2 text-[15px]">
-            <span>{a.action}{a.vaultId ? ` (${a.vaultId})` : ""}</span>
-            <time className="text-sm text-mist" dateTime={a.at}>{a.at.slice(0, 19).replace("T", " ")}Z</time>
-          </li>
-        ))}
-      </ul>
+      {(!signedIn || data?.attested) && <AttestationPanel api={api} />}
+      {signedIn && (
+        <>
+          <h2 className="mt-10 font-display text-xl">What you have done here</h2>
+          {audit.data && audit.data.audit.length === 0 && <p className="mt-2 text-mist">No actions yet. Pausing, resuming, rule changes and tokens you create are listed here.</p>}
+          <ul className="mt-2">
+            {audit.data?.audit.map((a, i) => (
+              <li key={`${a.at}-${i}`} className="flex justify-between gap-3 border-t border-line py-2 text-[15px]">
+                <span>{a.action}{a.vaultId ? ` (${a.vaultId})` : ""}</span>
+                <time className="text-sm text-mist" dateTime={a.at}>{a.at.slice(0, 19).replace("T", " ")}Z</time>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </section>
   );
 }

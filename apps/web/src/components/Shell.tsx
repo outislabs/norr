@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import { shortId } from "../lib/format";
+import type { Api } from "../lib/api";
 import { KillSwitch } from "./KillSwitch";
+import { StatusBar } from "./StatusBar";
 
-export function Shell({ account, route, onSignOut, onPauseAll, children }: { account: string; route: string; onSignOut: () => void; onPauseAll: () => Promise<void>; children: ReactNode }) {
+export function Shell({ api, version, account, route, onSignOut, onPauseAll, children }: { api: Api; version: number; account: string; route: string; onSignOut: () => void; onPauseAll: () => Promise<void>; children: ReactNode }) {
   const link = (href: string, label: string, active: boolean) => (
     <a href={href} aria-current={active ? "page" : undefined} className={`pb-1 text-[15px] ${active ? "border-b border-brass text-ivory" : "text-mist hover:text-ivory"}`}>
       {label}
@@ -31,6 +33,24 @@ export function Shell({ account, route, onSignOut, onPauseAll, children }: { acc
           </nav>
           <KillSwitch onPauseAll={onPauseAll} />
         </div>
+      </header>
+      <StatusBar api={api} version={version} />
+      <main>{children}</main>
+    </div>
+  );
+}
+
+/** The page chrome for a signed-out visitor: just the proof, and a way in. */
+export function PublicFrame({ children }: { children: ReactNode }) {
+  return (
+    <div className="mx-auto min-h-screen max-w-2xl px-4 pb-24 pt-5">
+      <header className="mb-8 flex items-baseline justify-between gap-4 border-b border-line pb-3">
+        <a href="#/" className="font-display text-4xl font-normal tracking-tight text-ivory">
+          Norr
+        </a>
+        <a href="#/" className="btn btn-quiet">
+          Sign in
+        </a>
       </header>
       <main>{children}</main>
     </div>

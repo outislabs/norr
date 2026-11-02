@@ -11,7 +11,13 @@ export function VaultsPage({ api, account, version }: { api: Api; account: strin
       <div className="rule mt-3" />
       {loading && <p className="mt-6 text-mist">Loading…</p>}
       {error && <p role="alert" className="mt-6 text-rust">{error}</p>}
-      {data && data.vaults.length === 0 && <p className="mt-6 text-mist">No vaults are linked to {account} yet.</p>}
+      {data && data.vaults.length === 0 && (
+        <div className="mt-6 border-l-2 border-brass pl-4">
+          <p className="font-display text-xl">No vault is linked to this account</p>
+          <p className="mt-1 text-mist">You signed in as <span className="mono">{account}</span>. A vault belongs to the NEAR account that owns it, so check that this is the account the vault was set up for. Signing in with another account shows nothing, by design.</p>
+          <a href="#/verify" className="btn btn-quiet mt-3">Check the enclave while you are here</a>
+        </div>
+      )}
       <ul>
         {data?.vaults.map((v) => (
           <li key={v.id} className="border-b border-line">

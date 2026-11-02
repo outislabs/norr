@@ -37,6 +37,8 @@ import type { SealedReason } from "./seal";
 export interface FundingOffer { id: string; address: string; amountUsdc: number; asset: { symbol: string; chain: string; contract: string }; expiresAt: string }
 export interface FundingStatus { state: "waiting" | "arrived" | "expired"; receivedUsdc: number; balanceUsdc: number; expiresAt: string; reportedBy: string; independentlyConfirmed?: boolean }
 export interface VerifyInfo { mode: "mock" | "live"; attested: boolean; note: string; commit: string | null; dirty?: boolean; source?: "env" | "git" | "unknown" }
+export interface ServiceStatus { mock: boolean; pricing: "ready" | "retrying"; shield: "ok" | "incidents" | "unavailable"; enclave: boolean; vaults: { total: number; paused: number } }
+export interface ValuePoint { t: number; totalUsd: number; cryptoUsd: number; equityUsd: number }
 export interface AuditItem { at: string; owner: string; action: string; vaultId?: string }
 
 export interface ApiOptions {
@@ -95,6 +97,8 @@ export function createApi(o: ApiOptions) {
     /** Public endpoints: the service proves what it is to anyone, so no session is needed. */
     attestation: (nonceHex: string) => call<AttestationEvidence & { attested: true; commit: string | null }>(`/attestation?nonce=${nonceHex}`),
     appInfo: () => call<AppInfo & { attested: true }>("/info"),
+    status: () => call<ServiceStatus>("/owner/v1/status"),
+    history: (id: string) => call<{ points: ValuePoint[] }>(`/owner/v1/vaults/${encodeURIComponent(id)}/history`),
     audit: () => call<{ audit: AuditItem[] }>("/owner/v1/audit"),
     verify: () => call<VerifyInfo>("/owner/v1/verify"),
   };

@@ -41,7 +41,7 @@ function withLock<T>(dir: string, fn: () => T): T {
   }
 }
 
-function writeAtomic(path: string, data: string): void {
+export function writeAtomic(path: string, data: string): void {
   const tmp = `${path}.${randomBytes(4).toString("hex")}.tmp`;
   writeFileSync(tmp, data, { mode: 0o600 });
   renameSync(tmp, path);

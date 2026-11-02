@@ -7,6 +7,7 @@ import { rateLimiter, type Attestor } from "./attestation";
 import type { SealKeyStore, SealingLedger } from "./seal";
 import { mountOwnerRoutes, type OwnerAuditEntry } from "./owner/routes";
 import type { OwnerAuth } from "./owner/auth";
+import type { ValueHistory } from "./history";
 import { valueLayers } from "./portfolio";
 import { safeEqual, type AgentTokens } from "./tokens";
 import { executeTrade, planTrade, reconcile, type TradeDeps } from "./trade";
@@ -27,6 +28,8 @@ export interface AppOptions {
   allowedOrigins?: string[];
   /** The TEE this service runs in, if any. Enables the public /attestation and /info endpoints. */
   attestor?: Attestor | null;
+  /** Balance readings over time (owner dashboard chart). */
+  history?: ValueHistory;
 }
 
 type Env = { Variables: { vaultId: string } };
@@ -35,7 +38,7 @@ type Env = { Variables: { vaultId: string } };
  * The agent-facing API. There is deliberately no route that moves funds out, changes policy, or
  * accepts a destination. The vault always comes from the agent token. Request bodies are never logged.
  */
-export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, allowedOrigins, attestor }: AppOptions): Hono<Env> {
+export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, allowedOrigins, attestor, history }: AppOptions): Hono<Env> {
   const app = new Hono<Env>();
 
   // CORS for the separately hosted dashboard: the owner API answers browsers on exactly the configured origins and
@@ -206,7 +209,7 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
     });
   });
 
-  if (owner) mountOwnerRoutes(app, { deps, tokens, auth: owner, mock, build: build ?? resolveBuildInfo(), seal, allowedOrigins, attestor: attestor ?? null, audit: [] as OwnerAuditEntry[] });
+  if (owner) mountOwnerRoutes(app, { deps, tokens, auth: owner, mock, build: build ?? resolveBuildInfo(), seal, allowedOrigins, attestor: attestor ?? null, audit: [] as OwnerAuditEntry[], history });
 
   if (adminToken) {
     const admin = (c: { req: { header(n: string): string | undefined } }) => safeEqual(c.req.header("x-admin-token") ?? "", adminToken);

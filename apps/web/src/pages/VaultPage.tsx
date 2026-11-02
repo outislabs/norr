@@ -1,7 +1,9 @@
 import { useState } from "react";
 import type { Policy } from "@norr/shared";
 import { ActivityList } from "../components/ActivityList";
-import { AgentAccess } from "../components/AgentAccess";
+import { ConnectAgent } from "../components/ConnectAgent";
+import { Onboarding } from "../components/Onboarding";
+import { ValueChart } from "../components/ValueChart";
 import { ActivityTab } from "../components/ActivityTab";
 import { FundingPanel } from "../components/FundingPanel";
 import { PendingChecks } from "../components/PendingChecks";
@@ -9,11 +11,14 @@ import { PolicyForm } from "../components/PolicyForm";
 import { Portfolio } from "../components/Portfolio";
 import type { Api } from "../lib/api";
 import { ago, shortId, usd } from "../lib/format";
+import { getFlag, setFlag } from "../lib/flags";
+import { onboardingSteps } from "../lib/onboarding";
+import { useEffect } from "react";
 import { vaultHref, type Route } from "../lib/route";
 import { useAsync } from "../lib/useAsync";
 
 type Tab = Extract<Route, { name: "vault" }>["tab"];
-const TABS: [Tab, string][] = [["overview", "Overview"], ["fund", "Fund"], ["rules", "Rules"], ["activity", "Activity"], ["approvals", "Approvals"]];
+const TABS: [Tab, string][] = [["overview", "Overview"], ["fund", "Fund"], ["connect", "Connect"], ["rules", "Rules"], ["activity", "Activity"], ["approvals", "Approvals"]];
 
 function Meter({ label, value, max }: { label: string; value: number; max: number }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 100;
@@ -30,11 +35,16 @@ function Meter({ label, value, max }: { label: string; value: number; max: numbe
   );
 }
 
-export function VaultPage({ api, account, id, tab, onChanged }: { api: Api; account: string; id: string; tab: Tab; onChanged: () => void }) {
+export function VaultPage({ api, account, id, tab, mcpUrl, onChanged }: { api: Api; account: string; id: string; tab: Tab; mcpUrl: string; onChanged: () => void }) {
   const vault = useAsync(() => api.vault(id), `vault-${id}`);
   const activity = useAsync(() => (tab === "activity" ? api.activity(id) : Promise.resolve(null)), `act-${id}-${tab}`);
   const pending = useAsync(() => api.pending(id), `pend-${id}-${tab}`);
+  const history = useAsync(() => (tab === "overview" ? api.history(id) : Promise.resolve(null)), `hist-${id}-${tab}`);
   const [toggling, setToggling] = useState(false);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (tab === "rules") setFlag(`rules-${id}`);
+  }, [tab, id]);
 
   if (vault.loading && !vault.data) return <p className="text-mist">Loading…</p>;
   if (vault.error || !vault.data) return <p role="alert" className="text-rust">{vault.error ?? "This vault could not be found."}</p>;
@@ -73,9 +83,9 @@ export function VaultPage({ api, account, id, tab, onChanged }: { api: Api; acco
       </div>
       <p className="mono mt-1 text-sm text-mist" title={v.walletAccount}>Custody wallet {shortId(v.walletAccount, 12, 6)}</p>
 
-      <nav className="mt-6 flex gap-6 border-b border-line" aria-label="Vault sections">
+      <nav className="-mx-4 mt-6 flex gap-6 overflow-x-auto border-b border-line px-4" aria-label="Vault sections">
         {TABS.map(([t, label]) => (
-          <a key={t} href={vaultHref(id, t)} aria-current={t === tab ? "page" : undefined} className={`pb-2 ${t === tab ? "border-b border-brass text-ivory" : "text-mist hover:text-ivory"}`}>
+          <a key={t} href={vaultHref(id, t)} aria-current={t === tab ? "page" : undefined} className={`shrink-0 whitespace-nowrap pb-2 ${t === tab ? "border-b border-brass text-ivory" : "text-mist hover:text-ivory"}`}>
             {label}
             {t === "approvals" && pending.data && pending.data.pending.length > 0 ? ` (${pending.data.pending.length})` : ""}
           </a>
@@ -85,7 +95,15 @@ export function VaultPage({ api, account, id, tab, onChanged }: { api: Api; acco
       <div className="mt-8">
         {tab === "overview" && (
           <div className="flex flex-col gap-10">
-            <Portfolio portfolio={v.portfolio} />
+            <Onboarding
+              vaultId={id}
+              steps={onboardingSteps({ totalUsd: v.portfolio?.totalUsd ?? null, tokenIssued: getFlag(`token-${id}`), hasActivity: Boolean(v.state.lastTradeAt), rulesReviewed: getFlag(`rules-${id}`) })}
+            />
+            <Portfolio portfolio={v.portfolio} fundHref={vaultHref(id, "fund")} />
+            <div>
+              <h2 className="font-display text-xl">Value over time</h2>
+              <div className="mt-3">{history.data ? <ValueChart points={history.data.points} /> : <p className="text-sm text-mist">Loading…</p>}</div>
+            </div>
             <div className="flex flex-col gap-4">
               <h2 className="font-display text-xl">Today</h2>
               <Meter label="Spent on buys" value={v.state.spentTodayUsd} max={v.policy.dailySpendCapUsd} />
@@ -94,12 +112,12 @@ export function VaultPage({ api, account, id, tab, onChanged }: { api: Api; acco
             </div>
             <div>
               <h2 className="font-display text-xl">Your agent</h2>
-              <div className="mt-2">
-                <AgentAccess api={api} vaultId={id} />
-              </div>
+              <p className="mt-1 text-sm text-mist">It holds one token for this vault and cannot move money out or change your rules.</p>
+              <a href={vaultHref(id, "connect")} className="btn btn-quiet mt-3">Connect or rotate the token</a>
             </div>
           </div>
         )}
+        {tab === "connect" && <ConnectAgent api={api} vaultId={id} mcpUrl={mcpUrl} onIssued={() => tick((n) => n + 1)} />}
         {tab === "fund" && <FundingPanel api={api} vaultId={id} account={account} onArrived={() => vault.reload()} />}
         {tab === "rules" && <PolicyForm key={JSON.stringify(v.policy)} policy={v.policy} onSave={save} />}
         {tab === "activity" && (activity.error ? <p role="alert" className="text-rust">{activity.error}</p> : activity.data ? <ActivityTab api={api} account={account} vaultId={id} items={activity.data.activity} reload={activity.reload} /> : <p className="text-mist">Loading…</p>)}

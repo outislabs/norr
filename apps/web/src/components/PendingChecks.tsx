@@ -5,9 +5,16 @@ import { amount, shortId } from "../lib/format";
 /** What Norr asked the custody provider for, so you can compare it with the approval screen before you sign. */
 export function PendingChecks({ items }: { items: PendingItem[] }) {
   const [copied, setCopied] = useState<string | null>(null);
-  if (items.length === 0) return <p className="text-mist">Nothing is waiting for your approval.</p>;
+  if (items.length === 0) {
+    return (
+      <div>
+        <p className="text-mist">Nothing is waiting for your approval.</p>
+        <p className="mt-2 text-sm text-mist">When the agent places a swap, your custody provider holds it until you approve. It shows up here the moment Norr sends it, so you can check it before you sign.</p>
+      </div>
+    );
+  }
   return (
-    <ul className="flex flex-col gap-6">
+    <ul className="flex flex-col gap-8">
       {items.map((p) => (
         <li key={p.requestId} className="border-l-2 border-brass pl-4">
           <p className="text-ivory">
@@ -33,6 +40,11 @@ export function PendingChecks({ items }: { items: PendingItem[] }) {
             </p>
           )}
           <p className="mt-2 text-sm text-mist">{p.check}</p>
+          <ol className="mt-3 list-decimal pl-5 text-sm text-mist">
+            <li>Open the approval screen with the button below.</li>
+            <li>Find the request: same amounts, and it pays the vault's own account, not someone else's.</li>
+            <li>If anything differs, reject it and pause the vault. If it matches, approve.</li>
+          </ol>
           <a className="btn btn-quiet mt-3" href="https://app.outlayer.ai/wallet/approvals" target="_blank" rel="noreferrer">
             Open the approval screen
           </a>

@@ -1,5 +1,7 @@
 import { HeuristicRiskProvider, type RegistryEntry } from "@norr/core";
 import { DexScreenerSignals, NearIntentsBalances, OneClick, OutLayerCustody, ShieldClient } from "@norr/intents";
+import { FileValueHistory } from "./history";
+import { readPortfolio, sampleValue } from "./owner/routes";
 import { PricingFeed } from "./pricing";
 import { dstackAttestor } from "./attestation";
 import { loadPolicy, parseOrigins } from "./config";
@@ -59,6 +61,7 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env, opts: 
   const dir = dataDir(env);
   const cipher = DataCipher.load(env, dir);
   const sealKeys = new FileSealKeys(dir);
+  const history = new FileValueHistory(dir, cipher);
   const vaults = new FileVaultStore(dir, [
     newVault(
       {
@@ -94,7 +97,7 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env, opts: 
     now,
     sleep,
   };
-  return { deps, pricing, ledger, sealKeys, vaultId: policy.vaultId, walletAccount, shieldMode, shieldConfigured: Boolean(env.SHIELD_API_KEY) };
+  return { deps, pricing, history, ledger, sealKeys, vaultId: policy.vaultId, walletAccount, shieldMode, shieldConfigured: Boolean(env.SHIELD_API_KEY) };
 }
 
 /** The live HTTP service: the same API as mock mode, on real rails. */
@@ -102,8 +105,13 @@ export async function buildLive(env: NodeJS.ProcessEnv = process.env) {
   const l = await buildLiveDeps(env);
   const tokens = new AgentTokens();
   const agentToken = tokens.issue(l.vaultId);
+  // A reading every 15 minutes (the store keeps at most one per 10), so the value chart has points when nobody has the dashboard open.
+  const sample = async () => {
+    for (const v of l.deps.vaults.list()) sampleValue(l.deps, l.history, v.id, await readPortfolio(l.deps, v));
+  };
+  setInterval(() => void sample().catch(() => undefined), 15 * 60_000).unref();
   return {
-    app: createApp({ deps: l.deps, tokens, mock: false, adminToken: env.NORR_ADMIN_TOKEN, owner: new OwnerAuth({ keys: new RpcAccessKeyChecker() }), allowedOrigins: parseOrigins(env.NORR_ALLOWED_ORIGINS), attestor: dstackAttestor(env), seal: { keys: l.sealKeys, ledger: l.ledger } }),
+    app: createApp({ deps: l.deps, tokens, mock: false, adminToken: env.NORR_ADMIN_TOKEN, owner: new OwnerAuth({ keys: new RpcAccessKeyChecker() }), allowedOrigins: parseOrigins(env.NORR_ALLOWED_ORIGINS), attestor: dstackAttestor(env), seal: { keys: l.sealKeys, ledger: l.ledger }, history: l.history }),
     agentToken,
     vaultId: l.vaultId,
     shieldConfigured: l.shieldConfigured,

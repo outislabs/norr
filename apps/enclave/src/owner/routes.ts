@@ -11,6 +11,7 @@ import { valueLayers } from "../portfolio";
 import type { AgentTokens } from "../tokens";
 import type { TradeDeps } from "../trade";
 import type { OwnerAuth } from "./auth";
+import type { ValueHistory } from "../history";
 
 /** What an owner did through the dashboard, newest last. Kept in memory for now. */
 export interface OwnerAuditEntry {
@@ -32,6 +33,23 @@ export interface OwnerRouteContext {
   allowedOrigins?: string[];
   attestor?: Attestor | null;
   audit: OwnerAuditEntry[];
+  /** Balance readings over time, for the dashboard's value chart. */
+  history?: ValueHistory;
+}
+
+/** The vault's holdings across both layers, valued at registry prices. Null when balances cannot be read right now. */
+export async function readPortfolio(deps: TradeDeps, v: { walletAccount: string; custody: { confidentialHoldings(): Promise<Record<string, string>> } }) {
+  try {
+    return valueLayers({ public: deps.balances ? await deps.balances.holdings(v.walletAccount) : undefined, confidential: await v.custody.confidentialHoldings() }, deps.registry);
+  } catch {
+    return null; // balances unavailable: the rest of the page still works
+  }
+}
+
+/** Records a reading for the chart (throttled by the store). */
+export function sampleValue(deps: TradeDeps, history: ValueHistory | undefined, vaultId: string, p: { totalUsd: number; byClass: { crypto: number; equity: number } } | null): void {
+  if (!history || !p) return;
+  history.record(vaultId, { t: deps.now(), totalUsd: p.totalUsd, cryptoUsd: p.byClass.crypto, equityUsd: p.byClass.equity });
 }
 
 const LoginBody = z.object({
@@ -117,12 +135,8 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
   app.get("/owner/v1/vaults/:id", async (c) => {
     const v = mine(c.get("owner") as string, c.req.param("id"));
     if (!v) return c.json({ error: "not found" }, 404);
-    let portfolio: unknown = null;
-    try {
-      portfolio = valueLayers({ public: deps.balances ? await deps.balances.holdings(v.walletAccount) : undefined, confidential: await v.custody.confidentialHoldings() }, deps.registry);
-    } catch {
-      /* balances unavailable: the rest of the page still works */
-    }
+    const portfolio = await readPortfolio(deps, v);
+    sampleValue(deps, ctx.history, v.id, portfolio);
     return c.json({ ...summary(v), portfolio });
   });
 
@@ -317,6 +331,26 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
     tokens.revoke(v.id);
     note(owner, "revoked all agent tokens", v.id);
     return c.json({ revoked: true });
+  });
+
+  app.get("/owner/v1/vaults/:id/history", (c) => {
+    const v = mine(c.get("owner") as string, c.req.param("id"));
+    if (!v) return c.json({ error: "not found" }, 404);
+    return c.json({ points: ctx.history?.list(v.id) ?? [] });
+  });
+
+  // What the status bar shows. Nothing here is secret: it says whether the service can trade right now and why not.
+  app.get("/owner/v1/status", async (c) => {
+    const owner = c.get("owner") as string;
+    const mine_ = deps.vaults.list().filter((v) => v.owner === owner);
+    const feed = await deps.shield().catch(() => null);
+    return c.json({
+      mock: ctx.mock,
+      pricing: deps.pricingReady?.() === false ? "retrying" : "ready",
+      shield: feed === null ? "unavailable" : feed.status === "operational" ? "ok" : "incidents",
+      enclave: Boolean(ctx.attestor),
+      vaults: { total: mine_.length, paused: mine_.filter((v) => v.policy.paused).length },
+    });
   });
 
   app.get("/owner/v1/audit", (c) => {

@@ -45,7 +45,10 @@ export function SignInPage({ api, onSession }: { api: Api; onSession: (s: Sessio
           {error}
         </p>
       )}
-      {health.data?.mock && <p className="mt-8 text-sm text-mist">This service is running in mock mode: prices are fixed, nothing leaves your machine, and the demo owner needs no wallet.</p>}
+      <p className="mt-8 text-sm text-mist">
+        Not ready to sign in? <a href="#/verify" className="underline decoration-line underline-offset-4 hover:text-ivory">Check the enclave first</a>: no account needed.
+      </p>
+      {health.data?.mock && <p className="mt-4 text-sm text-mist">This service is running in mock mode: prices are fixed, nothing leaves your machine, and the demo owner needs no wallet.</p>}
     </div>
   );
 }
