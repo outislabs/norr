@@ -16,9 +16,11 @@ Workers & Pages, Create application, **Pages**, Connect to Git, pick `outislabs/
 | Root directory | leave empty (the repository root: the build needs the workspace lockfile) |
 | Build command | `pnpm install --frozen-lockfile && pnpm --filter @norr/web build` |
 | Build output directory | `apps/web/dist` |
-| Environment variable `NODE_VERSION` | `22` |
-| Environment variable `PNPM_VERSION` | `10.18.0` (matches `packageManager` in `package.json`) |
+| Node version | from `.node-version` in the repo (`22`); set no `NODE_VERSION` variable |
+| Environment variable `PNPM_VERSION` | `10.18.0` (Cloudflare's v3 image reads pnpm's version only from this variable; its docs do not mention the `packageManager` field or corepack) |
 | Environment variable `VITE_NORR_API_URL` | leave unset until the CVM exists; then `https://<service-host>` (https only, no trailing path). It is read at build time, so changing it needs a new deployment (Deployments, Retry, or push a commit) |
+
+If the first build stops at "Failed: an internal error occurred" right after "No Wrangler configuration file found" (seen 2026-11-02, before any install), the cause is not documented by Cloudflare. In order: retry the deployment once (it may be on their side); remove `PNPM_VERSION` (the image's pnpm 10.11.1 then installs, and the lockfile format is the same); then, as a last resort, build locally and use the direct upload in step 4 below.
 
 Then:
 
