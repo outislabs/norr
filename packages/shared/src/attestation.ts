@@ -166,7 +166,7 @@ export function composeImages(appCompose: string): { image: string; pinned: bool
 const result = (id: Check["id"], label: string, status: CheckStatus, detail: string): Check => ({ id, label, status, detail });
 
 /**
- * dstack OS images Phala offers (`phala os-images`, 2026-11-03). A "dev" image allows SSH and debugging access to the VM,
+ * dstack OS images Phala offers (`phala os-images`, 2026-11-02). A "dev" image allows SSH and debugging access to the VM,
  * so an attestation from one proves nothing about what the operator can see. Hashes are the `os-image-hash` the guest
  * measures into RTMR3. Not exhaustive: an image missing here is reported as unrecognised, never as production.
  */

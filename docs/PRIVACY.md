@@ -1,6 +1,6 @@
 # What is private, from whom (honest draft)
 
-Status as of 2026-10-30. "Built" means it exists in the repo and is tested; "Planned" means it does not exist yet. This table is the source for the README's privacy section; do not claim a row marked Planned or "Not private".
+Status as of 2026-11-02 (first drafted 2026-10-30). "Built" means it exists in the repo and is tested; "Planned" means it does not exist yet. This table is the source for the README's privacy section; do not claim a row marked Planned or "Not private".
 
 ## Trading privacy (NEAR Intents)
 
@@ -22,9 +22,9 @@ Notes from NEAR Intents' documentation (and OutLayer's): a vault's confidential 
 | Activity log and decisions | The service (it must read decisions to enforce caps and answer the agent). Encrypted on disk with the service data key (`data/ledger.jsonl`, mode 0600, gitignored), so copying the files alone reveals nothing | Data key sealed by the TEE | Encrypted at rest: Built. Key sealed in TEE: Planned |
 | Per-vault counters, positions, policy and kill switch | The service. Same encrypted file layer (`data/vaults/<id>.json`); the agent sees a planning view only | Same, with the service running in a TEE | Encrypted at rest: Built. TEE: Planned |
 | Agent tokens | Only SHA-256 hashes are stored | Same | Built |
-| API keys for custody | The service's environment | Sealed by the TEE | Planned |
+| API keys for custody | The service's environment. On the Phala deployment they are encrypted environment variables that only the CVM can decrypt (Phala's key service is a trust assumption) | Same | Built (deployed 2026-11-02) |
 | Strategy / prompts in the agent | The agent's host (Claude Desktop, IronClaw or other) | Agent hosted in a TEE | Not Norr's to promise; IronClaw unverified |
-| Service code integrity | The Verify screen shows the git commit (flagging uncommitted changes); nothing proves it | TEE attestation of the exact code | Commit shown: Built. Attestation: Planned |
+| Service code integrity | Anyone: the public `/attestation` and `/info` endpoints return a TDX quote bound to the caller's nonce, the measured configuration and the pinned image digests; the Verify screen and `scripts/verify-attestation.mts` check them (seven checks, including a production-OS-image check and Phala's quote verification). It proves which code and images booted, not what secrets were given | Same | **Built and checked against our own CVM on 2026-11-02** |
 
 ### How the private reasoning works, and what it does not protect
 - The owner's key is derived from a wallet signature over a fixed message (ed25519 signatures are deterministic, so it is the same every time). The private half never leaves the browser; only the public half is sent to the service.
