@@ -4,6 +4,8 @@
 
 Norr is a private trading layer for AI agents. An agent (Claude, ChatGPT, your own bot) connects over MCP and trades **crypto and tokenized US stocks and ETFs** across chains through **NEAR Intents**. Trades settle in the **Confidential Intents** layer when the vault holds its funds there, so pair, size and price stay off the public chain. The engine that enforces your rules runs in an **Intel TDX enclave on Phala** that anyone can check. The agent holds **one token, scoped to one vault**: it cannot withdraw, change the rules, or choose a destination.
 
+**Site:** [norr.finance](https://norr.finance) · **Dashboard:** [app.norr.finance](https://app.norr.finance) · **X:** [@norrfi](https://x.com/norrfi)
+
 Built for the NEAR hackathon (Nov 1 to Nov 14, 2026). Tracks: Privacy & Private AI, Unstoppable DeFi, AI Security, Agent Economy. The project was built with Claude Code as the main implementation assistant, directed by the repository owner. Read [Timeline & disclosure](#timeline--disclosure) for exactly what was built when.
 
 > Not audited software. Hackathon build, tiny balances. Do not put in money you cannot lose.
