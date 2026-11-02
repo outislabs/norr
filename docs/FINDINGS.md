@@ -285,7 +285,7 @@ Read-only (`scripts/autonomy-check.mts`; the agent key can read the policy but o
 - The demo wallet's policy has approval threshold 1 (approver `norrfi.near`), **no `excluded_types`**, `transaction_types: ["confidential"]`, capability `confidential` on, and an address whitelist of `legalalienx.near` plus the controller key. Plain `withdraw` is not an allowed type at all (its dry-run is denied).
 - From earlier live runs: a confidential **swap** and a confidential **withdraw** are both gated as the single type `confidential` (the withdraw dry-run was denied with "Transaction type 'confidential' is not allowed by policy"). An approval exemption for `confidential` would therefore skip approval for withdrawals too. They cannot be separated by type.
 - **Decision: keep approvals** for the demo. What an exemption would still leave in place: the whitelist (funds can only go to the owner's own accounts), per-transaction and daily limits, and the rate limit; what it would remove is the owner's signature on withdrawals. If wanted anyway, the owner can add `excluded_types: ["confidential"]` in OutLayer's dashboard; the check to run afterwards is a confidential withdraw dry-run, which would show whether it still says it requires approval.
-- Note: the whitelist holds `legalalienx.near`, not `norrfi.near`, so a withdrawal from the demo wallet goes to `legalalienx.near`.
+- Note: the whitelist holds `legalalienx.near`, not `norrfi.near`, so a withdrawal from the demo wallet goes to `legalalienx.near`. **Confirmed by the owner 2026-11-02 as intended; the whitelist stays as is.**
 
 ## Real "rug" token for the live demo (2026-10-31)
 
