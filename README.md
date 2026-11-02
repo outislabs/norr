@@ -188,6 +188,8 @@ Researched, not built (details in `docs/`):
 
 This repository keeps its full history. **Most of the code was written on Oct 30 and 31, before the hackathon window opened on Nov 1.** The dates below come from the commit log, so judges can separate that work from what was done inside the window.
 
+Organizers confirmed pre-window work is permitted.
+
 **Before Nov 1 (2026):**
 - **Oct 24:** gating research on 1Click, Confidential Intents, Ondo assets and TEE hosting; monorepo scaffold; shared schemas.
 - **Oct 24 to Oct 30:** `packages/core` with tests (registry with multi-issuer routing, Scam Shield, Shield incident check, policy engine, swap guard, `verifyExecution`); custody options compared and the architecture decided (OutLayer custody, Norr service on Phala).
