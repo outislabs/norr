@@ -188,7 +188,7 @@ Researched, not built (details in `docs/`):
 
 This repository keeps its full history. **Most of the code was written on Oct 30 and 31, before the hackathon window opened on Nov 1.** The dates below come from the commit log, so judges can separate that work from what was done inside the window.
 
-Organizers confirmed pre-window work is permitted.
+Organizers confirmed pre-window work is permitted. The hackathon rules count code from the 2026-10-19 announcement (HACKATHON.md, Q-001), so everything in this repository (research from Oct 24, first commit Oct 30) falls inside the window and there is no earlier baseline to separate.
 
 **Before Nov 1 (2026):**
 - **Oct 24:** gating research on 1Click, Confidential Intents, Ondo assets and TEE hosting; monorepo scaffold; shared schemas.
