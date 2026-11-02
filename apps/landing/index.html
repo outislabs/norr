@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#171b26" />
+    <meta name="color-scheme" content="dark" />
+    <title>Norr: your agent trades, nobody watches</title>
+    <meta name="description" content="Norr is a private trading layer for AI agents. Crypto and tokenized stocks in one vault, confidential by default, inside an enclave you can verify. The agent never holds the keys." />
+    <meta property="og:title" content="Norr: your agent trades. Nobody watches." />
+    <meta property="og:description" content="A private trading layer for AI agents on NEAR Intents. The agent never holds the keys." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://norr.finance" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="wordmark" href="/">Norr</a>
+      <nav aria-label="Main">
+        <a href="#proof">Verify</a>
+        <a href="#hide">Privacy</a>
+        <a class="btn btn-small" href="https://app.norr.finance">Open dashboard</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <p class="eyebrow">A private trading layer for AI agents</p>
+        <h1>Your agent trades.<br />Nobody watches.</h1>
+        <p class="lede">Crypto and tokenized stocks in one vault, traded through NEAR Intents' confidential layer, by an engine that runs in an enclave you can check yourself. Your agent gets rules and a token. It never gets the keys.</p>
+        <div class="cta">
+          <a class="btn btn-solid" href="https://app.norr.finance">Open dashboard</a>
+          <a class="btn" href="https://github.com/outislabs/norr">GitHub</a>
+          <a class="btn" href="https://x.com/norrfi">X @norrfi</a>
+        </div>
+      </section>
+
+      <section id="layers">
+        <h2>Private at every layer</h2>
+        <p class="sub">Four places a strategy usually leaks, and what Norr does at each.</p>
+        <ol class="layers">
+          <li>
+            <h3>Thinking</h3>
+            <p>Run your agent's model inside a NEAR AI Cloud enclave. Norr's reference agent checks the hardware-backed signature on every response it uses, so "private model" is verified, not assumed.</p>
+          </li>
+          <li>
+            <h3>Trades</h3>
+            <p>Swaps settle in the confidential layer of NEAR Intents whenever the vault holds its funds there. Pair, size and price stay off the public chain.</p>
+          </li>
+          <li>
+            <h3>Engine</h3>
+            <p>The Norr service runs in an Intel TDX enclave on Phala. Its configuration and the exact container images it booted are measured and public.</p>
+          </li>
+          <li>
+            <h3>Record</h3>
+            <p>The agent's stated reasoning is sealed to a key derived from your wallet. The service can write it but cannot read it back; only you can open it.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section id="proof" class="band">
+        <h2>Proof, not promises</h2>
+        <p class="sub">Anyone can ask the running service to prove what it is. The dashboard's Verify screen runs these checks in your browser, with a fresh random nonce each time.</p>
+        <ul class="checks">
+          <li>The quote is a genuine Intel TDX quote, verified through Phala's service</li>
+          <li>It was made for your request, not replayed</li>
+          <li>The configuration matches what the hardware measured</li>
+          <li>The boot event log reproduces the hardware's register</li>
+          <li>The VM runs a production OS image, not a debug one</li>
+          <li>Every container image is pinned by digest</li>
+        </ul>
+        <p><a class="btn btn-solid" href="https://app.norr.finance/#/verify">Check the enclave yourself</a></p>
+        <p class="fine">Attestation shows which code and images the machine booted. It does not show what secrets it was given, and Phala's key service is a trust assumption we name below.</p>
+      </section>
+
+      <section id="keys">
+        <h2>Your agent never holds the keys</h2>
+        <p class="sub">The agent holds one token, scoped to one vault. The funds sit in an OutLayer custody wallet whose limits you set.</p>
+        <dl class="grid">
+          <div><dt>Rules you set</dt><dd>Largest trade, daily spend cap, daily loss cap, allowed assets, cooldown. Enforced before every trade.</dd></div>
+          <div><dt>Scam Shield</dt><dd>Unknown or thin tokens are scored on liquidity and age and blocked when high risk. A live Shield incident feed can stop an asset outright.</dd></div>
+          <div><dt>Kill switch</dt><dd>One tap pauses every vault. The next request the agent makes is refused.</dd></div>
+          <div><dt>No way out for the agent</dt><dd>It cannot withdraw, change the rules, or choose a destination. Withdrawals go only to your address and need your approval.</dd></div>
+        </dl>
+      </section>
+
+      <section class="band">
+        <h2>Stocks and crypto, one private vault, from $5</h2>
+        <p class="sub">Ask for a ticker. Norr finds every routable version and takes the best quote. Tokenized stocks trade around the clock; small orders on liquid names start at about $5.</p>
+        <ul class="plain">
+          <li>Crypto across chains, and tokenized US stocks and ETFs (Ondo)</li>
+          <li>Fund from any chain NEAR Intents supports</li>
+          <li>Every swap carries a minimum output and is checked after it runs</li>
+          <li>Tokenized stocks are not available to US persons; you confirm your status when you set the rules</li>
+        </ul>
+      </section>
+
+      <section id="hide">
+        <h2>What we don't hide</h2>
+        <p class="sub">Private from the public is not the same as private from everyone. The honest list:</p>
+        <ul class="plain">
+          <li><b>Funding is public.</b> Depositing to the vault, and shielding funds into the confidential layer, show on public chains.</li>
+          <li><b>Your custody provider sees every operation.</b> OutLayer builds and signs each swap. NEAR Intents' operator and solvers can read confidential intents.</li>
+          <li><b>Norr sees decisions.</b> The service reads trades to enforce your caps, and the agent can read its own activity. Only the agent's reasoning is sealed to you.</li>
+          <li><b>Confidential swaps have no independent audit trail.</b> We check them against balances and the provider's own report, and say so on every result.</li>
+          <li><b>Trust assumptions.</b> OutLayer's gateway builds swap routes, Phala's key service holds the enclave's keys, and traffic from Norr is identifiable as Norr.</li>
+        </ul>
+        <p><a href="https://github.com/outislabs/norr/blob/main/docs/PRIVACY.md">Read the full privacy table (PRIVACY.md)</a></p>
+      </section>
+
+      <section class="band">
+        <h2>Built on</h2>
+        <ul class="stack">
+          <li>NEAR Intents</li>
+          <li>Confidential Intents</li>
+          <li>NEAR AI Cloud</li>
+          <li>OutLayer</li>
+          <li>Phala</li>
+        </ul>
+      </section>
+
+      <section class="status">
+        <h2>Where this stands</h2>
+        <p>Built for the NEAR hackathon, November 2026. Real mainnet trades have run with small balances, including a confidential round trip in a tokenized stock. Each swap currently waits for the owner's approval in the custody dashboard. Limit orders are not supported. This is a hackathon build, not audited software: do not put in money you cannot lose.</p>
+      </section>
+    </main>
+
+    <footer>
+      <span class="wordmark">Norr</span>
+      <nav aria-label="Footer">
+        <a href="https://app.norr.finance">Dashboard</a>
+        <a href="https://github.com/outislabs/norr">GitHub</a>
+        <a href="https://x.com/norrfi">@norrfi</a>
+      </nav>
+    </footer>
+  </body>
+</html>
