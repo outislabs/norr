@@ -13,3 +13,4 @@ export * from "./spend";
 export * from "./presets";
 export * from "./equity-minimums";
 export * from "./funding-sources";
+export * from "./pnl-report";

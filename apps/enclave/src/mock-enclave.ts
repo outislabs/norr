@@ -80,6 +80,7 @@ export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed
   const deps: TradeDeps = {
     registry,
     risk: new HeuristicRiskProvider(async (a) => (a.symbol === "RUGPULL" ? RUG_SIGNALS : HEALTHY)),
+    marketSignals: async (a) => (a.symbol === "RUGPULL" ? RUG_SIGNALS : HEALTHY),
     shield: async () => (o.shield === undefined ? { status: "operational" } : o.shield),
     quoter: rails.quoter,
     auditor: rails.auditor,

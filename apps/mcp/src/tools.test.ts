@@ -27,10 +27,10 @@ async function connect(opts: { token?: string; fetch?: (u: string, i?: RequestIn
 }
 
 describe("tool surface", () => {
-  it("exposes exactly the seven Norr tools, each with a description", async () => {
+  it("exposes exactly the nine Norr tools, each with a description", async () => {
     const { mcp } = await connect();
     const { tools } = await mcp.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["check_asset", "get_activity", "get_policy", "get_portfolio", "get_quote", "list_assets", "trade"]);
+    expect(tools.map((t) => t.name).sort()).toEqual(["check_asset", "get_activity", "get_market_data", "get_pnl", "get_policy", "get_portfolio", "get_quote", "list_assets", "trade"]);
     for (const t of tools) expect(t.description!.length).toBeGreaterThan(40);
   });
 

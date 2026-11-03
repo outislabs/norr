@@ -1,0 +1,27 @@
+{
+  "name": "@norrfi/mcp",
+  "version": "0.1.0",
+  "description": "Connect any stdio MCP client (Claude Desktop, Claude Code, Cursor...) to Norr's hosted MCP endpoint with your agent token.",
+  "license": "MIT",
+  "type": "module",
+  "homepage": "https://norr.finance/docs/connect-agent/",
+  "repository": { "type": "git", "url": "git+https://github.com/outislabs/norr.git", "directory": "packages/mcp-bridge" },
+  "keywords": ["mcp", "model-context-protocol", "near", "near-intents", "ai-agent", "trading"],
+  "bin": { "norr-mcp": "dist/cli.js" },
+  "main": "dist/bridge.js",
+  "types": "dist/bridge.d.ts",
+  "exports": { ".": { "types": "./dist/bridge.d.ts", "import": "./dist/bridge.js" } },
+  "files": ["dist", "README.md", "LICENSE"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2"
+  },
+  "devDependencies": {
+    "@norr/enclave": "workspace:*",
+    "@norr/mcp": "workspace:*"
+  }
+}

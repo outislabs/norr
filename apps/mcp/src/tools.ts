@@ -19,7 +19,7 @@ const asset = z.string().min(1).describe("A crypto symbol (SOL), a stock/ETF tic
 const amountUsd = z.number().positive().describe("The trade size in US dollars.");
 
 /**
- * The seven Norr tools. They are thin wrappers over the agent API: the vault comes from the token,
+ * The nine Norr tools. They are thin wrappers over the agent API: the vault comes from the token,
  * and no tool can move funds out, change rules, or choose a destination.
  */
 export function createNorrServer(client: EnclaveClient): McpServer {
@@ -100,6 +100,31 @@ export function createNorrServer(client: EnclaveClient): McpServer {
       annotations: read,
     },
     () => run(() => client.get("/v1/policy")),
+  );
+
+  server.registerTool(
+    "get_market_data",
+    {
+      title: "Market data for an asset",
+      description:
+        "Numbers for one asset: its listed price and, for crypto, the market signals Norr's Scam Shield scores (liquidity in USD, market cap, token age in days) with the resulting risk level. For stocks and ETFs: the price per issuer and the smallest order that quotes. " +
+        "Read-only facts, not advice. Use it to size and compare trades; check_asset gives the full risk reasons.",
+      inputSchema: { asset },
+      annotations: read,
+    },
+    ({ asset: a }) => run(() => client.get("/v1/market", { asset: a })),
+  );
+
+  server.registerTool(
+    "get_pnl",
+    {
+      title: "Profit and loss",
+      description:
+        "Profit and loss since the vault's first trade, per asset and in total: realized (from sells, at average cost) and unrealized (what is still held from your buys, at today's price), with what was bought and sold. " +
+        "Only positions bought through Norr are counted; deposits have no known cost. Use it to judge how your trading is going before deciding what to do next.",
+      annotations: read,
+    },
+    () => run(() => client.get("/v1/pnl")),
   );
 
   server.registerTool(

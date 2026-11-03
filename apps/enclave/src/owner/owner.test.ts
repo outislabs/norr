@@ -386,6 +386,16 @@ describe("owner routes", () => {
     expect((await (await req(`/owner/v1/vaults/demo/funding/${offer.id}`, { token })).json()).independentlyConfirmed).toBe(false);
   });
 
+  it("P&L: the owner sees the vault's P&L; another owner cannot", async () => {
+    const { m, req, token, loginAs } = await boot();
+    await m.app.request("/v1/trade", { method: "POST", headers: { authorization: `Bearer ${m.agentToken}`, "content-type": "application/json" }, body: JSON.stringify({ side: "buy", asset: "SOL", amountUsd: 5 }) });
+    const p = await (await req("/owner/v1/vaults/demo/pnl", { token })).json();
+    expect(p.assets.map((a: { asset: string }) => a.asset)).toEqual(["SOL"]);
+    expect(p.totals.boughtUsd).toBeGreaterThan(4.9);
+    const other = await loginAs("mallory.near");
+    expect((await req("/owner/v1/vaults/demo/pnl", { token: other.token })).status).toBe(404);
+  });
+
   it("funding from another chain: the owner picks the source, the vault stays the recipient, and the refund goes back on that chain", async () => {
     const { m, req, token } = await boot();
     const vault = m.deps.vaults.get("demo")!;

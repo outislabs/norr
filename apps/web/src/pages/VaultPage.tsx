@@ -9,6 +9,7 @@ import { FundingPanel } from "../components/FundingPanel";
 import { PendingChecks } from "../components/PendingChecks";
 import { PolicyForm } from "../components/PolicyForm";
 import { Portfolio } from "../components/Portfolio";
+import { PnlPanel } from "../components/PnlPanel";
 import type { Api } from "../lib/api";
 import { ago, shortId, usd } from "../lib/format";
 import { getFlag, setFlag } from "../lib/flags";
@@ -40,6 +41,7 @@ export function VaultPage({ api, account, id, tab, mcpUrl, onChanged }: { api: A
   const activity = useAsync(() => (tab === "activity" ? api.activity(id) : Promise.resolve(null)), `act-${id}-${tab}`);
   const pending = useAsync(() => api.pending(id), `pend-${id}-${tab}`);
   const history = useAsync(() => (tab === "overview" ? api.history(id) : Promise.resolve(null)), `hist-${id}-${tab}`);
+  const pnl = useAsync(() => (tab === "overview" ? api.pnl(id) : Promise.resolve(null)), `pnl-${id}-${tab}`);
   const [toggling, setToggling] = useState(false);
   const [, tick] = useState(0);
   useEffect(() => {
@@ -106,6 +108,10 @@ export function VaultPage({ api, account, id, tab, mcpUrl, onChanged }: { api: A
             <div>
               <h2 className="font-display text-xl">Value over time</h2>
               <div className="mt-3">{history.data ? <ValueChart points={history.data.points} /> : <p className="text-sm text-mute">Loading…</p>}</div>
+            </div>
+            <div>
+              <h2 className="font-display text-xl">Profit and loss</h2>
+              <div className="mt-3">{pnl.loading && !pnl.data ? <p className="text-sm text-mute">Loading…</p> : <PnlPanel pnl={pnl.data} />}</div>
             </div>
             </div>
             <aside className="flex flex-col gap-10 lg:border-l lg:border-line lg:pl-10">

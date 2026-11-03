@@ -18,10 +18,16 @@
 
 ## Roadmap
 
+Planned, not built:
+
+- **Self-serve hosted vaults.** Create a vault, its custody wallet and its first agent token from the dashboard, without an operator.
+- **Multi-vault and client management.** Several vaults per owner (one per agent or strategy), and an operator view for people who run vaults for clients, with each client's data still sealed to that client.
+- **TypeScript SDK.** A typed client for the [agent API](/docs/api/), generated from the OpenAPI spec, for agents that do not use MCP.
+- **Verified P&L and Follow.** P&L that others can check, each trade backed by evidence, so an owner can publish a track record without revealing positions in real time, and others can follow it.
+
 Researched, not built:
 
 - **Owning a vault from an EVM or Solana wallet.** Needs an owner identity that is not a NEAR account and a way to approve custody requests.
-- **Self-serve vaults.** Create a custody wallet and link it from the dashboard.
 - **Norr as a NEAR Intents solver** for orders under $5; gated by KYC/KYB of an operating entity.
 - **Order pooling** for $1 to $5 stock orders; changes the custody model and needs legal review.
 - **Smaller stock minimums** if NEAR Intents or the issuers make the floor configurable.

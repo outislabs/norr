@@ -12,6 +12,7 @@ import type { AgentTokens } from "../tokens";
 import type { TradeDeps } from "../trade";
 import type { OwnerAuth } from "./auth";
 import type { ValueHistory } from "../history";
+import { vaultPnl } from "../vault-pnl";
 
 /** What an owner did through the dashboard, newest last. Kept in memory for now. */
 export interface OwnerAuditEntry {
@@ -296,6 +297,12 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
     for (const id of ids) deps.vaults.pause(id, "paused by owner (kill switch)");
     note(owner, "kill switch: paused all vaults");
     return c.json({ paused: ids });
+  });
+
+  app.get("/owner/v1/vaults/:id/pnl", (c) => {
+    const v = mine(c.get("owner") as string, c.req.param("id"));
+    if (!v) return c.json({ error: "not found" }, 404);
+    return c.json(vaultPnl(deps, v.id));
   });
 
   // The owner sees the agent's stated reasoning; nobody else does.

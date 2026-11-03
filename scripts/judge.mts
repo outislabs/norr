@@ -72,8 +72,8 @@ try {
   await agent.connect(transport);
   const tool = async (name: string, a: Record<string, unknown> = {}) => parse(await agent.callTool({ name, arguments: a }));
   const tools = (await agent.listTools()).tools.map((t) => t.name).sort();
-  const expected = ["check_asset", "get_activity", "get_policy", "get_portfolio", "get_quote", "list_assets", "trade"];
-  record("demo", "the MCP server exposes 7 tools; none can withdraw, change rules or set a destination", JSON.stringify(tools) === JSON.stringify(expected), tools.join(", "), "apps/mcp/src/tools.ts");
+  const expected = ["check_asset", "get_activity", "get_market_data", "get_pnl", "get_policy", "get_portfolio", "get_quote", "list_assets", "trade"];
+  record("demo", "the MCP server exposes 9 tools; none can withdraw, change rules or set a destination", JSON.stringify(tools) === JSON.stringify(expected), tools.join(", "), "apps/mcp/src/tools.ts");
 
   const policy = await tool("get_policy");
   record("demo", "get_policy returns the vault's rules", policy.maxTradeUsd === 50, `max trade $${policy.maxTradeUsd}, cooldown ${policy.cooldownSec}s`, "apps/mcp/src/tools.ts, packages/core/src/presets.ts");
@@ -92,6 +92,13 @@ try {
   skewMs += (Number(policy.cooldownSec) + 1) * 1000;
   const sol = await tool("trade", { side: "buy", asset: "SOL", amountUsd: 5, reason: "judge: cross-chain" });
   record("demo", "after the cooldown, buy $5 of SOL (cross-chain) executes", sol.status === "executed", String(sol.status), "apps/enclave/src/trade.ts");
+
+  const pnl = await tool("get_pnl");
+  const pnlAssets = ((pnl.assets ?? []) as { asset: string }[]).map((a) => a.asset).sort();
+  record("demo", "get_pnl reports P&L per asset since the first trade (realized and unrealized)", JSON.stringify(pnlAssets) === JSON.stringify(["NVDAon", "SOL"]) && typeof (pnl.totals as { totalUsd?: unknown })?.totalUsd === "number", `${pnlAssets.join(", ")}; total ${(pnl.totals as { totalUsd: number }).totalUsd}`, "packages/core/src/pnl-report.ts, apps/enclave/src/vault-pnl.ts");
+  const market = await tool("get_market_data", { asset: "RUGPULL" });
+  const v0 = (market.versions as { liquidityUsd: number; risk: { level: string } }[])[0];
+  record("demo", "get_market_data shows the numbers Scam Shield scored (liquidity, risk level)", v0?.liquidityUsd === 3200 && v0?.risk?.level === "high", `liquidity $${v0?.liquidityUsd}, risk ${v0?.risk?.level}`, "apps/enclave/src/app.ts (/v1/market)");
 
   const activity = await tool("get_activity");
   const items = (Array.isArray(activity) ? activity : (activity.activity ?? activity.items ?? [])) as unknown[];

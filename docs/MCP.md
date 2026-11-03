@@ -1,6 +1,6 @@
 # Connect an agent to Norr (MCP)
 
-Norr exposes seven tools over MCP: `list_assets`, `check_asset`, `get_quote`, `trade`, `get_portfolio`, `get_policy`, `get_activity`. The agent holds only a Norr **agent token**, scoped to one vault. No tool can withdraw, change rules or choose a destination.
+Norr exposes nine tools over MCP: `list_assets`, `check_asset`, `get_market_data`, `get_quote`, `trade`, `get_portfolio`, `get_pnl`, `get_policy`, `get_activity`. The agent holds only a Norr **agent token**, scoped to one vault. No tool can withdraw, change rules or choose a destination.
 
 First start the Norr service. For a no-funds try-out: `pnpm dev:mock`, which prints an agent token (default API on `http://localhost:8787`).
 
@@ -29,7 +29,7 @@ First start the Norr service. For a no-funds try-out: `pnpm dev:mock`, which pri
    },
    ```
 4. Quit Claude completely (Cmd+Q, closing the window is not enough) and reopen it.
-5. Check: Settings, Developer should list `norr` as running, and the tools icon in a new chat should show seven Norr tools. Logs are in `~/Library/Logs/Claude/` (`mcp-server-norr.log`).
+5. Check: Settings, Developer should list `norr` as running, and the tools icon in a new chat should show nine Norr tools. Logs are in `~/Library/Logs/Claude/` (`mcp-server-norr.log`).
 6. Try: "What are my Norr rules?", "Buy $40 of NVDA", "Put $150 into TSLA", "Ape $5 into RUGPULL", then after ten seconds "Swap $5 of USDC to SOL". To see the kill switch, run the `curl` shown in the terminal where Norr started (it prints a dev-only admin token), then ask for another trade.
 
 ## Claude Code (stdio)

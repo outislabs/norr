@@ -1,6 +1,7 @@
 import { join, resolve } from "node:path";
 import { defineConfig, type Plugin } from "vite";
-import { PAGES, llmsFullTxt, llmsTxt, readSource, writePages } from "./build/docs";
+import { readFileSync } from "node:fs";
+import { OPENAPI_PATH, PAGES, llmsFullTxt, llmsTxt, readSource, writePages } from "./build/docs";
 
 // A static site: no framework, no client script. Fonts are bundled from @fontsource (no third-party font requests).
 // The docs (content/docs/*.md) are rendered to static pages at build time, alongside llms.txt and llms-full.txt.
@@ -14,6 +15,7 @@ function docs(): Plugin {
     generateBundle() {
       this.emitFile({ type: "asset", fileName: "llms.txt", source: llmsTxt() });
       this.emitFile({ type: "asset", fileName: "llms-full.txt", source: llmsFullTxt(content) });
+      this.emitFile({ type: "asset", fileName: "openapi.json", source: readFileSync(OPENAPI_PATH, "utf8") });
       for (const p of PAGES) this.emitFile({ type: "asset", fileName: `docs/${p.slug ? `${p.slug}/` : ""}index.md`, source: readSource(content, p) });
     },
   };

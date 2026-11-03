@@ -20,7 +20,8 @@ export const PAGES: DocPage[] = [
   { slug: "", nav: "Overview", description: "What Norr is and where to start." },
   { slug: "quickstart", nav: "Quickstart", description: "Sign in, fund the vault from any chain, connect an agent, watch, approve and stop it." },
   { slug: "connect-agent", nav: "Connect your agent", description: "MCP setup for Claude Code, Claude Desktop and any MCP client, with the agent token." },
-  { slug: "mcp-tools", nav: "MCP tools", description: "The seven tools, what trade answers, and every block code." },
+  { slug: "mcp-tools", nav: "MCP tools", description: "The nine tools, what trade answers, and every block code." },
+  { slug: "api", nav: "API reference", description: "The agent REST API behind the MCP tools, generated from the OpenAPI spec (openapi.json)." },
   { slug: "rules", nav: "Rules and limits", description: "The rules you set, the presets, Scam Shield, stock eligibility and the custody provider's limits." },
   { slug: "privacy", nav: "Privacy model", description: "Who sees what: the public, the custody provider, NEAR Intents, the Norr service and you." },
   { slug: "verify", nav: "Verify the enclave", description: "Check the running code yourself: seven attestation checks in the browser or a terminal." },
@@ -32,8 +33,77 @@ const href = (slug: string) => (slug ? `/docs/${slug}/` : "/docs/");
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const slugify = (s: string) => s.toLowerCase().replace(/<[^>]+>/g, "").replace(/&[a-z]+;/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
+/** The OpenAPI spec of the agent API, the single source for the API reference page and /openapi.json. */
+export const OPENAPI_PATH = join(import.meta.dirname, "../../enclave/openapi.json");
+
 export function readSource(contentDir: string, p: DocPage): string {
+  if (p.slug === "api") return apiReferenceMd(JSON.parse(readFileSync(OPENAPI_PATH, "utf8")));
   return readFileSync(join(contentDir, `${p.slug || "index"}.md`), "utf8");
+}
+
+// ---------- API reference, generated from openapi.json ----------
+
+type Obj = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+const cell = (s: string) => s.replace(/\|/g, "\\|").replace(/\n/g, " ");
+
+function typeOf(spec: Obj, s: Obj | undefined): string {
+  if (!s) return "";
+  if (s.$ref) return s.$ref.split("/").pop();
+  if (s.const !== undefined) return JSON.stringify(s.const);
+  if (s.enum) return s.enum.map((v: unknown) => `\`${v}\``).join(", ");
+  if (s.oneOf) return s.oneOf.map((x: Obj) => typeOf(spec, x)).join(" or ");
+  if (s.type === "array") return `${typeOf(spec, s.items)}[]`;
+  return ([] as string[]).concat(s.type ?? "").join(" or ");
+}
+
+function fieldsTable(spec: Obj, schema: Obj): string {
+  const s = schema.$ref ? schema.$ref.split("/").slice(1).reduce((o: Obj, k: string) => o[k], spec) : schema;
+  if (s.oneOf) return s.oneOf.map((x: Obj) => `One of: ${typeOf(spec, x)}`).join("\n\n");
+  const props = Object.entries((s.properties ?? {}) as Obj);
+  if (!props.length) return `\`${typeOf(spec, s)}\``;
+  const req = new Set(s.required ?? []);
+  return ["| Field | Type | |", "|---|---|---|", ...props.map(([k, v]) => `| \`${k}\` | ${cell(typeOf(spec, v))} | ${req.has(k) ? "required" : ""}${v.description ? `${req.has(k) ? ". " : ""}${cell(v.description)}` : ""} |`)].join("\n");
+}
+
+export function apiReferenceMd(spec: Obj): string {
+  const out: string[] = [
+    "# API reference",
+    "",
+    `${spec.info.description}`,
+    "",
+    `The machine-readable spec is [openapi.json](/openapi.json) (OpenAPI ${spec.openapi}); this page is generated from it.`,
+    "",
+    "## Servers",
+    "",
+    ...spec.servers.map((s: Obj) => `- \`${s.url}\`: ${s.description}`),
+    "",
+    "## Authentication",
+    "",
+    "Send the vault's agent token on every `/v1` request: `Authorization: Bearer <agent token>`. Create one in the dashboard (Connect). A token works for one vault only.",
+    "",
+  ];
+  for (const tag of spec.tags as Obj[]) {
+    out.push(`## ${tag.name}`, "", tag.description, "");
+    for (const [path, ops] of Object.entries(spec.paths as Obj)) {
+      for (const [method, op] of Object.entries(ops as Obj)) {
+        if (!(op.tags ?? []).includes(tag.name)) continue;
+        out.push(`### ${method.toUpperCase()} ${path}`, "", `**${op.summary}.** ${op.description ?? ""}`.trim(), "");
+        if (op.security && op.security.length === 0) out.push("No token needed.", "");
+        const params = (op.parameters ?? []).map((p: Obj) => (p.$ref ? p.$ref.split("/").slice(1).reduce((o: Obj, k: string) => o[k], spec) : p));
+        if (params.length) out.push("| Query parameter | Type | |", "|---|---|---|", ...params.map((p: Obj) => `| \`${p.name}\` | ${cell(typeOf(spec, p.schema))} | ${p.required ? "required. " : ""}${cell(p.description ?? "")} |`), "");
+        const body = op.requestBody?.content?.["application/json"]?.schema;
+        if (body) out.push(`Request body (\`${typeOf(spec, body)}\`):`, "", fieldsTable(spec, body), "");
+        const ok = op.responses?.["200"]?.content?.["application/json"]?.schema;
+        if (ok) out.push(`Response \`200\` (\`${typeOf(spec, ok)}\`):`, "", fieldsTable(spec, ok), "");
+        const errors = Object.keys(op.responses ?? {}).filter((c) => c !== "200");
+        if (errors.length) out.push(`Other responses: ${errors.map((c) => `\`${c}\``).join(", ")}.`, "");
+      }
+    }
+  }
+  out.push("## Decisions", "", "What `POST /v1/trade` answers (`Decision`), by `status`:", "");
+  for (const name of ["Executed", "Blocked", "PendingApproval", "Failed"]) out.push(`**${name}**`, "", fieldsTable(spec, spec.components.schemas[name]), "");
+  out.push("Block codes and what they mean: [MCP tools](/docs/mcp-tools/#block-codes).", "");
+  return out.join("\n");
 }
 
 const titleOf = (md: string): string => md.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? "Norr docs";
@@ -163,7 +233,7 @@ export function llmsTxt(): string {
 > Norr is a private trading layer for AI agents. An agent connects over MCP with a token scoped to one vault and trades crypto and tokenized US stocks through NEAR Intents, in the Confidential Intents layer when the vault holds its funds there. Rules and a scam check are enforced by the Norr service, which runs in an attested Intel TDX enclave on Phala. Keys stay with OutLayer's custody: the agent's token cannot withdraw, change rules or choose a destination.
 
 - Dashboard: https://app.norr.finance (owners sign in with a NEAR wallet)
-- MCP: seven tools (list_assets, check_asset, get_quote, trade, get_portfolio, get_policy, get_activity), streamable HTTP with \`Authorization: Bearer <agent token>\`, or stdio from the repository
+- MCP: nine tools (list_assets, check_asset, get_market_data, get_quote, trade, get_portfolio, get_pnl, get_policy, get_activity), streamable HTTP with \`Authorization: Bearer <agent token>\`, or stdio from the repository
 - Verify: https://app.norr.finance/#/verify runs seven attestation checks in the browser, no account needed
 - Source and evidence: https://github.com/outislabs/norr (start with AGENTS.md; \`pnpm judge\` checks every claim in mock mode)
 - Status: hackathon build, unaudited, small balances; the hosted service runs on demand

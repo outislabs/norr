@@ -1,0 +1,223 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Norr agent API",
+    "version": "0.2.0",
+    "summary": "What an AI agent can do with one vault: read it, price trades, request trades.",
+    "description": "The REST API behind Norr's MCP tools. Every /v1 route needs the vault's agent token as `Authorization: Bearer <token>`; a token is scoped to one vault and no route can withdraw, change rules or choose a destination. The MCP endpoint (`/mcp` on the MCP host) exposes the same operations as tools. /health, /attestation and /info are public.",
+    "license": { "name": "MIT", "url": "https://github.com/outislabs/norr/blob/main/LICENSE" }
+  },
+  "servers": [
+    { "url": "https://api.norr.finance", "description": "Hosted service (TLS terminates inside the attested CVM). Runs on demand during the pilot." },
+    { "url": "https://85e1d6a557dae81985c9e30e28270f91bee5c0e9-8787.dstack-pha-prod5.phala.network", "description": "The same CVM through Phala's gateway." },
+    { "url": "http://localhost:8787", "description": "Local mock mode (pnpm dev:mock): fixed prices, no funds." }
+  ],
+  "security": [{ "agentToken": [] }],
+  "tags": [
+    { "name": "Assets", "description": "What can be traded, and what is known about it." },
+    { "name": "Trading", "description": "Price a trade (dry run) or request one." },
+    { "name": "Vault", "description": "Holdings, rules, results and history." },
+    { "name": "Public", "description": "Health and attestation; no token." }
+  ],
+  "paths": {
+    "/v1/assets": {
+      "get": {
+        "tags": ["Assets"], "operationId": "listAssets", "summary": "List tradable assets",
+        "description": "Crypto by symbol and chain; tokenized stocks and ETFs by ticker, with every issuer that offers it and the smallest order that has been quoting. MCP tool: list_assets.",
+        "parameters": [{ "name": "class", "in": "query", "required": false, "schema": { "type": "string", "enum": ["crypto", "equity"] }, "description": "Only crypto, or only tokenized stocks and ETFs." }],
+        "responses": { "200": { "description": "The asset list.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AssetList" } } } }, "400": { "$ref": "#/components/responses/BadRequest" }, "401": { "$ref": "#/components/responses/Unauthorized" } }
+      }
+    },
+    "/v1/assets/check": {
+      "get": {
+        "tags": ["Assets"], "operationId": "checkAsset", "summary": "Risk or eligibility verdict for one asset",
+        "description": "Crypto: Scam Shield's risk level with reasons. Stocks: whether this vault may trade them, and the notice. Also any active NEAR Intents security incident touching the asset. MCP tool: check_asset.",
+        "parameters": [{ "$ref": "#/components/parameters/asset" }],
+        "responses": { "200": { "description": "The verdict, or found: false.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AssetCheck" } } } }, "400": { "$ref": "#/components/responses/BadRequest" }, "401": { "$ref": "#/components/responses/Unauthorized" } }
+      }
+    },
+    "/v1/market": {
+      "get": {
+        "tags": ["Assets"], "operationId": "getMarketData", "summary": "Market data for one asset",
+        "description": "Listed price and, for crypto, the read-only signals Scam Shield scores (liquidity, market cap, age) with its risk level. For stocks: price per issuer and the quoting minimum. Facts, not advice. MCP tool: get_market_data.",
+        "parameters": [{ "$ref": "#/components/parameters/asset" }],
+        "responses": { "200": { "description": "The numbers, or found: false.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MarketData" } } } }, "400": { "$ref": "#/components/responses/BadRequest" }, "401": { "$ref": "#/components/responses/Unauthorized" } }
+      }
+    },
+    "/v1/quote": {
+      "post": {
+        "tags": ["Trading"], "operationId": "getQuote", "summary": "Price a trade without trading",
+        "description": "Dry run: no funds move. Runs the same checks as a trade, so a trade that would be blocked returns the same blocked decision. MCP tool: get_quote.",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TradeInput" } } } },
+        "responses": { "200": { "description": "A quote, or the blocked decision a trade would get.", "content": { "application/json": { "schema": { "oneOf": [{ "$ref": "#/components/schemas/Quote" }, { "$ref": "#/components/schemas/Blocked" }] } } } }, "400": { "$ref": "#/components/responses/BadRequest" }, "401": { "$ref": "#/components/responses/Unauthorized" } }
+      }
+    },
+    "/v1/trade": {
+      "post": {
+        "tags": ["Trading"], "operationId": "trade", "summary": "Request a trade",
+        "description": "Checks the rules and the asset's risk, quotes, executes through NEAR Intents (in the confidential layer when the vault's funds are there), and verifies the result. Funds always stay in the vault. A blocked answer names the rule; adjust the request instead of resending it. MCP tool: trade.",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TradeInput" } } } },
+        "responses": { "200": { "description": "The decision.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Decision" } } } }, "400": { "$ref": "#/components/responses/BadRequest" }, "401": { "$ref": "#/components/responses/Unauthorized" } }
+      }
+    },
+    "/v1/portfolio": {
+      "get": {
+        "tags": ["Vault"], "operationId": "getPortfolio", "summary": "Holdings in USD",
+        "description": "Every holding with its layer (public or confidential), valued in USD, and the split between crypto and tokenized stocks. MCP tool: get_portfolio.",
+        "responses": { "200": { "description": "The portfolio.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Portfolio" } } } }, "401": { "$ref": "#/components/responses/Unauthorized" }, "503": { "$ref": "#/components/responses/Unavailable" } }
+      }
+    },
+    "/v1/policy": {
+      "get": {
+        "tags": ["Vault"], "operationId": "getPolicy", "summary": "The rules the agent must stay within",
+        "description": "Planning view of the vault's rules, including what is left of today's spending cap. MCP tool: get_policy.",
+        "responses": { "200": { "description": "The rules.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PolicyView" } } } }, "401": { "$ref": "#/components/responses/Unauthorized" } }
+      }
+    },
+    "/v1/pnl": {
+      "get": {
+        "tags": ["Vault"], "operationId": "getPnl", "summary": "Profit and loss since the first trade",
+        "description": "Per asset and in total: realized (sells at average cost) and unrealized (what is still held from Norr's buys, at today's listed price). Deposits have no known cost and are not counted. MCP tool: get_pnl.",
+        "responses": { "200": { "description": "The P&L report.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Pnl" } } } }, "401": { "$ref": "#/components/responses/Unauthorized" } }
+      }
+    },
+    "/v1/activity": {
+      "get": {
+        "tags": ["Vault"], "operationId": "getActivity", "summary": "Recent requests and outcomes",
+        "description": "The last 20 trade requests, newest first. Swaps waiting for the owner's approval are settled here once approved. MCP tool: get_activity.",
+        "responses": { "200": { "description": "The activity.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Activity" } } } }, "401": { "$ref": "#/components/responses/Unauthorized" } }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": ["Public"], "operationId": "health", "summary": "Is the service up", "security": [],
+        "responses": { "200": { "description": "Up.", "content": { "application/json": { "schema": { "type": "object", "required": ["ok", "mock", "pricing"], "properties": { "ok": { "type": "boolean" }, "mock": { "type": "boolean" }, "pricing": { "type": "string", "enum": ["ready", "retrying"] }, "mockOwner": { "type": "string", "description": "Mock mode only." } } } } } } }
+      }
+    },
+    "/attestation": {
+      "get": {
+        "tags": ["Public"], "operationId": "attestation", "summary": "A fresh TDX quote bound to your nonce", "security": [],
+        "description": "The quote's report data is your nonce, padded with zeros. Check it with the dashboard's Verify screen or scripts/verify-attestation.mts.",
+        "parameters": [{ "name": "nonce", "in": "query", "required": true, "schema": { "type": "string", "pattern": "^([0-9a-fA-F]{2}){1,64}$" }, "description": "1 to 64 bytes of hex." }],
+        "responses": { "200": { "description": "The evidence: quote, event log, and the commit the image was built from.", "content": { "application/json": { "schema": { "type": "object", "required": ["attested", "nonce", "quote"], "properties": { "attested": { "const": true }, "nonce": { "type": "string" }, "quote": { "type": "string", "description": "Hex TDX quote." }, "eventLog": {}, "commit": { "type": ["string", "null"] } } } } } }, "400": { "$ref": "#/components/responses/BadRequest" }, "429": { "description": "Too many attestation requests; try again in a minute." }, "503": { "description": "Not running in a TEE (mock mode or local)." } }
+      }
+    },
+    "/info": {
+      "get": {
+        "tags": ["Public"], "operationId": "info", "summary": "The measured app configuration", "security": [],
+        "responses": { "200": { "description": "App id, compose hash and the app configuration whose SHA-256 the quote measures.", "content": { "application/json": { "schema": { "type": "object", "required": ["attested"], "properties": { "attested": { "const": true }, "appId": { "type": "string" }, "composeHash": { "type": "string" }, "appCompose": { "type": "string" }, "commit": { "type": ["string", "null"] } } } } } }, "503": { "description": "Not running in a TEE." } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": { "agentToken": { "type": "http", "scheme": "bearer", "description": "The vault's agent token, created by the owner in the dashboard (Connect)." } },
+    "parameters": { "asset": { "name": "asset", "in": "query", "required": true, "schema": { "type": "string", "minLength": 1 }, "description": "A symbol (SOL), a ticker (NVDA: routed to the best-priced issuer) or a NEAR Intents asset id." } },
+    "responses": {
+      "BadRequest": { "description": "The request is malformed.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "Unauthorized": { "description": "Missing or invalid agent token.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "Unavailable": { "description": "Balances cannot be read right now.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+    },
+    "schemas": {
+      "Error": { "type": "object", "required": ["error"], "properties": { "error": { "type": "string" } } },
+      "TradeInput": {
+        "type": "object", "required": ["side", "asset", "amountUsd"],
+        "properties": {
+          "side": { "type": "string", "enum": ["buy", "sell"] },
+          "asset": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "amountUsd": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000 },
+          "reason": { "type": "string", "maxLength": 2000, "description": "The agent's reasoning, sealed to the owner's key; the service cannot read it back." }
+        }
+      },
+      "BlockCode": { "type": "string", "enum": ["PAUSED", "OVER_TRADE_LIMIT", "DAILY_LOSS_CAP", "COOLDOWN", "ASSET_NOT_ALLOWED", "EQUITY_LIMIT", "SCAM_RISK", "INELIGIBLE", "PRICE_SANITY", "UNKNOWN_ASSET", "NO_LIQUIDITY", "SHIELD_INCIDENT", "DAILY_SPEND_CAP", "PRIVACY_UNAVAILABLE", "PRICING_UNAVAILABLE"] },
+      "Executed": {
+        "type": "object", "required": ["status", "txRef", "filled"],
+        "properties": {
+          "status": { "const": "executed" },
+          "txRef": { "type": "string" },
+          "filled": { "type": "object", "required": ["asset", "amount", "priceUsd"], "properties": { "asset": { "type": "string" }, "amount": { "type": "string" }, "priceUsd": { "type": "number" } } },
+          "venue": { "type": "string", "enum": ["public", "confidential"] },
+          "verification": { "type": "string", "enum": ["independent", "custody-reported"] },
+          "warnings": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "Blocked": { "type": "object", "required": ["status", "code", "message"], "properties": { "status": { "const": "blocked" }, "code": { "$ref": "#/components/schemas/BlockCode" }, "message": { "type": "string" }, "suggestedUsd": { "type": "number" } } },
+      "PendingApproval": { "type": "object", "required": ["status", "requestId", "message"], "properties": { "status": { "const": "pending_approval" }, "requestId": { "type": "string" }, "message": { "type": "string" } } },
+      "Failed": { "type": "object", "required": ["status", "message"], "properties": { "status": { "type": "string", "enum": ["failed", "refunded"] }, "message": { "type": "string" } } },
+      "Decision": { "oneOf": [{ "$ref": "#/components/schemas/Executed" }, { "$ref": "#/components/schemas/Blocked" }, { "$ref": "#/components/schemas/PendingApproval" }, { "$ref": "#/components/schemas/Failed" }], "discriminator": { "propertyName": "status" } },
+      "Quote": {
+        "type": "object", "required": ["status", "asset", "side", "amountUsd", "estimatedOut", "minimumOut", "outAsset", "venue"],
+        "properties": {
+          "status": { "const": "quote" }, "note": { "type": "string" }, "asset": { "type": "string" }, "side": { "type": "string", "enum": ["buy", "sell"] },
+          "amountUsd": { "type": "number" }, "estimatedOut": { "type": "number" }, "minimumOut": { "type": "number" }, "outAsset": { "type": "string" },
+          "venue": { "type": "string", "enum": ["public", "confidential"] }, "statedMinimumUsd": { "type": "number" }, "warnings": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "AssetList": {
+        "type": "object",
+        "properties": {
+          "crypto": { "type": "array", "items": { "type": "object", "required": ["symbol", "chain", "id"], "properties": { "symbol": { "type": "string" }, "chain": { "type": "string" }, "id": { "type": "string" } } } },
+          "equities": { "type": "array", "items": { "type": "object", "required": ["ticker", "minimumUsd", "issuers"], "properties": { "ticker": { "type": "string" }, "minimumUsd": { "type": "number" }, "issuers": { "type": "array", "items": { "type": "object", "properties": { "issuer": { "type": ["string", "null"] }, "symbol": { "type": "string" }, "id": { "type": "string" } } } } } } },
+          "equityNotice": { "type": "string" }, "equityMinimumNote": { "type": "string" }, "notice": { "type": "string" }
+        }
+      },
+      "Risk": { "type": "object", "required": ["score", "level", "reasons"], "properties": { "score": { "type": "number", "minimum": 0, "maximum": 100 }, "level": { "type": "string", "enum": ["low", "medium", "high"] }, "reasons": { "type": "array", "items": { "type": "string" } } } },
+      "AssetCheck": {
+        "type": "object", "required": ["found"],
+        "properties": {
+          "found": { "type": "boolean" }, "message": { "type": "string" }, "class": { "type": "string", "enum": ["crypto", "equity"] }, "ticker": { "type": "string" },
+          "versions": { "type": "array", "items": { "type": "object", "properties": { "symbol": { "type": "string" }, "issuer": { "type": ["string", "null"] }, "chain": { "type": "string" }, "shieldBlocked": { "type": ["string", "null"] }, "risk": { "oneOf": [{ "$ref": "#/components/schemas/Risk" }, { "type": "null" }] } } } },
+          "eligible": { "type": "boolean" }, "notice": { "type": "string" }
+        }
+      },
+      "MarketData": {
+        "type": "object", "required": ["found"],
+        "properties": {
+          "found": { "type": "boolean" }, "message": { "type": "string" }, "class": { "type": "string", "enum": ["crypto", "equity"] }, "ticker": { "type": "string" }, "source": { "type": "string" },
+          "versions": { "type": "array", "items": { "type": "object", "properties": {
+            "symbol": { "type": "string" }, "issuer": { "type": ["string", "null"] }, "chain": { "type": "string" }, "id": { "type": "string" }, "priceUsd": { "type": ["number", "null"] },
+            "liquidityUsd": { "type": ["number", "null"] }, "marketCapUsd": { "type": ["number", "null"] }, "ageDays": { "type": ["number", "null"] }, "routable": { "type": ["boolean", "null"] },
+            "risk": { "oneOf": [{ "type": "object", "properties": { "level": { "type": "string", "enum": ["low", "medium", "high"] }, "score": { "type": "number" } } }, { "type": "null" }] },
+            "minimumUsd": { "type": "number" }
+          } } }
+        }
+      },
+      "Portfolio": {
+        "type": "object", "required": ["holdings", "totalUsd", "byClass"],
+        "properties": {
+          "holdings": { "type": "array", "items": { "type": "object", "required": ["assetId", "symbol", "class", "amount", "valueUsd"], "properties": { "assetId": { "type": "string" }, "symbol": { "type": "string" }, "class": { "type": "string", "enum": ["crypto", "equity"] }, "amount": { "type": "number" }, "valueUsd": { "type": "number" }, "layer": { "type": "string", "enum": ["public", "confidential"] } } } },
+          "totalUsd": { "type": "number" },
+          "byClass": { "type": "object", "required": ["crypto", "equity"], "properties": { "crypto": { "type": "number" }, "equity": { "type": "number" } } }
+        }
+      },
+      "PolicyView": {
+        "type": "object",
+        "required": ["maxTradeUsd", "dailySpendCapUsd", "spentTodayUsd", "spendRemainingTodayUsd", "dailyLossCapUsd", "maxEquityPct", "allowedCrypto", "allowedEquities", "cooldownSec", "allowMediumRisk", "equitiesEnabled", "privacy", "paused"],
+        "properties": {
+          "maxTradeUsd": { "type": "number" }, "dailySpendCapUsd": { "type": "number" }, "spentTodayUsd": { "type": "number" }, "spendRemainingTodayUsd": { "type": "number" },
+          "dailyLossCapUsd": { "type": "number" }, "maxEquityPct": { "type": "number" },
+          "allowedCrypto": { "oneOf": [{ "const": "any_safe" }, { "type": "array", "items": { "type": "string" } }] },
+          "allowedEquities": { "type": "array", "items": { "type": "string" } },
+          "cooldownSec": { "type": "number" }, "allowMediumRisk": { "type": "boolean" }, "equitiesEnabled": { "type": "boolean" },
+          "privacy": { "type": "string", "enum": ["public", "prefer", "require"] }, "paused": { "type": "boolean" }
+        }
+      },
+      "Pnl": {
+        "type": "object", "required": ["since", "scope", "assets", "totals", "unpriced"],
+        "properties": {
+          "since": { "type": ["string", "null"], "format": "date-time" }, "sinceMs": { "type": ["number", "null"] }, "scope": { "type": "string" },
+          "assets": { "type": "array", "items": { "type": "object", "required": ["asset", "trades", "boughtUsd", "soldUsd", "realizedUsd", "qtyHeld", "costBasisUsd"], "properties": {
+            "asset": { "type": "string" }, "trades": { "type": "integer" }, "boughtUsd": { "type": "number" }, "soldUsd": { "type": "number" }, "realizedUsd": { "type": "number" },
+            "qtyHeld": { "type": "number" }, "costBasisUsd": { "type": "number" }, "avgCostUsd": { "type": ["number", "null"] }, "priceUsd": { "type": ["number", "null"] },
+            "marketValueUsd": { "type": ["number", "null"] }, "unrealizedUsd": { "type": ["number", "null"] }
+          } } },
+          "totals": { "type": "object", "required": ["boughtUsd", "soldUsd", "realizedUsd", "unrealizedUsd", "totalUsd", "costBasisUsd"], "properties": { "boughtUsd": { "type": "number" }, "soldUsd": { "type": "number" }, "realizedUsd": { "type": "number" }, "unrealizedUsd": { "type": "number" }, "totalUsd": { "type": "number" }, "costBasisUsd": { "type": "number" } } },
+          "unpriced": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "Activity": {
+        "type": "object", "required": ["activity"],
+        "properties": { "activity": { "type": "array", "items": { "type": "object", "required": ["at", "side", "asset", "amountUsd", "decision"], "properties": { "at": { "type": "string", "format": "date-time" }, "side": { "type": "string", "enum": ["buy", "sell"] }, "asset": { "type": "string" }, "amountUsd": { "type": "number" }, "decision": { "$ref": "#/components/schemas/Decision" } } } } }
+      }
+    }
+  }
+}

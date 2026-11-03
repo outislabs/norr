@@ -190,6 +190,19 @@ importers:
         specifier: workspace:*
         version: link:../shared
 
+  packages/mcp-bridge:
+    dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: 1.32.2
+        version: 1.32.2(zod@4.6.7)
+    devDependencies:
+      '@norr/enclave':
+        specifier: workspace:*
+        version: link:../../apps/enclave
+      '@norr/mcp':
+        specifier: workspace:*
+        version: link:../../apps/mcp
+
   packages/shared:
     dependencies:
       zod:
@@ -3869,7 +3882,7 @@ snapshots:
 
   isexe@2.0.0: {}
 
-  isomorphic-ws@4.0.1(ws@7.5.13(bufferutil@4.1.0)):
+  isomorphic-ws@4.0.1(ws@7.5.13(bufferutil@4.1.0)(utf-8-validate@6.0.6)):
     dependencies:
       ws: 7.5.13(bufferutil@4.1.0)(utf-8-validate@6.0.6)
 
@@ -3882,7 +3895,7 @@ snapshots:
       delay: 5.0.0
       es6-promisify: 5.0.0
       eyes: 0.1.8
-      isomorphic-ws: 4.0.1(ws@7.5.13(bufferutil@4.1.0))
+      isomorphic-ws: 4.0.1(ws@7.5.13(bufferutil@4.1.0)(utf-8-validate@6.0.6))
       json-stringify-safe: 5.0.1
       stream-json: 1.9.1
       uuid: 8.3.2

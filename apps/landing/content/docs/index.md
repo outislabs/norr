@@ -10,7 +10,8 @@ Norr lets an AI agent trade crypto and tokenized US stocks for you, inside rules
 
 - [Quickstart](/docs/quickstart/): sign in, fund the vault, connect an agent, watch what it does.
 - [Connect your agent](/docs/connect-agent/): copy-ready MCP setup for Claude Code, Claude Desktop and other clients.
-- [MCP tools](/docs/mcp-tools/): the seven tools, their answers, and every reason a trade can be blocked.
+- [MCP tools](/docs/mcp-tools/): the nine tools, their answers, and every reason a trade can be blocked.
+- [API reference](/docs/api/): the REST API behind the tools, from the OpenAPI spec.
 - [Rules and limits](/docs/rules/): what you control, the presets, Scam Shield, stock eligibility.
 - [Privacy model](/docs/privacy/): who sees what, stated plainly.
 - [Verify the enclave](/docs/verify/): check the running code yourself, in the browser or a terminal.

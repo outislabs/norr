@@ -3,6 +3,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ServiceStatus } from "../lib/api";
 import { Onboarding } from "./Onboarding";
+import { PnlPanel, signedUsd } from "./PnlPanel";
 import { Portfolio } from "./Portfolio";
 import { statusPills } from "./StatusBar";
 import { ValueChart } from "./ValueChart";
@@ -87,5 +88,40 @@ describe("ValueChart", () => {
     rerender(<ValueChart points={[{ t: Date.UTC(2026, 10, 3, 12), totalUsd: 10, cryptoUsd: 10, equityUsd: 0 }, { t: Date.UTC(2026, 10, 3, 13), totalUsd: 12, cryptoUsd: 12, equityUsd: 0 }]} />);
     expect(screen.getByRole("img", { name: /from \$10\.00 to \$12\.00/ })).toBeTruthy();
     expect(screen.getByText(/\+\$2\.00/)).toBeTruthy();
+  });
+});
+
+describe("PnlPanel", () => {
+  const pnl = {
+    since: "2026-11-03T12:00:00.000Z",
+    scope: "Positions Norr bought for this vault.",
+    assets: [
+      { asset: "SOL", trades: 2, boughtUsd: 10, soldUsd: 4, realizedUsd: -0.12, qtyHeld: 0.06, costBasisUsd: 6, avgCostUsd: 100, priceUsd: 110, marketValueUsd: 6.6, unrealizedUsd: 0.6 },
+      { asset: "ODD", trades: 1, boughtUsd: 5, soldUsd: 0, realizedUsd: 0, qtyHeld: 3, costBasisUsd: 5, avgCostUsd: 1.6667, priceUsd: null, marketValueUsd: null, unrealizedUsd: null },
+    ],
+    totals: { boughtUsd: 15, soldUsd: 4, realizedUsd: -0.12, unrealizedUsd: 0.6, totalUsd: 0.48, costBasisUsd: 11 },
+    unpriced: ["ODD"],
+  };
+
+  it("signs amounts in words, not colour", () => {
+    expect(signedUsd(1.5)).toBe("+$1.50");
+    expect(signedUsd(-0.12)).toBe("−$0.12");
+    expect(signedUsd(0)).toBe("$0.00");
+  });
+
+  it("shows totals, a row per asset, and says which holdings have no price", () => {
+    render(<PnlPanel pnl={pnl} />);
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("+$0.48");
+    expect(text).toContain("−$0.12");
+    expect(screen.getAllByRole("row")).toHaveLength(3);
+    expect(text).toContain("no price");
+    expect(text).toContain("No current price for ODD");
+    expect(text).toContain("Since 2026-11-03");
+  });
+
+  it("says plainly when there are no trades yet", () => {
+    render(<PnlPanel pnl={{ ...pnl, assets: [], since: null, unpriced: [] }} />);
+    expect(document.body.textContent).toContain("No trades yet");
   });
 });

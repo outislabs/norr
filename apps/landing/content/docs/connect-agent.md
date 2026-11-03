@@ -1,6 +1,6 @@
 # Connect your agent
 
-Norr speaks MCP (Model Context Protocol). Any MCP client can use it: Claude Code, Claude Desktop, or your own agent. The agent gets seven tools ([MCP tools](/docs/mcp-tools/)) and one credential, an **agent token** that works for one vault only.
+Norr speaks MCP (Model Context Protocol). Any MCP client can use it: Claude Code, Claude Desktop, or your own agent. The agent gets nine tools ([MCP tools](/docs/mcp-tools/)) and one credential, an **agent token** that works for one vault only.
 
 ## Get a token
 
@@ -19,6 +19,24 @@ https://85e1d6a557dae81985c9e30e28270f91bee5c0e9-8788.dstack-pha-prod5.phala.net
 ```
 
 The Connect tab always shows the current URL. The service runs on demand during the pilot, so it may be offline.
+
+## Any stdio client: `npx @norrfi/mcp`
+
+For clients that start MCP servers as a local command (Claude Desktop, Claude Code, Cursor and most others), the [@norrfi/mcp](https://www.npmjs.com/package/@norrfi/mcp) bridge connects to the hosted endpoint with your token. It keeps no state and adds no tools of its own.
+
+```json
+{
+  "mcpServers": {
+    "norr": {
+      "command": "npx",
+      "args": ["-y", "@norrfi/mcp"],
+      "env": { "NORR_AGENT_TOKEN": "<agent token>" }
+    }
+  }
+}
+```
+
+Claude Code: `claude mcp add norr --env NORR_AGENT_TOKEN=<agent token> -- npx -y @norrfi/mcp`. Set `NORR_MCP_URL` to use another endpoint.
 
 ## Claude Code
 

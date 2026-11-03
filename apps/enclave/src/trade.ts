@@ -17,6 +17,7 @@ import {
   usdToUnits,
   verifyConfidentialSwap,
   verifyExecution,
+  type CryptoSignals,
   type Holdings,
   type IntendedSwap,
   type Registry,
@@ -34,6 +35,8 @@ import type { Ledger, Vault, VaultStore } from "./state";
 export interface TradeDeps {
   registry: Registry;
   risk: RiskProvider;
+  /** The read-only market data Scam Shield scores (liquidity, market cap, age), for the agent's get_market_data. */
+  marketSignals?: (asset: RegistryEntry) => Promise<CryptoSignals>;
   /** The Shield incident feed; null when unreachable (fails closed). */
   shield: () => Promise<ShieldFeed | null>;
   /** What to do when the feed is unreachable. Defaults to "block"; "allow" is the dev-only bypass (see shield-mode.ts). */

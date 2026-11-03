@@ -70,6 +70,38 @@ describe("read endpoints", () => {
   });
 });
 
+describe("P&L and market data", () => {
+  it("P&L: realized on sells at average cost, unrealized at today's price, since the first trade", async () => {
+    const { call, clock } = boot();
+    expect(await (await call("/v1/pnl")).json()).toMatchObject({ since: null, assets: [], totals: { realizedUsd: 0, unrealizedUsd: 0 } });
+    expect((await (await call("/v1/trade", { body: { side: "buy", asset: "SOL", amountUsd: 10 } })).json()).status).toBe("executed");
+    clock.t += 60_000;
+    expect((await (await call("/v1/trade", { body: { side: "sell", asset: "SOL", amountUsd: 4 } })).json()).status).toBe("executed");
+    const p = await (await call("/v1/pnl")).json();
+    expect(p.since).toBe(new Date(T0).toISOString());
+    const sol = p.assets.find((a: { asset: string }) => a.asset === "SOL");
+    expect(sol).toMatchObject({ trades: 2 });
+    expect(sol.boughtUsd).toBeGreaterThan(9);
+    expect(sol.qtyHeld).toBeGreaterThan(0);
+    expect(sol.priceUsd).toBe(100);
+    expect(p.totals.totalUsd).toBeCloseTo(p.totals.realizedUsd + p.totals.unrealizedUsd, 6);
+    expect(p.scope).toMatch(/Deposits have no known cost/);
+    expect((await call("/v1/pnl", { token: null })).status).toBe(401);
+  });
+
+  it("market data: price and the signals Scam Shield scores for crypto; price and minimum for stocks", async () => {
+    const { call } = boot();
+    const rug = await (await call("/v1/market?asset=RUGPULL")).json();
+    expect(rug.versions[0]).toMatchObject({ symbol: "RUGPULL", liquidityUsd: 3200, marketCapUsd: 41000, ageDays: 2, risk: { level: "high" } });
+    const nvda = await (await call("/v1/market?asset=NVDA")).json();
+    expect(nvda).toMatchObject({ found: true, class: "equity" });
+    expect(nvda.versions[0].priceUsd).toBe(208);
+    expect(nvda.versions[0].minimumUsd).toBeGreaterThan(0);
+    expect(await (await call("/v1/market?asset=NOPE")).json()).toMatchObject({ found: false });
+    expect((await call("/v1/market")).status).toBe(400);
+  });
+});
+
 describe("the demo flow, end to end on mock rails", () => {
   it("buy $40 NVDA, $150 TSLA blocked, $5 rug blocked, $5 USDC to SOL, then the kill switch", async () => {
     const { m, call, clock } = boot();

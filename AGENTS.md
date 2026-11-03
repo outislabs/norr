@@ -17,11 +17,11 @@ It runs, and prints PASS/FAIL for each check with the file that proves it:
 
 1. Typecheck of both TypeScript projects.
 2. The whole test suite (vitest).
-3. The demo as an agent sees it: a real MCP client spawns `apps/mcp/src/stdio.ts` over stdio and trades against the Norr service in mock mode. Expect NVDA $40 executed, TSLA $150 `OVER_TRADE_LIMIT`, a rug token `SCAM_RISK`, a trade inside the cooldown `COOLDOWN`, SOL $5 executed.
+3. The demo as an agent sees it: a real MCP client spawns `apps/mcp/src/stdio.ts` over stdio and trades against the Norr service in mock mode. Expect NVDA $40 executed, TSLA $150 `OVER_TRADE_LIMIT`, a rug token `SCAM_RISK`, a trade inside the cooldown `COOLDOWN`, SOL $5 executed, then P&L per asset (`get_pnl`) and the market data Scam Shield scored (`get_market_data`).
 4. The owner side over HTTP: NEP-413 sign-in, the agent token refused on owner routes, funding from another chain (the recipient is the vault even when the request names another), a wrong-chain refund address refused, the kill switch (the next trade returns `PAUSED`), and an honest 503 for attestation in mock mode.
 5. A production build of the dashboard and its generated Content-Security-Policy.
 
-Last line on success: `PASS: 19/19 checks passed`. `pnpm judge --no-tests` skips step 2 (about 40 s instead of 2 minutes).
+Last line on success: `PASS: 21/21 checks passed`. `pnpm judge --no-tests` skips step 2 (about 40 s instead of 2 minutes).
 
 ## Try it by hand (do X, see Y)
 
@@ -33,7 +33,7 @@ Last line on success: `PASS: 19/19 checks passed`. `pnpm judge --no-tests` skips
 | `POST /v1/trade {"side":"buy","asset":"TSLA","amountUsd":150}` | `blocked`, `OVER_TRADE_LIMIT`, with a plain-language message. |
 | `POST /v1/trade {"side":"buy","asset":"RUGPULL","amountUsd":5}` | `blocked`, `SCAM_RISK`, with the reasons. |
 | `pnpm dev:web`, open http://localhost:5173, "Use the demo owner" | The owner dashboard: balances by layer, rules, the agent's activity, Fund (pick a chain), Connect (MCP config), Pause everything, Verify. |
-| Connect Claude Desktop or Claude Code with `docs/MCP.md` | Seven tools; ask it to buy $150 of TSLA and it reports the block. |
+| Connect Claude Desktop or Claude Code with `docs/MCP.md` | Nine tools; ask it to buy $150 of TSLA and it reports the block. |
 | `pnpm exec tsx scripts/verify-attestation.mts <service URL>` against the live CVM (URL in README) | Seven attestation checks, including Intel's signature chain. Only while the CVM is running. |
 
 ## Repository map

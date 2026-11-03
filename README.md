@@ -18,7 +18,7 @@ Built for the NEAR hackathon (Nov 1 to Nov 14, 2026). Tracks: Privacy & Private 
 | **Confidential trades** | Confidential swaps and a tokenized-stock round trip have run on mainnet through OutLayer custody, with tiny amounts. | $6 NVDAon buy and sell back, 2026-10-30, round trip cost 0.0719 USDC (about 1.2%); a 1.5 USDC to SOL and back swap; `docs/FINDINGS.md`, `docs/PRIVACY.md` |
 | **Stocks and crypto from about $5** | Ondo tokenized stocks and crypto, 24/7. On liquid tickers (NVDAon, TSLAon, AAPLon, QQQon, AMZNon, GOOGLon) the confidential route quoted from $5.05; other tickers needed $26. The floor moves with the market. | `docs/EQUITY-MINIMUMS.md` (measured 2026-10-30) |
 | **Owner dashboard** | Sign in with a NEAR wallet; fund the vault; edit the rules; read the agent's private reasoning; approve with a request-versus-approval check; kill switch; status bar; Verify screen that works without signing in. | https://app.norr.finance |
-| **MCP server** | Seven tools over stdio and streamable HTTP, in the same attested VM. | `docs/MCP.md`; `apps/mcp` |
+| **MCP server** | Nine tools over stdio and streamable HTTP, in the same attested VM. | `docs/MCP.md`; `apps/mcp` |
 | **Private model for the agent** | The reference agent runs its model on NEAR AI Cloud and verifies the hardware-backed signature of every response it uses. | `apps/agent`; `docs/AGENT-MODELS.md` |
 | **Mock mode** | The whole flow runs locally with no funds and no network. | [Run it in 5 minutes](#run-it-in-5-minutes-mock-mode-no-funds) |
 
@@ -147,7 +147,7 @@ Private from the public is not private from everyone. This is the honest table (
 
 ## MCP tools
 
-`list_assets`, `check_asset`, `get_quote` (dry run, no funds move), `trade`, `get_portfolio`, `get_policy`, `get_activity`. No tool can withdraw, change policy, or accept a destination address. Stdio for Claude Desktop and Claude Code, streamable HTTP for remote agents (`docs/MCP.md`).
+`list_assets`, `check_asset`, `get_market_data`, `get_quote` (dry run, no funds move), `trade`, `get_portfolio`, `get_pnl`, `get_policy`, `get_activity`. No tool can withdraw, change policy, or accept a destination address. Stdio for Claude Desktop and Claude Code, streamable HTTP for remote agents (`docs/MCP.md`).
 
 ## Repository layout
 
@@ -181,6 +181,12 @@ scripts/           live trade runner, verify-attestation, research probes (live 
 - **Not audited**, tiny balances, and the live deployment runs only when needed.
 
 ## Roadmap (after the hackathon)
+
+Planned, not built:
+- **Self-serve hosted vaults:** create a vault, its custody wallet and its first agent token from the dashboard, without an operator.
+- **Multi-vault and client management:** several vaults per owner (one per agent or strategy), and an operator view for people who run vaults for clients, with each client's data still sealed to that client.
+- **TypeScript SDK:** a typed client for the agent API (generated from `apps/enclave/openapi.json`) for agents that do not use MCP.
+- **Verified P&L and Follow:** P&L that others can check (each trade backed by its 1Click status or a confidential balance proof), so an owner can publish a track record without revealing positions in real time, and others can follow it.
 
 Researched, not built (details in `docs/`):
 - **Owning a vault from an EVM or Solana wallet**: needs an owner identity that is not a NEAR account and a way to approve custody requests; not possible with NEAR's Ethereum-wallets module as it stands.

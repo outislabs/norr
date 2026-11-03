@@ -3,6 +3,7 @@ import { TradeInput, type Decision, type TradeRequest } from "@norr/shared";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { resolveBuildInfo, type BuildInfo } from "./build-info";
+import { vaultPnl } from "./vault-pnl";
 import { rateLimiter, type Attestor } from "./attestation";
 import type { SealKeyStore, SealingLedger } from "./seal";
 import { mountOwnerRoutes, type OwnerAuditEntry } from "./owner/routes";
@@ -197,6 +198,27 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
       privacy: p.privacy,
       paused: p.paused,
     });
+  });
+
+  app.get("/v1/pnl", (c) => c.json(vaultPnl(deps, c.get("vaultId"))));
+
+  // Market data for one asset: the listed price (1Click's token list) and, for crypto, the read-only signals Scam Shield
+  // scores (liquidity, market cap, age) with its verdict. Numbers only; Norr does not recommend trades.
+  app.get("/v1/market", async (c) => {
+    const q = c.req.query("asset");
+    if (!q) return c.json({ error: "asset is required" }, 400);
+    const res = deps.registry.resolve(q);
+    if (!res) return c.json({ found: false, message: `"${q}" is not a tradable asset.` });
+    const versions = await Promise.all(
+      res.candidates.map(async (e) => {
+        const base = { symbol: e.symbol, issuer: e.issuer, chain: e.chain, id: e.id, priceUsd: e.priceUsd };
+        if (res.class === "equity") return { ...base, minimumUsd: equityMinimum(res.ticker).usd };
+        const signals = await deps.marketSignals?.(e).catch(() => null);
+        const risk = await deps.risk.assess(e).catch(() => null);
+        return { ...base, liquidityUsd: signals?.liquidityUsd ?? null, marketCapUsd: signals?.marketCapUsd ?? null, ageDays: signals?.ageDays ?? null, routable: signals?.routable ?? null, risk: risk ? { level: risk.level, score: risk.score } : null };
+      }),
+    );
+    return c.json({ found: true, class: res.class, ticker: res.ticker, versions, source: res.class === "crypto" ? "Price: NEAR Intents token list. Liquidity, market cap and age: DexScreener (read-only), as scored by Scam Shield." : "Price: NEAR Intents token list." });
   });
 
   app.get("/v1/activity", async (c) => {

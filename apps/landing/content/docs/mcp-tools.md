@@ -1,14 +1,16 @@
 # MCP tools reference
 
-Seven tools. Six only read; `trade` can move money, inside the vault only. No tool can withdraw, change rules, or accept a destination address.
+Nine tools. Eight only read; `trade` can move money, inside the vault only. No tool can withdraw, change rules, or accept a destination address.
 
 | Tool | Inputs | What it does |
 |---|---|---|
 | `list_assets` | `class` (optional: `crypto` or `equity`) | What can be traded. Crypto by symbol and chain; stocks and ETFs by ticker with every issuer that offers it, and the smallest order that has been quoting (`minimumUsd`). |
+| `get_market_data` | `asset` | Numbers, not advice: the listed price and, for crypto, the market signals Scam Shield scores (liquidity, market cap, token age) with the risk level. For stocks, price per issuer and the quoting minimum. |
 | `check_asset` | `asset` | A verdict before trading. Crypto: Scam Shield's risk level (low, medium, high) with reasons. Stocks: whether this vault may trade them, and the notice to respect. Also any active NEAR Intents security incident touching the asset. |
 | `get_quote` | `side`, `asset`, `amountUsd` | A dry run: the price and the minimum you would accept. No funds move. If a rule would stop the trade, you get the same blocked answer `trade` would give. |
 | `trade` | `side` (`buy` or `sell`), `asset`, `amountUsd`, `reason` (optional, private to the owner) | Requests a trade. Runs every check, quotes, executes through NEAR Intents (confidential layer when the funds are there) and verifies the result. |
 | `get_portfolio` | none | Holdings in USD, split into crypto and tokenized stocks. |
+| `get_pnl` | none | Profit and loss since the vault's first trade, per asset and in total: realized (sells at average cost) and unrealized (what is still held from Norr's buys, at today's price). Deposits have no known cost and are not counted. |
 | `get_policy` | none | The rules: largest trade, daily spending cap and what is left today, daily loss cap, stock share, allowlists, cooldown, whether stocks are enabled, whether the vault is paused. |
 | `get_activity` | none | Recent requests and outcomes, newest first. Use it to follow up on a trade waiting for approval. |
 

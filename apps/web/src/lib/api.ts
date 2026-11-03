@@ -53,6 +53,8 @@ export interface FundingStatus { state: "waiting" | "arrived" | "expired"; recei
 export interface VerifyInfo { mode: "mock" | "live"; attested: boolean; note: string; commit: string | null; dirty?: boolean; source?: "env" | "git" | "unknown" }
 export interface ServiceStatus { mock: boolean; pricing: "ready" | "retrying"; shield: "ok" | "incidents" | "unavailable"; enclave: boolean; vaults: { total: number; paused: number } }
 export interface ValuePoint { t: number; totalUsd: number; cryptoUsd: number; equityUsd: number }
+export interface AssetPnl { asset: string; trades: number; boughtUsd: number; soldUsd: number; realizedUsd: number; qtyHeld: number; costBasisUsd: number; avgCostUsd: number | null; priceUsd: number | null; marketValueUsd: number | null; unrealizedUsd: number | null }
+export interface VaultPnl { since: string | null; scope: string; assets: AssetPnl[]; totals: { boughtUsd: number; soldUsd: number; realizedUsd: number; unrealizedUsd: number; totalUsd: number; costBasisUsd: number }; unpriced: string[] }
 export interface AuditItem { at: string; owner: string; action: string; vaultId?: string }
 
 export interface ApiOptions {
@@ -119,6 +121,7 @@ export function createApi(o: ApiOptions) {
     attestation: (nonceHex: string) => call<AttestationEvidence & { attested: true; commit: string | null }>(`/attestation?nonce=${nonceHex}`),
     appInfo: () => call<AppInfo & { attested: true }>("/info"),
     status: () => call<ServiceStatus>("/owner/v1/status"),
+    pnl: (id: string) => call<VaultPnl>(`/owner/v1/vaults/${encodeURIComponent(id)}/pnl`),
     history: (id: string) => call<{ points: ValuePoint[] }>(`/owner/v1/vaults/${encodeURIComponent(id)}/history`),
     audit: () => call<{ audit: AuditItem[] }>("/owner/v1/audit"),
     verify: () => call<VerifyInfo>("/owner/v1/verify"),

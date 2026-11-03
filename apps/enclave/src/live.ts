@@ -80,9 +80,12 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env, opts: 
   ledger.sealExisting(policy.vaultId);
 
   const shield = env.SHIELD_API_KEY ? new ShieldClient({ apiKey: env.SHIELD_API_KEY }).feed : async () => null;
+  // One market-data client: Scam Shield scores it, and get_market_data shows the same numbers to the agent.
+  const market = new DexScreenerSignals();
   const deps: TradeDeps = {
     registry,
-    risk: new HeuristicRiskProvider(new DexScreenerSignals().signals),
+    risk: new HeuristicRiskProvider(market.signals),
+    marketSignals: market.signals,
     shield,
     shieldOnUnavailable: shieldMode.onUnavailable,
     onShieldBypass: (vaultId) => console.warn(bypassWarning(vaultId)),
