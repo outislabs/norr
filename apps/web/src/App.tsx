@@ -62,7 +62,7 @@ export function App({ base = "/api", mcpUrl = "http://127.0.0.1:8788/mcp" }: { b
       }}
     >
       {route.name === "vaults" && <VaultsPage api={api} account={session.accountId} version={version} />}
-      {route.name === "vault" && <VaultPage key={`${route.id}-${version}`} api={api} account={session.accountId} id={route.id} tab={route.tab} mcpUrl={mcpUrl} onChanged={() => setVersion((v) => v + 1)} />}
+      {route.name === "vault" && <VaultPage key={`${route.id}-${version}`} api={api} account={session.accountId} id={route.id} tab={route.tab} mcpUrl={mcpUrl} apiUrl={base.startsWith("http") ? base : "http://localhost:8787"} onChanged={() => setVersion((v) => v + 1)} />}
       {route.name === "verify" && <VerifyPage api={api} signedIn />}
     </Shell>
   );

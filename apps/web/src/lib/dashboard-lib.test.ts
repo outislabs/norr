@@ -32,23 +32,42 @@ describe("chartGeometry", () => {
 });
 
 describe("mcpSnippets", () => {
-  it("uses a placeholder until a token exists, then the token, and always the given endpoint", () => {
-    const before = mcpSnippets("https://x-8788.example/mcp", null);
-    expect(before.every((s) => s.text.includes("https://x-8788.example/mcp"))).toBe(true);
-    expect(before.every((s) => s.text.includes("PASTE_YOUR_AGENT_TOKEN"))).toBe(true);
+  const all = (s: { blocks: { text: string }[] }) => s.blocks.map((b) => b.text).join("\n");
+
+  it("offers any MCP client first, then the named clients and the REST API", () => {
+    expect(mcpSnippets("https://x/mcp", null).map((s) => s.client)).toEqual(["any", "claude-code", "claude-desktop", "cursor", "openai", "rest", "norr-agent"]);
+  });
+
+  it("uses a placeholder until a token exists, then the token; MCP snippets use the endpoint, REST the service URL", () => {
+    const before = mcpSnippets("https://x-8788.example/mcp", null, "https://x-8787.example");
+    expect(before.every((s) => all(s).includes("PASTE_YOUR_AGENT_TOKEN"))).toBe(true);
+    for (const s of before) expect(all(s)).toContain(s.client === "rest" ? "https://x-8787.example/v1/trade" : "https://x-8788.example/mcp");
     const after = mcpSnippets("https://x-8788.example/mcp", "norr_agent_abc");
-    expect(after.every((s) => s.text.includes("norr_agent_abc") && !s.text.includes("PASTE_YOUR"))).toBe(true);
+    expect(after.every((s) => all(s).includes("norr_agent_abc") && !all(s).includes("PASTE_YOUR"))).toBe(true);
   });
 
-  it("the Claude Desktop snippet is valid JSON and keeps the token out of args", () => {
-    const d = mcpSnippets("https://x/mcp", "norr_agent_abc").find((s) => s.client === "claude-desktop")!;
-    const parsed = JSON.parse(d.text) as { mcpServers: { norr: { args: string[]; env: Record<string, string> } } };
-    expect(parsed.mcpServers.norr.args.join(" ")).not.toContain("norr_agent_abc");
-    expect(parsed.mcpServers.norr.env.NORR_AUTH).toBe("Bearer norr_agent_abc");
+  it("until @norrfi/mcp is published, the stdio blocks use mcp-remote, with the token in env, not args", () => {
+    const desk = mcpSnippets("https://x/mcp", "norr_agent_abc", undefined, false).find((s) => s.client === "claude-desktop")!;
+    const parsed = JSON.parse(desk.blocks[0]!.text) as { mcpServers: { norr: { args: string[]; env: Record<string, string> } } };
+    expect(parsed.mcpServers.norr.args).toEqual(["-y", "mcp-remote", "https://x/mcp", "--header", "Authorization:${NORR_AUTH}"]);
+    expect(parsed.mcpServers.norr.env).toEqual({ NORR_AUTH: "Bearer norr_agent_abc" });
+    expect(mcpSnippets("https://x/mcp", "t", undefined, false).flatMap((s) => s.blocks).some((b) => b.text.includes("@norrfi/mcp"))).toBe(false);
   });
 
-  it("only the path we ran end to end is labelled tested", () => {
-    expect(mcpSnippets("https://x/mcp", null).filter((s) => s.status === "tested").map((s) => s.client)).toEqual(["norr-agent"]);
+  it("JSON configs are valid; the stdio bridge gets the token through env, never args, and the endpoint only when it is not the default", () => {
+    const desk = mcpSnippets("https://x/mcp", "norr_agent_abc", undefined, true).find((s) => s.client === "claude-desktop")!;
+    const parsed = JSON.parse(desk.blocks[0]!.text) as { mcpServers: { norr: { args: string[]; env: Record<string, string> } } };
+    expect(parsed.mcpServers.norr.args).toEqual(["-y", "@norrfi/mcp"]);
+    expect(parsed.mcpServers.norr.env).toEqual({ NORR_AGENT_TOKEN: "norr_agent_abc", NORR_MCP_URL: "https://x/mcp" });
+    const onDefault = JSON.parse(mcpSnippets("https://mcp.norr.finance/mcp", "t", undefined, true).find((s) => s.client === "claude-desktop")!.blocks[0]!.text);
+    expect(onDefault.mcpServers.norr.env).toEqual({ NORR_AGENT_TOKEN: "t" });
+    const cursor = JSON.parse(mcpSnippets("https://x/mcp", "t").find((s) => s.client === "cursor")!.blocks[0]!.text);
+    expect(cursor).toEqual({ mcpServers: { norr: { url: "https://x/mcp", headers: { Authorization: "Bearer t" } } } });
+  });
+
+  it("labels as tested only the paths we have run", () => {
+    expect(mcpSnippets("https://x/mcp", null).filter((s) => s.status === "tested").map((s) => s.client)).toEqual(["any", "claude-code", "rest", "norr-agent"]);
+    for (const s of mcpSnippets("https://x/mcp", null)) expect(s.statusNote.length).toBeGreaterThan(20);
   });
 });
 

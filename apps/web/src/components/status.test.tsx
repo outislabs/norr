@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
-import type { ServiceStatus } from "../lib/api";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Api, ServiceStatus } from "../lib/api";
+import { ConnectAgent } from "./ConnectAgent";
 import { Onboarding } from "./Onboarding";
 import { PnlPanel, signedUsd } from "./PnlPanel";
 import { Portfolio } from "./Portfolio";
@@ -123,5 +124,29 @@ describe("PnlPanel", () => {
   it("says plainly when there are no trades yet", () => {
     render(<PnlPanel pnl={{ ...pnl, assets: [], since: null, unpriced: [] }} />);
     expect(document.body.textContent).toContain("No trades yet");
+  });
+});
+
+describe("ConnectAgent", () => {
+  it("leads with any MCP client, shows the token alone with a Copy button, and labels every tab tested or not", async () => {
+    const api = { issueToken: vi.fn(async () => ({ token: "norr_agent_abc123" })), revokeTokens: vi.fn() } as unknown as Api;
+    render(<ConnectAgent api={api} vaultId="demo" mcpUrl="https://mcp.example/mcp" apiUrl="https://api.example" />);
+    expect(document.body.textContent).toContain("Works with any MCP-compatible agent, or any code that can call the REST API.");
+    const tabs = screen.getAllByRole("tab").map((t) => t.textContent);
+    expect(tabs).toEqual(["Any MCP client", "Claude Code", "Claude Desktop", "Cursor", "ChatGPT / OpenAI", "REST API", "Norr agent"]);
+    expect(screen.getByRole("tab", { name: "Any MCP client" }).getAttribute("aria-selected")).toBe("true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Create an agent token" }));
+    const box = await screen.findByTestId("agent-token");
+    expect(box.querySelector("pre")!.textContent).toBe("norr_agent_abc123");
+    expect(within(box).getByRole("button", { name: "Copy" })).toBeTruthy();
+
+    for (const t of screen.getAllByRole("tab")) {
+      fireEvent.click(t);
+      expect(screen.getByRole("tabpanel").textContent).toMatch(/^(tested|not yet tested)/);
+    }
+    fireEvent.click(screen.getByRole("tab", { name: "REST API" }));
+    expect(screen.getByRole("tabpanel").textContent).toContain("curl -X POST https://api.example/v1/trade");
+    expect(screen.getByRole("tabpanel").textContent).toContain("Bearer norr_agent_abc123");
   });
 });
