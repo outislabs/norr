@@ -34,7 +34,21 @@ export interface PendingItem {
 }
 import type { AppInfo, AttestationEvidence } from "@norr/shared";
 import type { SealedReason } from "./seal";
-export interface FundingOffer { id: string; address: string; amountUsdc: number; asset: { symbol: string; chain: string; contract: string }; expiresAt: string }
+/** A token and chain the vault can be funded from; whatever is sent arrives as USDC in the vault's confidential balance. */
+export interface FundingSource { assetId: string; symbol: string; chain: string; chainName: string; family: "near" | "evm" | "solana"; evmChainId?: number; decimals: number; contract: string | null; priceUsd: number }
+export interface FundingOffer {
+  id: string;
+  address: string;
+  /** The USD amount asked for (older services: also the USDC amount). */
+  amountUsdc: number;
+  amountUsd?: number;
+  minArrivingUsdc?: number;
+  /** What exactly to send, and on which chain. Absent from older services (USDC on NEAR). */
+  send?: { amount: string; units: string; symbol: string; chain: string; chainName: string; family: "near" | "evm" | "solana"; evmChainId?: number; contract: string | null; decimals: number };
+  asset: { symbol: string; chain: string; contract: string };
+  refundTo?: string;
+  expiresAt: string;
+}
 export interface FundingStatus { state: "waiting" | "arrived" | "expired"; receivedUsdc: number; balanceUsdc: number; expiresAt: string; reportedBy: string; independentlyConfirmed?: boolean }
 export interface VerifyInfo { mode: "mock" | "live"; attested: boolean; note: string; commit: string | null; dirty?: boolean; source?: "env" | "git" | "unknown" }
 export interface ServiceStatus { mock: boolean; pricing: "ready" | "retrying"; shield: "ok" | "incidents" | "unavailable"; enclave: boolean; vaults: { total: number; paused: number } }
@@ -96,7 +110,8 @@ export function createApi(o: ApiOptions) {
     pending: (id: string) => call<{ pending: PendingItem[] }>(`/owner/v1/vaults/${encodeURIComponent(id)}/pending`),
     issueToken: (id: string) => call<{ token: string; note: string }>(`/owner/v1/vaults/${encodeURIComponent(id)}/tokens`, { body: {} }),
     revokeTokens: (id: string) => call<{ revoked: boolean }>(`/owner/v1/vaults/${encodeURIComponent(id)}/tokens`, { method: "DELETE" }),
-    requestFunding: (id: string, amountUsdc: number, fromAccount?: string) => call<FundingOffer>(`/owner/v1/vaults/${encodeURIComponent(id)}/funding`, { body: { amountUsdc, ...(fromAccount ? { fromAccount } : {}) } }),
+    fundingSources: () => call<{ sources: FundingSource[] }>("/owner/v1/funding/sources"),
+    requestFunding: (id: string, r: { amountUsd: number; source?: string; refundTo?: string }) => call<FundingOffer>(`/owner/v1/vaults/${encodeURIComponent(id)}/funding`, { body: { amountUsd: r.amountUsd, ...(r.source ? { source: r.source } : {}), ...(r.refundTo ? { refundTo: r.refundTo } : {}) } }),
     fundingStatus: (id: string, fid: string) => call<FundingStatus>(`/owner/v1/vaults/${encodeURIComponent(id)}/funding/${encodeURIComponent(fid)}`),
     sealKey: () => call<{ publicKey: string | null }>("/owner/v1/seal-key"),
     enrollSealKey: (publicKey: string) => call<{ publicKey: string; resealed: number }>("/owner/v1/seal-key", { method: "PUT", body: { publicKey } }),

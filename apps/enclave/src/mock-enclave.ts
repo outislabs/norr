@@ -22,6 +22,9 @@ export const DEMO = {
   NVDAon: tok("NVDAon", "bsc", 208, 18),
   TSLAon: tok("TSLAon", "bsc", 370, 18),
   SPYon: tok("SPYon", "bsc", 768, 18),
+  // Funding sources on other chains (the Fund tab's picker); the contract is Base's real USDC, prices are fixed.
+  USDC_BASE: { ...tok("USDC", "base", 1, 6, "usd-coin"), contractAddress: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" },
+  ETH: tok("ETH", "eth", 2300, 18, "ethereum"),
 };
 
 const RUG_SIGNALS: CryptoSignals = { routable: true, liquidityUsd: 3_200, marketCapUsd: 41_000, ageDays: 2 };
@@ -51,7 +54,7 @@ export interface MockEnclave {
  * owner-confirmed for equities, so trades run confidentially by default.
  */
 export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed | null; now?: () => number; agentToken?: string; keys?: AccessKeyChecker; allowedOrigins?: string[]; attestor?: Attestor | null } = {}): MockEnclave {
-  const registry = new Registry({ crypto: [DEMO.USDC, DEMO.SOL, DEMO.wNEAR, DEMO.RUG], equities: [{ issuer: ONDO, tokens: [DEMO.NVDAon, DEMO.TSLAon, DEMO.SPYon] }] });
+  const registry = new Registry({ crypto: [DEMO.USDC, DEMO.SOL, DEMO.wNEAR, DEMO.RUG, DEMO.USDC_BASE, DEMO.ETH], equities: [{ issuer: ONDO, tokens: [DEMO.NVDAon, DEMO.TSLAon, DEMO.SPYon] }] });
   const now = o.now ?? Date.now;
   const vaultId = "demo";
   const walletAccount = "demo-vault.mock.near";

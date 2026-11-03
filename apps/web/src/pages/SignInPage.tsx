@@ -5,6 +5,9 @@ import { isOffline, type Api, type SessionInfo } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { demoSignIn, walletSignIn } from "../lib/signin";
 
+/** Where "No NEAR wallet?" points: HOT Wallet, multichain, which gives a NEAR account next to EVM and Solana ones. */
+export const HOT_WALLET = "https://hot-labs.org/wallet/";
+
 /**
  * One column on phones; from 900px a split screen: the headline on the left, a compact sign-in panel on the right.
  * Copy is deliberately minimal. What signing in does (one NEP-413 message, no transaction) is stated in one line.
@@ -49,6 +52,10 @@ export function SignInPage({ api, onSession }: { api: Api; onSession: (s: Sessio
             </button>
           )}
           <p className="mt-1 text-sm text-mute">Signing in moves no funds.</p>
+          {/* Owning a vault needs a NEAR account (full EVM and Solana sign-in is on the roadmap); HOT Wallet gives one alongside EVM and Solana. */}
+          <a href={HOT_WALLET} target="_blank" rel="noopener noreferrer" className="text-sm text-mute hover:text-fg">
+            No NEAR wallet? HOT works with your EVM or Solana setup →
+          </a>
           {offline && <div className="mt-5"><Offline compact /></div>}
           {health.error && !offline && <p role="alert" className="mt-5 border-l border-line-strong pl-4 text-sm text-fg">{health.error}</p>}
           {error && <p role="alert" className="mt-5 border-l border-line-strong pl-4 text-sm text-fg">{error}</p>}

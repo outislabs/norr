@@ -81,9 +81,11 @@ export class OneClick implements Quoter, ExecutionAuditor, DepositQuoter {
   }
 
   /**
-   * A real (not dry) quote for funding: public USDC on NEAR in, the same asset out into the vault's confidential
-   * balance. Returns 1Click's one-time deposit address. Moves nothing by itself; the owner sends the funds.
-   * Refuses an offer that would lose more than 1% on the way.
+   * A real (not dry) quote for funding: the owner's asset on its own chain in (USDC on NEAR by default; USDC on Base,
+   * ETH, SOL...), USDC out into the vault's confidential balance. Returns 1Click's one-time deposit address on the
+   * origin chain. Moves nothing by itself; the owner sends the funds. Refuses an offer that would lose more than 1%
+   * on the way (by units for the same asset, by 1Click's own USD values across assets), or that falls more than 3%
+   * short of Norr's own estimate from the listed price.
    */
   async requestDeposit(p: DepositParams): Promise<DepositOffer> {
     const body = {
@@ -91,7 +93,7 @@ export class OneClick implements Quoter, ExecutionAuditor, DepositQuoter {
       depositMode: "SIMPLE",
       swapType: "EXACT_INPUT",
       slippageTolerance: this.slippageBps,
-      originAsset: p.token,
+      originAsset: p.originAsset ?? p.token,
       depositType: "ORIGIN_CHAIN",
       destinationAsset: p.token,
       amount: p.amount,
@@ -110,8 +112,18 @@ export class OneClick implements Quoter, ExecutionAuditor, DepositQuoter {
     const minAmountOut = str(q.minAmountOut);
     const deadline = str(q.deadline);
     if (!depositAddress || !amountIn || !amountOut || !minAmountOut || !deadline) throw new IntentsApiError(502, "1Click deposit quote: unexpected response");
-    if (BigInt(amountOut) * 100n < BigInt(amountIn) * 99n) throw new IntentsApiError(502, "1Click deposit quote: the route would lose more than 1%, so it is not offered");
-    return { depositAddress, amountIn, amountOut, minAmountOut, deadline };
+    const sameAsset = (p.originAsset ?? p.token) === p.token;
+    if (sameAsset) {
+      if (BigInt(amountOut) * 100n < BigInt(amountIn) * 99n) throw new IntentsApiError(502, "1Click deposit quote: the route would lose more than 1%, so it is not offered");
+    } else {
+      const inUsd = Number(q.amountInUsd);
+      const outUsd = Number(q.amountOutUsd);
+      if (!(inUsd > 0) || !(outUsd > 0)) throw new IntentsApiError(502, "1Click deposit quote: no USD values to check the route against");
+      if (outUsd < inUsd * 0.99) throw new IntentsApiError(502, "1Click deposit quote: the route would lose more than 1%, so it is not offered");
+    }
+    if (p.expectedOut && BigInt(amountOut) * 100n < BigInt(p.expectedOut) * 97n) throw new IntentsApiError(502, "1Click deposit quote: it pays out more than 3% below the listed price, so it is not offered");
+    const amountInFormatted = str(q.amountInFormatted);
+    return { depositAddress, amountIn, ...(amountInFormatted ? { amountInFormatted } : {}), amountOut, minAmountOut, deadline };
   }
 
   /** What 1Click says happened for a deposit address. Null unless the swap succeeded. */

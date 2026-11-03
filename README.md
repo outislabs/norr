@@ -170,7 +170,7 @@ scripts/           live trade runner, verify-attestation, research probes (live 
 - **Confidential swaps have no independent audit trail.** They are checked from balances and the provider's own report, and labelled `custody-reported`.
 - **Funding and withdrawals are public**, and the custody provider and NEAR Intents operator can see confidential trades. A funding transfer and the next hop can be correlated by timing and amount.
 - **Shield feed key pending**: the deployed service blocks all trades until it is set. Live trades so far used a dev-only bypass locally.
-- **Owning a vault needs a NEAR account.** EVM and Solana users can fund a vault from their own chain, but cannot sign in or approve swaps yet: NEAR's Ethereum-wallets module does not implement `signMessage`/NEP-413 (`docs/AURORA.md`).
+- **Owning a vault needs a NEAR account.** EVM and Solana users can fund a vault from their own chain (the Fund tab), but cannot sign in or approve swaps yet: NEAR's Ethereum-wallets module does not implement `signMessage`/NEP-413 (`docs/AURORA.md`). The sign-in page points them to HOT Wallet, which gives a NEAR account alongside EVM and Solana ones.
 - **Limit orders are out of v1**: two test limit orders never filled.
 - **Small orders**: the stock minimum is a quote-time floor that moves (about $5 on liquid tickers at US market open, higher at other times and for other tickers).
 - **Stock eligibility**: per third-party sources (NEAR Intents' docs are silent), Ondo's tokens are for non-US persons only. The owner confirms non-US status before equities are enabled, and the dashboard shows a disclaimer. This is not legal advice and has not been reviewed by counsel.
@@ -180,7 +180,6 @@ scripts/           live trade runner, verify-attestation, research probes (live 
 ## Roadmap (after the hackathon)
 
 Researched, not built (details in `docs/`):
-- **Fund from any wallet** with Aurora's Intents widget, so EVM and Solana users can deposit without copying an address (`docs/AURORA.md`).
 - **Owning a vault from an EVM or Solana wallet**: needs an owner identity that is not a NEAR account and a way to approve custody requests; not possible with NEAR's Ethereum-wallets module as it stands.
 - **Norr as a NEAR Intents solver** for orders under $5 (`docs/SOLVER-FEASIBILITY.md`); gated by KYC/KYB of an operating entity.
 - **Order pooling** for $1 to $5 stock orders (`docs/ROADMAP-POOLING.md`); changes the custody model and needs legal review.
@@ -201,7 +200,8 @@ Organizers confirmed pre-window work is permitted. The hackathon rules count cod
 **Inside the window (Nov 1 to Nov 14):**
 - **Nov 1:** no commits.
 - **Nov 2:** first deployment on Phala Cloud (a smoke CVM, then the production CVM on a production OS image); attestation checked for the first time against our own hardware; a startup fix found by the smoke test (the service now starts and retries when 1Click is unreachable, and blocks trades with `PRICING_UNAVAILABLE` meanwhile); a check that fails debug OS images; dashboard status bar, onboarding, Connect-agent page, value history, clearer approvals, and a Verify screen that works without signing in; the landing page; MIT license; this README; the dashboard hosted at app.norr.finance.
-- **Planned:** the Aurora funding integration, demo rehearsal, video and submission.
+- **Nov 3:** landing page and dashboard redesigned (black and white, Geist), a strict Content-Security-Policy on the dashboard, the quote's signature chain verified in the browser (`dcap-qvl` WebAssembly), HOT sign-in tested on a phone against the live CVM, and funding from other chains (USDC on Ethereum, Base, Arbitrum, Optimism, Polygon, BNB Chain or Solana, or ETH, SOL) through Norr's own 1Click quote. Aurora's widget was evaluated and not used: it cannot pay into the vault's confidential balance (`docs/AURORA.md`).
+- **Planned:** the first mainnet funding from another chain, demo rehearsal, video and submission.
 
 ## License
 

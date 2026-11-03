@@ -145,6 +145,24 @@ describe("confidential layer", () => {
     await expect(quote({ depositAddress: "a", amountIn: "1000000", amountOut: "980000", minAmountOut: "970000", deadline: "x" }).requestDeposit(p)).rejects.toThrow(/lose more than 1%/);
   });
 
+  it("1Click: funds from another chain (ETH on Ethereum) into USDC in the vault's confidential account, refunding on the origin chain", async () => {
+    const q = { depositAddress: "0xdep", amountIn: "600000000000000", amountInFormatted: "0.0006", amountInUsd: "1.3616", amountOut: "1362236", amountOutUsd: "1.3613", minAmountOut: "1348613", deadline: "d" };
+    const r = recorder(() => json({ quote: q }));
+    const oc = new OneClick({ fetch: r.f });
+    const offer = await oc.requestDeposit({ token: "nep141:usdc", originAsset: "nep141:eth.omft.near", amount: "600000000000000", expectedOut: "1361000", recipient: "vaultacct", refundTo: "0x8ba1f109551bD432803012645Ac136ddd64DBA72" });
+    expect(offer).toMatchObject({ depositAddress: "0xdep", amountInFormatted: "0.0006", minAmountOut: "1348613" });
+    expect(JSON.parse(String(r.calls[0]!.init.body))).toMatchObject({ originAsset: "nep141:eth.omft.near", destinationAsset: "nep141:usdc", recipient: "vaultacct", recipientType: "CONFIDENTIAL_INTENTS", refundType: "ORIGIN_CHAIN" });
+  });
+
+  it("1Click: across assets, refuses a route that loses more than 1% in USD, has no USD values, or pays far below the listed price", async () => {
+    const quote = (over: object) => new OneClick({ fetch: recorder(() => json({ quote: { depositAddress: "a", amountIn: "1", amountOut: "1000000", minAmountOut: "990000", deadline: "d", amountInUsd: "1.00", amountOutUsd: "0.999", ...over } })).f });
+    const p = { token: "nep141:usdc", originAsset: "nep141:sol.omft.near", amount: "1", recipient: "v", refundTo: "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T" };
+    await expect(quote({}).requestDeposit(p)).resolves.toBeTruthy();
+    await expect(quote({ amountOutUsd: "0.98" }).requestDeposit(p)).rejects.toThrow(/lose more than 1%/);
+    await expect(quote({ amountInUsd: undefined }).requestDeposit(p)).rejects.toThrow(/no USD values/);
+    await expect(quote({}).requestDeposit({ ...p, expectedOut: "1100000" })).rejects.toThrow(/below the listed price/);
+  });
+
   it("OutLayer: asks for a confidential deposit address with the source asset and amount, and rejects a reply without one", async () => {
     const r = recorder(() => json({ intent_id: "i1", deposit_address: "49e108dd", amount: "8000000", amount_out: "8000000", min_amount_out: "7920000", expires_at: "2026-11-02T17:49:39Z" }));
     expect(await ol(r).requestConfidentialDeposit("nep141:usdc", "8000000")).toEqual({ intentId: "i1", depositAddress: "49e108dd", amount: "8000000", minAmountOut: "7920000", expiresAt: "2026-11-02T17:49:39Z" });

@@ -1,6 +1,6 @@
 import { createHash, generateKeyPairSync, sign, type KeyObject } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { createMockEnclave, MOCK_OWNER } from "../mock-enclave";
+import { createMockEnclave, DEMO, MOCK_OWNER } from "../mock-enclave";
 import { deriveOwnerKey, openBox } from "../../../web/src/lib/seal";
 import { OwnerAuth, RpcAccessKeyChecker, type AccessKeyChecker } from "./auth";
 import { base58Decode, nep413Hash, NEP413_TAG, parsePublicKey, verifyNep413 } from "./nep413";
@@ -384,6 +384,50 @@ describe("owner routes", () => {
     expect((await (await req(`/owner/v1/vaults/demo/funding/${offer.id}`, { token })).json()).independentlyConfirmed).toBe(true);
     m.deps.auditor.audit = async () => ({ tokenIn: "x", tokenOut: "x", amountIn: "1", amountOut: "1", recipient: "somebody-else" });
     expect((await (await req(`/owner/v1/vaults/demo/funding/${offer.id}`, { token })).json()).independentlyConfirmed).toBe(false);
+  });
+
+  it("funding from another chain: the owner picks the source, the vault stays the recipient, and the refund goes back on that chain", async () => {
+    const { m, req, token } = await boot();
+    const vault = m.deps.vaults.get("demo")!;
+    const asked: Record<string, unknown>[] = [];
+    const real = m.deps.funder!.requestDeposit.bind(m.deps.funder);
+    m.deps.funder!.requestDeposit = async (p) => (asked.push({ ...p }), real(p));
+
+    const { sources } = await (await req("/owner/v1/funding/sources", { token })).json();
+    expect(sources.map((s: { symbol: string; chain: string }) => `${s.symbol}@${s.chain}`)).toEqual(["USDC@near", "ETH@eth", "USDC@base", "SOL@sol"]);
+    const base = sources.find((s: { chain: string }) => s.chain === "base");
+
+    const evm = "0x8ba1f109551bD432803012645Ac136ddd64DBA72";
+    const offer = await (await req("/owner/v1/vaults/demo/funding", { token, body: { amountUsd: 2, source: base.assetId, refundTo: evm } })).json();
+    expect(asked[0]).toEqual({ token: m.deps.quoteAsset.id, originAsset: base.assetId, expectedOut: "2000000", amount: "2000000", recipient: vault.walletAccount, refundTo: evm });
+    expect(offer).toMatchObject({ amountUsd: 2, refundTo: evm, send: { symbol: "USDC", chainName: "Base", family: "evm", evmChainId: 8453, contract: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", units: "2000000", decimals: 6 } });
+
+    // Native ETH: the amount is the USD value at the listed price; there is no contract to call.
+    const eth = sources.find((s: { symbol: string }) => s.symbol === "ETH");
+    const ethOffer = await (await req("/owner/v1/vaults/demo/funding", { token, body: { amountUsd: 23, source: eth.assetId, refundTo: evm } })).json();
+    expect(ethOffer.send).toMatchObject({ symbol: "ETH", units: "10000000000000000", contract: null, evmChainId: 1 });
+    expect(asked[1]!.expectedOut).toBe("23000000");
+  });
+
+  it("funding from another chain: a refund address for the wrong chain, or a source that is not offered, is refused before any quote", async () => {
+    const { m, req, token } = await boot();
+    let quotes = 0;
+    const real = m.deps.funder!.requestDeposit.bind(m.deps.funder);
+    m.deps.funder!.requestDeposit = async (p) => (quotes++, real(p));
+    const { sources } = await (await req("/owner/v1/funding/sources", { token })).json();
+    const base = sources.find((s: { chain: string }) => s.chain === "base").assetId;
+    const sol = sources.find((s: { chain: string }) => s.chain === "sol").assetId;
+    for (const refundTo of [undefined, "", "norrfi.near", "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T"]) {
+      const r = await req("/owner/v1/vaults/demo/funding", { token, body: { amountUsd: 2, source: base, ...(refundTo !== undefined ? { refundTo } : {}) } });
+      expect(r.status).toBe(400);
+      expect((await r.json()).error).toContain("Base address");
+    }
+    expect((await req("/owner/v1/vaults/demo/funding", { token, body: { amountUsd: 2, source: sol, refundTo: "0x8ba1f109551bD432803012645Ac136ddd64DBA72" } })).status).toBe(400);
+    expect((await req("/owner/v1/vaults/demo/funding", { token, body: { amountUsd: 2, source: m.deps.registry.byId(DEMO.RUG.assetId)!.id, refundTo: "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T" } })).status).toBe(400);
+    expect(quotes).toBe(0);
+    // Without Norr's own 1Click key, only USDC on NEAR is offered.
+    delete (m.deps as { funder?: unknown }).funder;
+    expect((await (await req("/owner/v1/funding/sources", { token })).json()).sources.map((s: { chain: string }) => s.chain)).toEqual(["near"]);
   });
 
   it("funding: the refund account defaults to the owner, and anything that is not an account id is refused", async () => {

@@ -148,7 +148,12 @@ export function createMockRails(entries: RegistryEntry[], vaultAccount: string, 
   const funder: DepositQuoter = {
     async requestDeposit(p: DepositParams): Promise<DepositOffer> {
       const k = ++n;
-      return { depositAddress: `mockdep${k.toString(16).padStart(56, "0")}`, amountIn: p.amount, amountOut: p.amount, minAmountOut: ((BigInt(p.amount) * 99n) / 100n).toString(), deadline: new Date(Date.now() + 30 * 60_000).toISOString() };
+      // Same asset: what goes in comes out. Another asset: Norr's own estimate stands in for the route.
+      const out = (p.originAsset ?? p.token) === p.token ? p.amount : (p.expectedOut ?? p.amount);
+      // The address has the shape of the origin chain's (1Click issues it there): NEAR-style, EVM, or Solana base58.
+      const origin = p.originAsset ?? p.token;
+      const depositAddress = origin === p.token ? `mockdep${k.toString(16).padStart(56, "0")}` : /(^|[:.-])sol([.-]|$)/.test(origin) ? `MockDep${"1".repeat(30)}${k.toString().padStart(5, "1").replace(/0/g, "2")}` : `0x${k.toString(16).padStart(40, "0")}`;
+      return { depositAddress, amountIn: p.amount, amountOut: out, minAmountOut: ((BigInt(out) * 99n) / 100n).toString(), deadline: new Date(Date.now() + 30 * 60_000).toISOString() };
     },
   };
 

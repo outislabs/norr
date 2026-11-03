@@ -33,3 +33,9 @@ NEAR Intents itself already accepts EVM (ERC-191) and Solana (ed25519) signature
 ## Decisions (2026-11-02)
 1. **A approved.** The owner supplies an Intents Studio key in `.env` (`VITE_AURORA_API_KEY`; public by design) and confirms each mainnet test transaction.
 2. **B accepted as a documented limitation and roadmap item** (README). NEAR's Ethereum-wallets module (`@near-wallet-selector/ethereum-wallets` 10.1.4) does not implement `signMessage`/NEP-413, so it cannot replace our sign-in; whether OutLayer's approval screen accepts such an account was not found in any source.
+
+## Outcome (2026-11-03): built without Aurora's widget
+
+Checked against the widget's source (`@aurora-is-near/intents-swap-widget` 7.27.0, `src/utils/intents/getQuoteRecipient.ts`): when the target is a NEAR Intents balance, the widget makes the **connected wallet's own** Intents account the recipient and ignores `sendAddress`. A fixed `sendAddress` (kept with `hideSendAddress`) only applies to on-chain targets, so the widget could pay the vault only as public USDC in its NEAR account, needing a second custody step (with an owner approval) to reach the confidential layer, plus Aurora's fee and Reown/WalletConnect origins in the CSP.
+
+Instead, Norr's own 1Click quote was generalised (`originAsset`): the owner picks USDC on NEAR, Ethereum, Base, Arbitrum, Optimism, Polygon, BNB Chain or Solana, or ETH or SOL, and gets a one-time deposit address on that chain whose route ends as USDC in the vault's **confidential** balance; the destination is set by the service, refunds go to the owner's address on the origin chain. Every route was quoted live (dry) on 2026-11-03 at about 0.01% for USDC. EVM wallets can pay with one button (an ERC-20 `transfer`, or a native transfer, built from the service's offer); Solana wallets scan a Solana Pay QR. Decided by the owner on 2026-11-03. The Aurora key is unused.

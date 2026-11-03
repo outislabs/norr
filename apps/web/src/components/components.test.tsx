@@ -11,7 +11,7 @@ import { FundingPanel } from "./FundingPanel";
 import { AttestationPanel, DetailText } from "./AttestationPanel";
 import type { Qvl } from "../lib/qvl";
 import { fixture } from "../../../../packages/shared/src/attestation.fixture";
-import type { Api, FundingOffer, FundingStatus } from "../lib/api";
+import type { Api, FundingOffer, FundingSource, FundingStatus } from "../lib/api";
 
 afterEach(cleanup);
 
@@ -154,24 +154,29 @@ describe("PendingChecks", () => {
 });
 
 describe("FundingPanel", () => {
-  const offer: FundingOffer = { id: "f1", address: "49e108dd75c0114f46b00b384c61bde9f6b4b4805cac85ab20f6dacf5452693b", amountUsdc: 8, asset: { symbol: "USDC", chain: "NEAR", contract: "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1" }, expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() };
+  const sources: FundingSource[] = [
+    { assetId: "nep141:usdc", symbol: "USDC", chain: "near", chainName: "NEAR", family: "near", decimals: 6, contract: null, priceUsd: 1 },
+    { assetId: "nep141:base-usdc", symbol: "USDC", chain: "base", chainName: "Base", family: "evm", evmChainId: 8453, decimals: 6, contract: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", priceUsd: 1 },
+  ];
+  const offer: FundingOffer = { id: "f1", address: "49e108dd75c0114f46b00b384c61bde9f6b4b4805cac85ab20f6dacf5452693b", amountUsdc: 8, amountUsd: 8, minArrivingUsdc: 7.99, refundTo: "me.near", send: { amount: "8", units: "8000000", symbol: "USDC", chain: "near", chainName: "NEAR", family: "near", contract: null, decimals: 6 }, asset: { symbol: "USDC", chain: "NEAR", contract: "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1" }, expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() };
   const fakeApi = (status: () => FundingStatus, request: () => Promise<FundingOffer> = async () => offer) =>
-    ({ requestFunding: vi.fn(request), fundingStatus: vi.fn(async () => status()) }) as unknown as Api;
+    ({ fundingSources: vi.fn(async () => ({ sources })), requestFunding: vi.fn(request), fundingStatus: vi.fn(async () => status()) }) as unknown as Api;
 
-  it("shows the address, amount, asset, network and the warnings, then reports the arrival", async () => {
+  it("shows the address, amount, network, a QR code and the warnings, then reports the arrival", async () => {
     let s: FundingStatus = { state: "waiting", receivedUsdc: 0, balanceUsdc: 0, expiresAt: offer.expiresAt, reportedBy: "custody provider" };
     const api = fakeApi(() => s);
     const arrived = vi.fn();
-    render(<FundingPanel api={api} vaultId="demo" pollMs={10} onArrived={arrived} />);
-    fireEvent.change(screen.getByLabelText("Amount in USDC"), { target: { value: "8" } });
+    render(<FundingPanel api={api} vaultId="demo" account="me.near" pollMs={10} onArrived={arrived} />);
+    await waitFor(() => expect(screen.getByRole("option", { name: "USDC on Base" })).toBeTruthy());
+    fireEvent.change(screen.getByLabelText("Amount in USD"), { target: { value: "8" } });
     fireEvent.click(screen.getByRole("button", { name: "Get a deposit address" }));
     expect((await screen.findByTestId("deposit-address")).textContent).toBe(offer.address);
     const text = document.body.textContent ?? "";
     expect(text).toContain("Send exactly 8 USDC on NEAR");
-    expect(text).toContain(offer.asset.contract);
     expect(text).toContain("character by character");
     expect(text).toContain("normal public transaction");
-    expect(api.requestFunding).toHaveBeenCalledWith("demo", 8, undefined);
+    expect(screen.getByRole("img", { name: /QR code/ })).toBeTruthy();
+    expect(api.requestFunding).toHaveBeenCalledWith("demo", { amountUsd: 8, source: "nep141:usdc", refundTo: "me.near" });
 
     s = { ...s, state: "arrived", receivedUsdc: 8, balanceUsdc: 15.93 };
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Arrived: $8.00 USDC"));
@@ -179,9 +184,22 @@ describe("FundingPanel", () => {
     expect(screen.queryByTestId("deposit-address")).toBeNull();
   });
 
+  it("asks for an address on the chosen chain for refunds, and sends the source the owner picked", async () => {
+    const api = fakeApi(() => ({ state: "waiting", receivedUsdc: 0, balanceUsdc: 0, expiresAt: offer.expiresAt, reportedBy: "custody provider" }));
+    render(<FundingPanel api={api} vaultId="demo" account="me.near" />);
+    await waitFor(() => expect(screen.getByRole("option", { name: "USDC on Base" })).toBeTruthy());
+    fireEvent.change(screen.getByLabelText("Pay with"), { target: { value: "nep141:base-usdc" } });
+    const refund = screen.getByLabelText("Your Base address (refunds go here)") as HTMLInputElement;
+    expect(refund.value).toBe(""); // the NEAR account is not reused for another chain
+    fireEvent.change(refund, { target: { value: "0x8ba1f109551bD432803012645Ac136ddd64DBA72" } });
+    fireEvent.click(screen.getByRole("button", { name: "Get a deposit address" }));
+    await waitFor(() => expect(api.requestFunding).toHaveBeenCalledWith("demo", { amountUsd: 5, source: "nep141:base-usdc", refundTo: "0x8ba1f109551bD432803012645Ac136ddd64DBA72" }));
+  });
+
   it("shows why it failed and keeps the form", async () => {
     const api = fakeApi(() => { throw new Error("unused"); }, async () => { throw new Error("Could not get a deposit address from the custody provider."); });
     render(<FundingPanel api={api} vaultId="demo" />);
+    await waitFor(() => expect(screen.getByRole("option", { name: "USDC on NEAR" })).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: "Get a deposit address" }));
     expect((await screen.findByRole("alert")).textContent).toContain("custody provider");
     expect(screen.queryByTestId("deposit-address")).toBeNull();

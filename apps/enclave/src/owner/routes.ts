@@ -1,4 +1,4 @@
-import { applyFill, lossToday, sumToday, unitsToNumber, usdToUnits, type Book } from "@norr/core";
+import { applyFill, fundingSources, lossToday, sumToday, unitsForUsd, unitsToNumber, usdToUnits, validRefundAddress, type Book, type FundingSource } from "@norr/core";
 import type { BuildInfo } from "../build-info";
 import type { Attestor } from "../attestation";
 import type { SealKeyStore, SealingLedger } from "../seal";
@@ -140,42 +140,84 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
     return c.json({ ...summary(v), portfolio });
   });
 
-  // Funding: the owner asks for a one-time confidential deposit address, sends USDC to it from their own wallet,
-  // and watches for it to arrive. The address always comes from the custody provider; nothing here takes one from a caller.
-  const FundBody = z.object({ amountUsdc: z.number().min(1).max(1000), fromAccount: z.string().regex(/^[a-z0-9][a-z0-9._-]{1,63}$/).optional() });
+  // Funding: the owner picks what they hold and on which chain (USDC on NEAR, Base, Solana..., or ETH, SOL), asks for a
+  // one-time deposit address on that chain, sends from their own wallet, and watches it arrive as USDC in the vault's
+  // confidential balance. The destination is always the vault, set here; the owner only chooses the source and where a
+  // refund goes. Nothing here takes a destination from a caller.
+  const FundBody = z
+    .object({
+      amountUsd: z.number().min(1).max(1000).optional(),
+      /** Older dashboards send the amount under this name. */
+      amountUsdc: z.number().min(1).max(1000).optional(),
+      source: z.string().max(200).optional(),
+      refundTo: z.string().max(128).optional(),
+      fromAccount: z.string().regex(/^[a-z0-9][a-z0-9._-]{1,63}$/).optional(),
+    })
+    .refine((b) => b.amountUsd !== undefined || b.amountUsdc !== undefined);
   const cash = () => deps.quoteAsset;
   const SAFE_ADDRESS = /^[A-Za-z0-9._-]{8,128}$/;
+  // What the owner can fund from. Without Norr's own 1Click key only USDC on NEAR (through the custody provider) works.
+  const nearCash = (): FundingSource => ({ assetId: cash().id, symbol: cash().symbol, chain: "near", chainName: "NEAR", family: "near", decimals: cash().decimals, contract: null, priceUsd: CASH_USD });
+  const sourcesNow = (): FundingSource[] => {
+    const live = deps.funder ? fundingSources(deps.registry.entries()) : [];
+    return live.some((s) => s.assetId === cash().id) ? live : [nearCash(), ...live];
+  };
+
+  app.get("/owner/v1/funding/sources", (c) => c.json({ sources: sourcesNow() }));
 
   app.post("/owner/v1/vaults/:id/funding", async (c) => {
     const owner = c.get("owner") as string;
     const v = mine(owner, c.req.param("id"));
     if (!v) return c.json({ error: "not found" }, 404);
     const body = FundBody.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) return c.json({ error: "amountUsdc must be a number from 1 to 1000" }, 400);
+    if (!body.success) return c.json({ error: "amountUsd must be a number from 1 to 1000" }, 400);
+    const usd = (body.data.amountUsd ?? body.data.amountUsdc)!;
+    const src = body.data.source ? sourcesNow().find((s) => s.assetId === body.data.source) : nearCash();
+    if (!src) return c.json({ error: "That token and chain are not offered for funding." }, 400);
+    const sameAsset = src.assetId === cash().id;
+    if (!sameAsset && !deps.funder) return c.json({ error: "Funding from other chains is not available on this service." }, 409);
+    const refundTo = src.family === "near" ? (body.data.refundTo?.trim() || body.data.fromAccount || owner) : (body.data.refundTo?.trim() ?? "");
+    if (!validRefundAddress(src.family, refundTo)) return c.json({ error: `Enter your ${src.chainName} address, where a refund would go if the deposit cannot complete.` }, 400);
     const now = deps.now();
     if (funding.open(v.id, now).length >= MAX_OPEN_FUNDING) return c.json({ error: "Too many open deposit requests. Use one of them, or wait for them to expire." }, 429);
     try {
       const baseline = (await v.custody.confidentialHoldings())[cash().id] ?? "0";
-      const amount = usdToUnits(body.data.amountUsdc, CASH_USD, cash().decimals);
-      // Norr's own 1Click quote is the source (nothing depends on the custody policy); the custody provider is the fallback.
-      // Either way the recipient is the vault itself, set here, and the refund goes to the account the owner sends from.
-      const refundTo = body.data.fromAccount ?? owner;
+      const usdcOut = usdToUnits(usd, CASH_USD, cash().decimals);
+      const amount = sameAsset ? usdcOut : unitsForUsd(usd, src.priceUsd, src.decimals);
+      // Norr's own 1Click quote is the source (nothing depends on the custody policy); the custody provider is the fallback
+      // for USDC on NEAR. Either way the recipient is the vault itself, set here.
       const source = deps.funder ? "1click" : "custody";
       const req = deps.funder
-        ? await deps.funder.requestDeposit({ token: cash().id, amount, recipient: v.walletAccount, refundTo }).then((o) => ({ intentId: o.depositAddress, depositAddress: o.depositAddress, amount: o.amountIn, minAmountOut: o.minAmountOut }))
-        : await v.custody.requestConfidentialDeposit(cash().id, amount);
+        ? await deps.funder
+            .requestDeposit({ token: cash().id, ...(sameAsset ? {} : { originAsset: src.assetId, expectedOut: usdcOut }), amount, recipient: v.walletAccount, refundTo })
+            .then((o) => ({ intentId: o.depositAddress, depositAddress: o.depositAddress, amount: o.amountIn, amountFormatted: o.amountInFormatted, minAmountOut: o.minAmountOut }))
+        : { ...(await v.custody.requestConfidentialDeposit(cash().id, amount)), amountFormatted: undefined };
       if (!SAFE_ADDRESS.test(req.depositAddress)) return c.json({ error: "The address returned does not look valid, so it is not shown." }, 502);
       const id = `fund-${now.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
       const expiresAt = now + FUNDING_WINDOW_MS;
       funding.add({ id, vaultId: v.id, token: cash().id, amount: req.amount, minAmount: req.minAmountOut, address: req.depositAddress, intentId: req.intentId, source, baseline, requestedAt: now, expiresAt });
-      note(owner, `requested a deposit address for ${body.data.amountUsdc} USDC`, v.id);
-      return c.json({ id, address: req.depositAddress, amountUsdc: unitsToNumber(req.amount, cash().decimals), asset: { symbol: cash().symbol, chain: "NEAR", contract: cash().id.replace(/^nep141:/, "") }, expiresAt: new Date(expiresAt).toISOString() });
+      note(owner, `requested a deposit address for $${usd} from ${src.symbol} on ${src.chainName}`, v.id);
+      const sendAmount = req.amountFormatted ?? String(unitsToNumber(req.amount, src.decimals));
+      return c.json({
+        id,
+        address: req.depositAddress,
+        amountUsd: usd,
+        amountUsdc: usd,
+        /** The least that counts as arrived, in USDC, from the quote. */
+        minArrivingUsdc: unitsToNumber(req.minAmountOut, cash().decimals),
+        send: { amount: sendAmount, units: req.amount, symbol: src.symbol, chain: src.chain, chainName: src.chainName, family: src.family, ...(src.evmChainId ? { evmChainId: src.evmChainId } : {}), contract: src.contract, decimals: src.decimals },
+        asset: { symbol: src.symbol, chain: src.chainName, contract: src.contract ?? cash().id.replace(/^nep141:/, "") },
+        refundTo,
+        expiresAt: new Date(expiresAt).toISOString(),
+      });
     } catch (e) {
       // The custody provider gates this request by transaction type ("call"). Say so, rather than a vague failure.
       if (e instanceof Error && /not allowed by policy/i.test(e.message)) {
         return c.json({ error: "Your custody policy does not allow deposit-address requests (transaction type \"call\"). Allow it in your custody dashboard while you fund this vault, then remove it again." }, 409);
       }
-      return c.json({ error: "Could not get a deposit address from the custody provider. Try again in a moment." }, 503);
+      if (e instanceof Error && /refundTo is not valid/i.test(e.message)) return c.json({ error: `1Click did not accept that ${src.chainName} address for refunds. Check it and try again.` }, 400);
+      if (e instanceof Error && /(lose more than|below the listed price|no USD values)/.test(e.message)) return c.json({ error: "The route for that amount costs too much right now, so no address is offered. Try USDC, or a larger amount." }, 502);
+      return c.json({ error: "Could not get a deposit address. Try again in a moment." }, 503);
     }
   });
 

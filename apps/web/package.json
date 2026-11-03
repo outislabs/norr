@@ -16,6 +16,7 @@
     "@phala/dcap-qvl-web": "0.3.3",
     "buffer": "^6.0.3",
     "near-api-js": "^6.5.1",
+    "qrcode-generator": "2.0.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
