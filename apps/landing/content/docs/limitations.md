@@ -8,6 +8,7 @@
 - **Confidential swaps have no independent audit trail.** They are checked from balances and the provider's own report, and labelled `custody-reported`.
 - **Funding and withdrawals are public**, and the custody provider and NEAR Intents operator see confidential trades. A funding transfer and the next hop can be correlated by timing and amount.
 - **One vault per deployment, set up by the operator.** There is no self-serve vault creation yet.
+- **Funding from other chains is quoted, not yet proven.** USDC on NEAR is proven on mainnet; the other chains were quoted live but not run with real funds.
 - **Owning a vault needs a NEAR account.** EVM and Solana users can fund a vault but not sign in or approve swaps.
 - **The Shield incident feed needs a key.** Without it the hosted service blocks every trade (it fails closed).
 - **Limit orders are out of v1**: two test limit orders never filled.

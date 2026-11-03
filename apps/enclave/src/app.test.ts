@@ -70,6 +70,16 @@ describe("read endpoints", () => {
   });
 });
 
+describe("check order with the incident feed unreadable (as on a deployment without a Shield key)", () => {
+  it("a rule-breaking trade gets the rule's reason; a rule-abiding one is still blocked, fail closed", async () => {
+    const { m, call } = boot();
+    m.deps.shield = async () => null;
+    expect(await (await call("/v1/trade", { body: { side: "buy", asset: "TSLA", amountUsd: 5000 } })).json()).toMatchObject({ status: "blocked", code: "OVER_TRADE_LIMIT" });
+    expect(await (await call("/v1/trade", { body: { side: "buy", asset: "RUGPULL", amountUsd: 5 } })).json()).toMatchObject({ status: "blocked", code: "SCAM_RISK" });
+    expect(await (await call("/v1/trade", { body: { side: "buy", asset: "SOL", amountUsd: 5 } })).json()).toMatchObject({ status: "blocked", code: "SHIELD_INCIDENT" });
+  });
+});
+
 describe("P&L and market data", () => {
   it("P&L: realized on sells at average cost, unrealized at today's price, since the first trade", async () => {
     const { call, clock } = boot();

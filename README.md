@@ -103,12 +103,13 @@ Every `trade` runs these steps in order; any failing step returns `blocked` with
 
 1. **Auth:** the agent token maps to exactly one vault.
 2. **Resolve:** the asset registry maps a ticker (say `NVDA`) to every routable version (Ondo `NVDAon`, others if 1Click lists them).
-3. **Shield and risk:** the NEAR Intents incident feed (fails closed if unreachable); then Scam Shield for crypto (liquidity, market cap, token age, allowlisted majors) or eligibility and a price sanity check for stocks.
+3. **Risk:** Scam Shield for crypto (liquidity, market cap, token age, allowlisted majors), or eligibility for stocks (a price sanity check follows the quote).
 4. **Policy:** paused, per-trade size, daily spend cap, daily loss cap, cooldown, allowlists, equity share. Trades for one vault run one at a time, so parallel requests cannot slip past a cap.
-5. **Quote:** Norr requests its own 1Click quote per venue: confidential first when the vault holds funds there, public only as a fallback (never under `privacy: require`).
-6. **Execute and track:** the custody wallet signs; Norr polls to a final state.
-7. **Verify:** every swap carries a positive `min_amount_out` from Norr's own quote and is checked afterwards. Public swaps are compared with 1Click's independent status; confidential swaps are checked against balances read before and after and the provider's report, and labelled `custody-reported`. A mismatch trips the kill switch.
-8. **Log:** an encrypted ledger entry; the agent's reasoning is sealed to the owner.
+5. **Incident feed:** last, for trades that pass every rule: an active NEAR Intents incident touching the asset blocks it, and so does a feed that cannot be read (fails closed). A trade that breaks a rule is refused with that rule's reason.
+6. **Quote:** Norr requests its own 1Click quote per venue: confidential first when the vault holds funds there, public only as a fallback (never under `privacy: require`).
+7. **Execute and track:** the custody wallet signs; Norr polls to a final state.
+8. **Verify:** every swap carries a positive `min_amount_out` from Norr's own quote and is checked afterwards. Public swaps are compared with 1Click's independent status; confidential swaps are checked against balances read before and after and the provider's report, and labelled `custody-reported`. A mismatch trips the kill switch.
+9. **Log:** an encrypted ledger entry; the agent's reasoning is sealed to the owner.
 
 The policy and risk logic is pure TypeScript in `packages/core`, tested exhaustively.
 
@@ -173,6 +174,7 @@ scripts/           live trade runner, verify-attestation, research probes (live 
 - **Funding and withdrawals are public**, and the custody provider and NEAR Intents operator can see confidential trades. A funding transfer and the next hop can be correlated by timing and amount.
 - **Shield feed key pending**: the deployed service blocks all trades until it is set. Live trades so far used a dev-only bypass locally.
 - **One vault per deployment, set up by the operator.** There is no self-serve vault creation yet; a deployment's vault is configured for a named NEAR account.
+- **Funding from other chains is quoted, not yet proven.** USDC on NEAR into the confidential balance is proven on mainnet (2026-10-31); routes from Ethereum, Base, Arbitrum, Optimism, Polygon, BNB Chain and Solana were quoted live on 2026-11-03 but not run with real funds.
 - **Owning a vault needs a NEAR account.** EVM and Solana users can fund a vault from their own chain (the Fund tab), but cannot sign in or approve swaps yet: NEAR's Ethereum-wallets module does not implement `signMessage`/NEP-413 (`docs/AURORA.md`). The sign-in page points them to HOT Wallet, which gives a NEAR account alongside EVM and Solana ones.
 - **Limit orders are out of v1**: two test limit orders never filled.
 - **Small orders**: the stock minimum is a quote-time floor that moves (about $5 on liquid tickers at US market open, higher at other times and for other tickers).

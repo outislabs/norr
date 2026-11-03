@@ -19,7 +19,7 @@ Open **Fund**. Pick what you hold and where: USDC on NEAR, Ethereum, Base, Arbit
 - With a browser wallet on an EVM chain (MetaMask, Rabby), **Send with my wallet** switches the network and asks your wallet to send the exact amount. You confirm it in the wallet.
 - Otherwise scan the QR code (on Solana it carries the amount) or copy the address.
 
-The money arrives as USDC in the vault's **confidential** balance, usually within a minute. The destination is always your vault: the Norr service sets it, not the page. Your transfer itself is a normal public transaction on the chain you send from.
+The money arrives as USDC in the vault's **confidential** balance, usually within a minute. Funding with USDC on NEAR is proven on mainnet (1 USDC arrived exactly, 2026-10-31); the routes from other chains were quoted live on 2026-11-03 and have not yet been run with real funds. The destination is always your vault: the Norr service sets it, not the page. Your transfer itself is a normal public transaction on the chain you send from.
 
 ## 4. Connect your agent
 

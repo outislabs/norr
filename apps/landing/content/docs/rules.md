@@ -37,6 +37,8 @@ No preset confirms non-US status; you do that yourself.
 
 ## Safety checks on every trade
 
+In this order: Scam Shield (crypto) or eligibility (stocks), then your rules, then the incident feed. A trade that breaks one of your rules is refused with that rule's reason; only trades that pass every rule reach the feed.
+
 - **Scam Shield (crypto).** Scores liquidity, market cap and token age from read-only market data; known stablecoins and majors are allowlisted, and anything not routable through NEAR Intents is high risk. 65 or more is high (refused), 35 to 64 medium (refused unless you allow it). Unknown data counts as risk, so it fails closed. It is a set of heuristics, not a guarantee.
 - **Shield incident feed.** An active NEAR Intents security incident touching the asset blocks the trade. If the feed cannot be read, trades are blocked (fail closed).
 - **Price sanity (stocks).** A stock quote more than 2% from the reference price is refused.

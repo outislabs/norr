@@ -14,7 +14,7 @@ Nothing trades. Your funds stay in the custody wallet, and you can still withdra
 
 ## Which chains can I fund from?
 
-USDC on NEAR, Ethereum, Base, Arbitrum, Optimism, Polygon, BNB Chain or Solana, or ETH or SOL. It arrives as USDC in the vault's confidential balance. USDC routes cost about 0.01% and take under a minute.
+USDC on NEAR, Ethereum, Base, Arbitrum, Optimism, Polygon, BNB Chain or Solana, or ETH or SOL. It arrives as USDC in the vault's confidential balance. Funding with USDC on NEAR is proven on mainnet; the other chains were quoted live (USDC at about 0.01%, 20 to 45 seconds) but not yet funded with real money.
 
 ## Do I need a NEAR wallet?
 

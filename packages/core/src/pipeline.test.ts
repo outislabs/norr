@@ -29,6 +29,39 @@ describe("preTradeChecks", () => {
     if (!isBlock(r)) expect(r.candidates.map((c) => c.id)).not.toContain(USDC_FAKE.assetId);
   });
 
+  describe("order: the vault's rules and scam risk come before the incident feed", () => {
+    const down = { shield: null }; // the feed cannot be read: fail closed
+    const incidentOnSol = { shield: { status: "incidents" as const, incidents: [{ scopeType: "chain" as const, scopeValue: "sol" }] } };
+
+    it("a trade over the limit is refused for the limit, even when the feed is down", async () => {
+      expect(await preTradeChecks(base({ ...down, policy: policy({ maxTradeUsd: 50 }), request: request({ asset: "TSLA", amountUsd: 150 }) }))).toMatchObject({ code: "OVER_TRADE_LIMIT" });
+    });
+
+    it("an asset outside the allowlist is refused for the allowlist, even with an active incident on it", async () => {
+      expect(await preTradeChecks(base({ ...incidentOnSol, policy: policy({ allowedCrypto: ["USDC"] }), request: request({ asset: "SOL", amountUsd: 5 }) }))).toMatchObject({ code: "ASSET_NOT_ALLOWED" });
+    });
+
+    it("a high-risk token is refused for scam risk, even when the feed is down", async () => {
+      expect(await preTradeChecks(base({ ...down, request: request({ asset: "RUGCOIN", amountUsd: 5 }) }))).toMatchObject({ code: "SCAM_RISK" });
+    });
+
+    it("the daily spending cap and the cooldown are reported before the feed", async () => {
+      const spent = await preTradeChecks(base({ ...down, policy: policy({ dailySpendCapUsd: 50 }), state: state({ spentTodayUsd: 45 }), request: request({ asset: "SOL", amountUsd: 10 }) }));
+      expect(spent).toMatchObject({ code: "DAILY_SPEND_CAP" });
+      const soon = await preTradeChecks(base({ ...down, policy: policy({ cooldownSec: 60 }), state: state({ lastTradeAtMs: 990_000 }), request: request({ asset: "SOL", amountUsd: 5 }) }));
+      expect(soon).toMatchObject({ code: "COOLDOWN" });
+    });
+
+    it("a trade that passes every rule is still blocked when the feed is down (fail closed), or when an incident touches it", async () => {
+      expect(await preTradeChecks(base({ ...down, request: request({ asset: "SOL", amountUsd: 5 }) }))).toMatchObject({ code: "SHIELD_INCIDENT" });
+      expect(await preTradeChecks(base({ ...incidentOnSol, request: request({ asset: "SOL", amountUsd: 5 }) }))).toMatchObject({ code: "SHIELD_INCIDENT" });
+    });
+
+    it("the owner's explicit dev bypass still lets a rule-abiding trade through when the feed is down", async () => {
+      expect(isBlock(await preTradeChecks(base({ ...down, shieldOnUnavailable: "allow", request: request({ asset: "SOL", amountUsd: 5 }) })))).toBe(false);
+    });
+  });
+
   it("lets the agent's demo flow through: $40 NVDA ok, $150 TSLA blocked, $5 rug blocked, $5 SOL ok", async () => {
     const p = policy({ maxTradeUsd: 50 });
     expect(isBlock(await preTradeChecks(base({ policy: p })))).toBe(false);

@@ -169,10 +169,11 @@ Every `trade` call runs these steps in order, and any failing step returns `bloc
 
 1. **Auth:** the agent token maps to exactly one vault.
 2. **Resolve asset:** look it up in the registry. If it's unknown, block (`UNKNOWN_ASSET`).
-3. **Shield + risk:** first the NEAR Intents Shield incident feed (`shield.chaindefuser.com/incident`): an active incident touching the asset blocks with `SHIELD_INCIDENT` (fails closed if the feed is unreachable). Then:
+3. **Risk:**
    - *crypto:* the scam/rug check (see §8). High risk → `SCAM_RISK`.
    - *equity:* the eligibility check, plus a price sanity check of the quote against a reference price (deviation > X% → `PRICE_SANITY`).
 4. **Policy:** paused, per-trade size, daily spend cap (buys only, counted when the swap is sent and given back if it did not run), daily loss, cooldown, allowlists, equity %. Trades for one vault run one at a time, so parallel requests cannot slip past a cap.
+   Then the NEAR Intents Shield incident feed (`shield.chaindefuser.com/incident`), last, for trades that pass the rules: an active incident touching the asset blocks with `SHIELD_INCIDENT` (fails closed if the feed is unreachable). A trade that breaks a rule is refused with that rule's reason (order changed 2026-11-03).
 5. **Quote:** the enclave requests a 1Click quote itself, per venue, in the order the vault's `privacy` mode allows: **confidential first** (`CONFIDENTIAL_INTENTS` types) when the vault holds the funds in the confidential layer, public only as a fallback (never under `require`, which blocks with `PRIVACY_UNAVAILABLE`). Recipient and refund are always the vault.
 6. **Execute:** the enclave signs the transfer to the quote's deposit address, then submits the deposit.
 7. **Track:** poll status until `SUCCESS` / `FAILED` / `REFUNDED`.

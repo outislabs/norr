@@ -46,29 +46,46 @@ export async function preTradeChecks(i: PreTradeInput): Promise<PreTradePass | B
     if (eligibility) return eligibility;
   }
 
+  // 1. Scam risk: the vault's own bar for which tokens are acceptable.
   const survivors: { entry: RegistryEntry; risk: RiskResult }[] = [];
-  let firstFailure: Block | null = null;
+  let riskFailure: Block | null = null;
   for (const entry of res.candidates) {
-    const shieldFailure = checkShield(i.shield, entry, { onUnavailable: i.shieldOnUnavailable });
-    if (shieldFailure) {
-      firstFailure ??= shieldFailure;
-      continue;
-    }
     // Equities are gated by eligibility and price sanity, not Scam Shield.
     const risk: RiskResult = res.class === "crypto" ? await i.risk.assess(entry) : { score: 0, level: "low", reasons: [] };
-    const riskFailure = gateRisk(risk, i.policy.allowMediumRisk);
-    if (riskFailure) firstFailure ??= riskFailure;
+    const failure = gateRisk(risk, i.policy.allowMediumRisk);
+    if (failure) riskFailure ??= failure;
     else survivors.push({ entry, risk });
   }
-  if (survivors.length === 0) return firstFailure!;
+  if (survivors.length === 0) return riskFailure!;
 
   // If several look-alike candidates survive, keep only the safest band.
-  const best = Math.min(...survivors.map((s) => RANK[s.risk.level]));
-  const kept = survivors.filter((s) => RANK[s.risk.level] === best);
+  const safest = (xs: typeof survivors) => {
+    const best = Math.min(...xs.map((s) => RANK[s.risk.level]));
+    return xs.filter((s) => RANK[s.risk.level] === best);
+  };
+  const policyFor = (symbol: string) => evaluatePolicy(i.policy, i.request, { class: res.class, ticker: res.ticker, symbol }, i.state, i.nowMs);
 
-  const symbol = kept[0]!.entry.symbol;
-  const policyFailure = evaluatePolicy(i.policy, i.request, { class: res.class, ticker: res.ticker, symbol }, i.state, i.nowMs);
+  // 2. The vault's rules (size, daily caps, allowlists, cooldown, stock share), so a trade that breaks one is refused
+  //    with that rule's reason, whatever the incident feed says.
+  let kept = safest(survivors);
+  const policyFailure = policyFor(kept[0]!.entry.symbol);
   if (policyFailure) return policyFailure;
+
+  // 3. The NEAR Intents incident feed, last, for trades that pass every rule. Still fail-closed: an active incident, or a
+  //    feed that cannot be read, blocks the candidate.
+  let shieldFailure: Block | null = null;
+  const clear = survivors.filter((s) => {
+    const f = checkShield(i.shield, s.entry, { onUnavailable: i.shieldOnUnavailable });
+    if (f) shieldFailure ??= f;
+    return !f;
+  });
+  if (clear.length === 0) return shieldFailure!;
+  const clearKept = safest(clear);
+  if (clearKept[0]!.entry.symbol !== kept[0]!.entry.symbol) {
+    const again = policyFor(clearKept[0]!.entry.symbol);
+    if (again) return again;
+  }
+  kept = clearKept;
 
   return {
     ok: true,
