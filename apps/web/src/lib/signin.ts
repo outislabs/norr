@@ -34,7 +34,7 @@ async function loadSelector() {
 export async function walletSignIn(api: Api): Promise<SessionInfo> {
   const { selector, setupModal } = await loadSelector();
   if (selector.store.getState().accounts.length === 0) {
-    const modal = setupModal(selector, {});
+    const modal = setupModal(selector, { theme: "dark" });
     modal.show();
     await new Promise<void>((resolve, reject) => {
       const sub = selector.store.observable.subscribe((s) => {
