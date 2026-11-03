@@ -20,10 +20,11 @@ describe("dashboard CSP", () => {
     expect(directive(csp, "object-src")).toEqual(["'none'"]);
   });
 
-  it("lets the HOT wallet widget, the NEAR RPC and Phala's verifier through", () => {
+  it("lets the HOT wallet widget and the NEAR RPC through, and nothing sends the quote to Phala", () => {
     const csp = buildCsp(SERVICE);
     expect(directive(csp, "frame-src")).toEqual(["https://hot-labs.org"]);
-    expect(directive(csp, "connect-src")).toEqual(expect.arrayContaining(["https://h4n.app", "https://free.rpc.fastnear.com", "https://cloud-api.phala.network"]));
+    expect(directive(csp, "connect-src")).toEqual(expect.arrayContaining(["https://h4n.app", "https://free.rpc.fastnear.com"]));
+    expect(csp).not.toContain("cloud-api.phala.network");
   });
 
   it("writes a Pages _headers file that keeps the existing headers", () => {

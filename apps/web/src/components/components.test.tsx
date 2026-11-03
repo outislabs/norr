@@ -8,7 +8,7 @@ import { KillSwitch } from "./KillSwitch";
 import { PendingChecks } from "./PendingChecks";
 import { fromForm, PolicyForm, toForm } from "./PolicyForm";
 import { FundingPanel } from "./FundingPanel";
-import { AttestationPanel } from "./AttestationPanel";
+import { AttestationPanel, DetailText } from "./AttestationPanel";
 import { fixture } from "../../../../packages/shared/src/attestation.fixture";
 import type { Api, FundingOffer, FundingStatus } from "../lib/api";
 
@@ -220,20 +220,30 @@ describe("AttestationPanel", () => {
     expect(document.body.textContent).toContain("Not pinned by digest");
   });
 
-  it("verifies the signature with Phala only when asked, and says so when Phala cannot be reached", async () => {
-    const f = vi.fn(async () => { throw new Error("offline"); });
+  it("hands the quote to Phala's explorer instead of sending it anywhere itself", async () => {
+    const f = vi.fn(async () => new Response("{}"));
+    const write = vi.fn(async () => undefined);
     vi.stubGlobal("fetch", f);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText: write }, configurable: true });
     try {
       render(<AttestationPanel api={apiFor()} />);
       fireEvent.click(screen.getByRole("button", { name: "Check attestation" }));
       await waitFor(() => expect(screen.getByText("Every image is pinned by digest")).toBeTruthy());
-      expect(f).not.toHaveBeenCalled(); // the quote does not leave the browser unless you ask
-      fireEvent.click(screen.getByRole("button", { name: /verify the signature with Phala/ }));
-      await waitFor(() => expect(document.body.textContent).toContain("Could not reach Phala"));
-      expect(f).toHaveBeenCalledOnce();
+      expect(f).not.toHaveBeenCalled(); // the quote does not leave the browser
+      expect(screen.getByRole("link", { name: /Open the explorer/ }).getAttribute("href")).toBe("https://proof.t16z.com/");
+      fireEvent.click(screen.getByRole("button", { name: "Copy the quote" }));
+      await waitFor(() => expect(screen.getByRole("button", { name: "Quote copied" })).toBeTruthy());
+      expect(write).toHaveBeenCalledOnce();
+      expect((write.mock.calls[0] as unknown as string[])[0]).not.toMatch(/^0x/);
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it("wraps sentences at word boundaries and lets only long tokens break anywhere", () => {
+    render(<DetailText text={"Its report data is our nonce.\nghcr.io/outislabs/norr@sha256:011d93f0fa2cf6be08da90bdb9066573"} />);
+    expect(screen.getByText("Its report data is our nonce.").className).toContain("break-words");
+    expect(screen.getByText(/^ghcr\.io/).className).toContain("break-all");
   });
 
   it("reports a service with no TEE instead of showing checks", async () => {

@@ -5,14 +5,14 @@
  * Every third-party origin below was observed in a browser, not guessed (see docs/DEPLOY-DASHBOARD.md):
  * - HOT Wallet: its connect widget in an iframe (hot-labs.org), its relay (h4n.app) and its logo (storage.herewallet.app).
  * - NEAR RPC used by the wallet selector and Meteor: free.rpc.fastnear.com, mw.rpc.fastnear.com, rpc.mainnet.near.org.
- * - Verify's optional signature check: Phala's quote verification API.
+ * Verify hands the quote to Phala's explorer by copy and paste; the page itself sends it nowhere.
  * Meteor and MyNearWallet open their own windows (not restricted by CSP) and talk back with postMessage.
  *
  * Deliberately blocked: the wallet modal's Google Fonts @import (the modal falls back to the page's own fonts),
  * inline scripts and styles, plugins, framing of this page, and form posts.
  */
 export const THIRD_PARTY = {
-  connect: ["https://h4n.app", "https://free.rpc.fastnear.com", "https://mw.rpc.fastnear.com", "https://rpc.mainnet.near.org", "https://cloud-api.phala.network"],
+  connect: ["https://h4n.app", "https://free.rpc.fastnear.com", "https://mw.rpc.fastnear.com", "https://rpc.mainnet.near.org"],
   frame: ["https://hot-labs.org"],
   img: ["https://storage.herewallet.app"],
 } as const;

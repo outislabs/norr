@@ -36,7 +36,6 @@ Then:
    | `https://h4n.app` | connect-src | HOT Wallet's relay |
    | `https://storage.herewallet.app` | img-src | HOT Wallet's logo in the picker |
    | `https://free.rpc.fastnear.com`, `https://mw.rpc.fastnear.com`, `https://rpc.mainnet.near.org` | connect-src | NEAR RPC used by the wallet selector and Meteor |
-   | `https://cloud-api.phala.network` | connect-src | Verify's optional quote-signature check |
 
    Meteor and MyNearWallet open their own windows, which a CSP does not restrict. Meteor's bundle (zod) probes once whether it may use `eval` and falls back when it may not; the browser logs that one report, nothing breaks. The wallet picker's stylesheet `@import`s Google Fonts: the build strips remote `@import`s from dependency CSS, so opening the picker no longer tells Google who you are, and the picker uses Geist. Adding a wallet means checking its origins the same way and adding them to `csp.ts`.
 
@@ -66,4 +65,4 @@ What that turns on:
 2. In the browser's network tab, the calls go to the service host and succeed (no CORS errors).
 3. Try the sign-in from a different origin (for example `localhost`): the service should answer 403/401.
 4. Verify screen: the commit shown matches the one in the CI summary.
-5. With the browser console open, sign in and run both Verify checks: there should be no Content-Security-Policy violations other than Meteor's `eval` probe.
+5. With the browser console open, sign in and run Check attestation: there should be no Content-Security-Policy violations other than Meteor's `eval` probe.
