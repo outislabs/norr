@@ -1,7 +1,7 @@
 import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { base58Decode, nep413Hash as serverHash, verifyNep413 } from "../../../enclave/src/owner/nep413";
-import { ApiError, createApi } from "./api";
+import { ApiError, createApi, isOffline } from "./api";
 import { ago, amount, shortId, usd } from "./format";
 import { base58Encode, base64ToBytes, generateDemoKey, nep413Hash } from "./nep413";
 import { parseRoute, vaultHref } from "./route";
@@ -74,7 +74,10 @@ describe("api client", () => {
     const bad = createApi({ base: "", getToken: () => "t", onUnauthorized: () => undefined, fetch: (async () => json({ error: "invalid policy", issues: ["maxTradeUsd: too small"] }, 400)) as unknown as typeof fetch });
     await expect(bad.pause("v")).rejects.toThrow("invalid policy: maxTradeUsd: too small");
     const down = createApi({ base: "", getToken: () => null, onUnauthorized: () => undefined, fetch: (async () => { throw new Error("x"); }) as unknown as typeof fetch });
-    await expect(down.health()).rejects.toThrow("Cannot reach the Norr service");
+    await expect(down.health()).rejects.toThrow("Norr is offline right now.");
+    await expect(down.health()).rejects.toSatisfy(isOffline);
+    expect(isOffline("Norr is offline right now.")).toBe(true);
+    expect(isOffline(new ApiError(503, "no TEE"))).toBe(false);
   });
 
   it("encodes vault ids in paths", async () => {

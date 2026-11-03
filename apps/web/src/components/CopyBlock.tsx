@@ -5,7 +5,7 @@ export function CopyBlock({ text, label }: { text: string; label: string }) {
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   return (
     <div>
-      <pre tabIndex={0} aria-label={label} className="mono overflow-x-auto whitespace-pre border border-line bg-vault p-3 text-sm">{text}</pre>
+      <pre tabIndex={0} aria-label={label} className="mono overflow-x-auto whitespace-pre rounded-xl border border-line bg-raised p-4 text-[13px] leading-relaxed">{text}</pre>
       <button
         type="button"
         className="btn btn-quiet mt-2 min-h-10 px-4 py-1 text-sm"

@@ -1,8 +1,14 @@
 import { useState } from "react";
-import type { Api, SessionInfo } from "../lib/api";
+import { Offline } from "../components/Offline";
+import { Wordmark } from "../components/Shell";
+import { isOffline, type Api, type SessionInfo } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 import { demoSignIn, walletSignIn } from "../lib/signin";
 
+/**
+ * One column on phones; from 900px a split screen: the headline on the left, a compact sign-in panel on the right.
+ * Copy is deliberately minimal. What signing in does (one NEP-413 message, no transaction) is stated in one line.
+ */
 export function SignInPage({ api, onSession }: { api: Api; onSession: (s: SessionInfo) => void }) {
   const health = useAsync(() => api.health(), "health");
   const [busy, setBusy] = useState<"wallet" | "demo" | null>(null);
@@ -19,36 +25,39 @@ export function SignInPage({ api, onSession }: { api: Api; onSession: (s: Sessio
       setBusy(null);
     }
   };
+  const offline = isOffline(health.error);
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
-      <h1 className="font-display text-6xl tracking-tight">Norr</h1>
-      <p className="mt-3 font-display text-xl text-brass">Give your AI money without giving it the keys.</p>
-      <p className="mt-6 text-mist">Sign in with your NEAR wallet. You sign one message that proves the account is yours; it does not move funds and gives Norr no access to them.</p>
+    <div className="grid min-h-screen content-center gap-12 px-6 py-12 min-[900px]:grid-cols-[1.25fr_1fr] min-[900px]:content-stretch min-[900px]:gap-0 min-[900px]:p-0">
+      <section className="relative flex flex-col gap-10 min-[900px]:justify-center min-[900px]:px-10 min-[1200px]:px-20">
+        <div className="min-[900px]:absolute min-[900px]:left-10 min-[900px]:top-10 min-[1200px]:left-20">
+          <Wordmark className="h-6 min-[900px]:h-7" />
+        </div>
+        <h1 className="font-display max-w-[15ch] text-[40px] leading-[1.02] tracking-[-0.045em] [text-wrap:balance] min-[900px]:max-w-none min-[900px]:text-[clamp(36px,3.7vw,64px)] min-[900px]:leading-[0.98]">
+          Privacy-first trading <br className="hidden min-[900px]:inline" />
+          for AI agents.
+        </h1>
+      </section>
 
-      <div className="mt-8 flex flex-col gap-3">
-        <button type="button" className="btn btn-solid" disabled={busy !== null} onClick={() => run("wallet")}>
-          {busy === "wallet" ? "Waiting for your wallet…" : "Sign in with a NEAR wallet"}
-        </button>
-        {health.data?.mock && (
-          <button type="button" className="btn btn-quiet" disabled={busy !== null} onClick={() => run("demo")}>
-            {busy === "demo" ? "Signing in…" : "Use the demo owner (mock mode, no funds)"}
+      <section aria-label="Sign in" className="flex flex-col justify-center min-[900px]:border-l min-[900px]:border-line min-[900px]:px-10 min-[1200px]:px-20">
+        <div className="flex w-full max-w-sm flex-col gap-3">
+          <button type="button" className="btn btn-solid min-h-12" disabled={busy !== null} onClick={() => run("wallet")}>
+            {busy === "wallet" ? "Waiting for your wallet…" : "Sign in with a NEAR wallet"}
           </button>
-        )}
-      </div>
-      {health.error && (
-        <p role="alert" className="mt-6 text-rust">
-          {health.error}
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="mt-6 text-rust">
-          {error}
-        </p>
-      )}
-      <p className="mt-8 text-sm text-mist">
-        Not ready to sign in? <a href="#/verify" className="underline decoration-line underline-offset-4 hover:text-ivory">Check the enclave first</a>: no account needed.
-      </p>
-      {health.data?.mock && <p className="mt-4 text-sm text-mist">This service is running in mock mode: prices are fixed, nothing leaves your machine, and the demo owner needs no wallet.</p>}
+          {health.data?.mock && (
+            <button type="button" className="btn min-h-12" disabled={busy !== null} onClick={() => run("demo")}>
+              {busy === "demo" ? "Signing in…" : "Use the demo owner"}
+            </button>
+          )}
+          <p className="mt-1 text-sm text-mute">Signing in moves no funds.</p>
+          {offline && <div className="mt-5"><Offline compact /></div>}
+          {health.error && !offline && <p role="alert" className="mt-5 border-l border-line-strong pl-4 text-sm text-fg">{health.error}</p>}
+          {error && <p role="alert" className="mt-5 border-l border-line-strong pl-4 text-sm text-fg">{error}</p>}
+          <div className="mt-6 flex items-center justify-between gap-4">
+            <a href="#/verify" className="text-sm text-fg hover:text-mute">Verify the enclave →</a>
+            {health.data?.mock && <span className="eyebrow" title="Prices are fixed and nothing leaves this machine; the demo owner needs no wallet.">Mock mode · no funds</span>}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

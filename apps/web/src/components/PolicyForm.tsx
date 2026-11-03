@@ -84,7 +84,7 @@ export function PolicyForm({ policy, onSave }: { policy: Policy; onSave: (p: Pol
         {label}
       </label>
       <input id={`f-${k}`} className="field" inputMode="decimal" value={String(form[k])} onChange={(e) => set(k, e.target.value as never)} />
-      {hint && <p className="mt-1 text-sm text-mist">{hint}</p>}
+      {hint && <p className="mt-1 text-sm text-mute">{hint}</p>}
     </div>
   );
 
@@ -111,7 +111,7 @@ export function PolicyForm({ policy, onSave }: { policy: Policy; onSave: (p: Pol
         <h3 id="presets" className="font-display text-xl">
           Start from a style
         </h3>
-        <p className="mb-3 text-sm text-mist">Fills in the limits below. You can change any of them.</p>
+        <p className="mb-3 text-sm text-mute">Fills in the limits below. You can change any of them.</p>
         <div className="flex flex-wrap gap-2">
           {(["cautious", "balanced", "degen"] as const).map((n) => (
             <button key={n} type="button" className="btn btn-quiet" onClick={() => applyPreset(n)}>
@@ -136,10 +136,10 @@ export function PolicyForm({ policy, onSave }: { policy: Policy; onSave: (p: Pol
         <div className="mt-3 flex flex-col gap-3">
           {PRIVACY.map((o) => (
             <label key={o.value} className="flex cursor-pointer gap-3">
-              <input type="radio" name="privacy" className="mt-1.5 accent-[#c8a46a]" checked={form.privacy === o.value} onChange={() => set("privacy", o.value)} />
+              <input type="radio" name="privacy" className="mt-1.5 accent-white" checked={form.privacy === o.value} onChange={() => set("privacy", o.value)} />
               <span>
-                <span className="block text-ivory">{o.title}</span>
-                <span className="block text-sm text-mist">{o.text}</span>
+                <span className="block text-fg">{o.title}</span>
+                <span className="block text-sm text-mute">{o.text}</span>
               </span>
             </label>
           ))}
@@ -159,35 +159,35 @@ export function PolicyForm({ policy, onSave }: { policy: Policy; onSave: (p: Pol
         <fieldset>
           <legend className="label">Crypto</legend>
           <label className="mr-6 inline-flex items-center gap-2">
-            <input type="radio" name="crypto" className="accent-[#c8a46a]" checked={form.cryptoMode === "any_safe"} onChange={() => set("cryptoMode", "any_safe")} /> Anything that passes the risk check
+            <input type="radio" name="crypto" className="accent-white" checked={form.cryptoMode === "any_safe"} onChange={() => set("cryptoMode", "any_safe")} /> Anything that passes the risk check
           </label>
           <label className="inline-flex items-center gap-2">
-            <input type="radio" name="crypto" className="accent-[#c8a46a]" checked={form.cryptoMode === "list"} onChange={() => set("cryptoMode", "list")} /> Only these
+            <input type="radio" name="crypto" className="accent-white" checked={form.cryptoMode === "list"} onChange={() => set("cryptoMode", "list")} /> Only these
           </label>
           {form.cryptoMode === "list" && <input aria-label="Allowed crypto symbols" className="field mt-3" value={form.allowedCrypto} onChange={(e) => set("allowedCrypto", e.target.value)} placeholder="BTC, ETH, SOL, USDC" />}
         </fieldset>
         <label className="flex cursor-pointer gap-3">
-          <input type="checkbox" className="mt-1.5 accent-[#c8a46a]" checked={form.allowMediumRisk} onChange={(e) => set("allowMediumRisk", e.target.checked)} />
+          <input type="checkbox" className="mt-1.5 accent-white" checked={form.allowMediumRisk} onChange={(e) => set("allowMediumRisk", e.target.checked)} />
           <span>
-            <span className="block text-ivory">Allow medium-risk tokens</span>
-            <span className="block text-sm text-mist">High-risk tokens are always refused.</span>
+            <span className="block text-fg">Allow medium-risk tokens</span>
+            <span className="block text-sm text-mute">High-risk tokens are always refused.</span>
           </span>
         </label>
       </section>
 
-      <section aria-labelledby="eligibility" className="border-l-2 border-brass pl-4">
+      <section aria-labelledby="eligibility" className="border-l border-line-strong pl-4">
         <h3 id="eligibility" className="font-display text-xl">
           Tokenized stocks
         </h3>
-        <p className="my-2 text-sm text-mist">{EQUITY_DISCLAIMER}</p>
+        <p className="my-2 text-sm text-mute">{EQUITY_DISCLAIMER}</p>
         <label className="flex cursor-pointer gap-3">
-          <input type="checkbox" className="mt-1.5 accent-[#c8a46a]" checked={form.nonUsConfirmed} onChange={(e) => set("nonUsConfirmed", e.target.checked)} />
+          <input type="checkbox" className="mt-1.5 accent-white" checked={form.nonUsConfirmed} onChange={(e) => set("nonUsConfirmed", e.target.checked)} />
           <span>I confirm that I am not a US person. Until I do, the agent cannot trade stocks.</span>
         </label>
       </section>
 
       {issues.length > 0 && (
-        <ul role="alert" className="list-disc pl-5 text-rust">
+        <ul role="alert" className="list-disc pl-5 text-alert">
           {issues.map((i) => (
             <li key={i}>{i}</li>
           ))}
@@ -198,7 +198,7 @@ export function PolicyForm({ policy, onSave }: { policy: Policy; onSave: (p: Pol
           {busy ? "Saving…" : "Save rules"}
         </button>
         {saved && (
-          <span role="status" className="text-verdigris">
+          <span role="status" className="text-ok">
             Saved. The agent follows these rules from its next request.
           </span>
         )}

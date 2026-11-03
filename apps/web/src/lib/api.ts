@@ -50,6 +50,12 @@ export interface ApiOptions {
   fetch?: typeof fetch;
 }
 
+/** What a failed connection says. The demo service runs on demand, so being unreachable is a normal state, not an error. */
+export const OFFLINE_MESSAGE = "Norr is offline right now.";
+
+/** True when an error (or a useAsync error string) means the service could not be reached at all. */
+export const isOffline = (e: unknown): boolean => e === OFFLINE_MESSAGE || (e instanceof ApiError && e.status === 0);
+
 /** Typed client for the owner API. The token travels only in the Authorization header. */
 export function createApi(o: ApiOptions) {
   const f = o.fetch ?? ((url: string, init?: RequestInit) => fetch(url, init));
@@ -63,7 +69,7 @@ export function createApi(o: ApiOptions) {
         body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
       });
     } catch {
-      throw new ApiError(0, "Cannot reach the Norr service. Is it running?");
+      throw new ApiError(0, OFFLINE_MESSAGE);
     }
     const body: unknown = await res.json().catch(() => null);
     if (res.status === 401 && token) o.onUnauthorized();

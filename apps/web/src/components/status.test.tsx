@@ -14,7 +14,7 @@ const ok: ServiceStatus = { mock: false, pricing: "ready", shield: "ok", enclave
 const byId = (p: ReturnType<typeof statusPills>) => Object.fromEntries(p.map((x) => [x.id, x]));
 
 describe("statusPills", () => {
-  it("shows green only when each thing is actually fine", () => {
+  it("marks a pill fine only when each thing is actually fine", () => {
     const p = byId(statusPills("pass", ok));
     expect(Object.values(p).every((x) => x.tone === "ok")).toBe(true);
     expect(p.enclave!.label).toBe("Enclave verified");
@@ -25,6 +25,10 @@ describe("statusPills", () => {
     expect(statusPills("none", null)[0]).toMatchObject({ tone: "warn", label: "Not in an enclave" });
     expect(statusPills("checking", null)[0]).toMatchObject({ tone: "idle" });
     expect(statusPills("checking", null)).toHaveLength(1); // no service facts yet: no guessing
+  });
+
+  it("treats an unreachable service as offline (the engine runs on demand), not as a failed check", () => {
+    expect(statusPills("offline", null)).toEqual([expect.objectContaining({ id: "enclave", label: "Offline", tone: "idle", href: "#/verify" })]);
   });
 
   it("explains pricing retrying and an unreadable Shield feed as the reason trades are blocked", () => {

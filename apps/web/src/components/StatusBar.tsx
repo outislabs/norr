@@ -1,15 +1,16 @@
 import { checkAttestation } from "@norr/shared";
 import { useEffect, useState } from "react";
-import { ApiError, type Api, type ServiceStatus } from "../lib/api";
+import { ApiError, isOffline, type Api, type ServiceStatus } from "../lib/api";
 
 type Tone = "ok" | "warn" | "bad" | "idle";
-const DOT: Record<Tone, string> = { ok: "bg-verdigris", warn: "bg-brass", bad: "bg-rust", idle: "bg-mist/50" };
+// Black and white: the word carries the meaning; the mark only reinforces it (filled = fine, grey = attention, ring = stopped).
+const DOT: Record<Tone, string> = { ok: "bg-fg", warn: "bg-mute", bad: "border border-fg", idle: "bg-dim" };
 
 const randomNonce = (): string => Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, "0")).join("");
 
-export type EnclaveState = "checking" | "pass" | "fail" | "none";
+export type EnclaveState = "checking" | "pass" | "fail" | "none" | "offline";
 
-/** Runs the attestation checks that need no third party, once and then every five minutes. A 503 means there is no TEE to ask. */
+/** Runs the attestation checks that need no third party, once and then every five minutes. A 503 means there is no TEE to ask; no answer at all means the service is off. */
 export function useEnclaveCheck(api: Api): EnclaveState {
   const [state, setState] = useState<EnclaveState>("checking");
   useEffect(() => {
@@ -21,7 +22,7 @@ export function useEnclaveCheck(api: Api): EnclaveState {
         const checks = await checkAttestation(nonce, ev, info);
         if (live) setState(checks.every((c) => c.status === "pass") ? "pass" : "fail");
       } catch (e) {
-        if (live) setState(e instanceof ApiError && e.status === 503 ? "none" : "fail");
+        if (live) setState(isOffline(e) ? "offline" : e instanceof ApiError && e.status === 503 ? "none" : "fail");
       }
     };
     void run();
@@ -50,6 +51,8 @@ export function statusPills(enclave: EnclaveState, status: ServiceStatus | null)
       ? { id: "enclave", label: "Enclave verified", tone: "ok", title: "This browser just checked the service's attestation. Open Verify for the details, including Phala's signature check.", href: "#/verify" }
       : enclave === "checking"
         ? { id: "enclave", label: "Checking enclave", tone: "idle", title: "Asking the service for a fresh attestation.", href: "#/verify" }
+        : enclave === "offline"
+          ? { id: "enclave", label: "Offline", tone: "idle", title: "The engine runs on demand and is switched off right now. Open Verify for how to check it.", href: "#/verify" }
         : enclave === "none"
           ? { id: "enclave", label: "Not in an enclave", tone: "warn", title: "This service is not running inside a TEE, so there is nothing to attest.", href: "#/verify" }
           : { id: "enclave", label: "Enclave check failed", tone: "bad", title: "At least one attestation check failed or could not run. Open Verify to see which.", href: "#/verify" },
@@ -98,7 +101,7 @@ export function StatusBar({ api, version }: { api: Api; version: number }) {
   }, [api, version]);
   const pills = statusPills(enclave, status);
   return (
-    <ul aria-label="Service status" className="mb-6 flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-mist">
+    <ul aria-label="Service status" className="mb-8 flex flex-wrap gap-x-5 gap-y-1.5 font-mono text-xs text-mute">
       {pills.map((p) => {
         const inner = (
           <>
@@ -108,14 +111,14 @@ export function StatusBar({ api, version }: { api: Api; version: number }) {
         );
         return (
           <li key={p.id} className="whitespace-nowrap" title={p.title}>
-            {p.href ? <a href={p.href} className="hover:text-ivory">{inner}</a> : inner}
+            {p.href ? <a href={p.href} className="hover:text-fg">{inner}</a> : inner}
           </li>
         );
       })}
-      {failed && (
-        <li className="whitespace-nowrap text-rust" title="The status request failed.">
-          <span aria-hidden="true" className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-rust" />
-          Service unreachable
+      {failed && enclave !== "offline" && (
+        <li className="whitespace-nowrap" title="The status request failed. The other indicators may be out of date.">
+          <span aria-hidden="true" className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${DOT.warn}`} />
+          Status unavailable
         </li>
       )}
     </ul>

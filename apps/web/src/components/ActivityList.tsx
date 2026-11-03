@@ -30,11 +30,12 @@ function headline(it: ActivityItem): string {
   return `${buy ? "Buy" : "Sell"} ${usd(it.amountUsd)} of ${it.asset}`;
 }
 
-const TONE = { ok: "text-verdigris", stop: "text-rust", wait: "text-brass", bad: "text-rust" } as const;
+// Black and white: the status word carries the meaning; waiting is the one quieter state.
+const TONE = { ok: "text-fg", stop: "text-fg", wait: "text-mute", bad: "text-fg" } as const;
 
 /** `reasons` holds the reasoning the owner has unlocked, by entry id. Anything else stays sealed. */
 export function ActivityList({ items, now, reasons = {} }: { items: ActivityItem[]; now?: number; reasons?: Record<string, string> }) {
-  if (items.length === 0) return <p className="text-mist">Nothing yet. When the agent trades, or tries to, it shows up here.</p>;
+  if (items.length === 0) return <p className="text-mute">Nothing yet. When the agent trades, or tries to, it shows up here.</p>;
   return (
     <ol className="flex flex-col">
       {items.map((it) => {
@@ -42,30 +43,30 @@ export function ActivityList({ items, now, reasons = {} }: { items: ActivityItem
         return (
           <li key={it.id} className="border-t border-line py-4 first:border-t-0">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <p className="text-ivory">
+              <p className="text-fg">
                 <span className={`${TONE[d.tone]} font-medium`}>{d.label}</span>
-                <span className="mx-2 text-mist">·</span>
+                <span className="mx-2 text-mute">·</span>
                 {headline(it)}
               </p>
-              <time className="text-sm text-mist" dateTime={it.at}>
+              <time className="text-sm text-mute" dateTime={it.at}>
                 {ago(it.at, now)}
               </time>
             </div>
-            <p className="mt-1 text-sm text-mist">{d.detail}</p>
+            <p className="mt-1 text-sm text-mute">{d.detail}</p>
             {it.decision.status === "executed" && it.decision.warnings?.map((w) => (
-              <p key={w} className="mt-1 text-sm text-brass">
+              <p key={w} className="mt-1 text-sm text-accent">
                 {w}
               </p>
             ))}
             {it.sealedReason && reasons[it.id] !== undefined ? (
-              <blockquote className="mt-2 border-l-2 border-brass-deep pl-3 text-sm italic text-mist">
-                <span className="not-italic text-ivory">The agent's reasoning, visible only to you: </span>
+              <blockquote className="mt-2 border-l border-line-strong pl-3 text-sm italic text-mute">
+                <span className="not-italic text-fg">The agent's reasoning, visible only to you: </span>
                 {reasons[it.id]}
               </blockquote>
             ) : it.sealedReason ? (
-              <p className="mt-2 border-l-2 border-line pl-3 text-sm text-mist">The agent's reasoning is sealed. Unlock it above to read it.</p>
+              <p className="mt-2 border-l border-line pl-3 text-sm text-mute">The agent's reasoning is sealed. Unlock it to read it.</p>
             ) : null}
-            {it.note && <p className="mt-1 text-sm text-rust">Note: {it.note}</p>}
+            {it.note && <p className="mt-1 text-sm text-alert">Note: {it.note}</p>}
           </li>
         );
       })}

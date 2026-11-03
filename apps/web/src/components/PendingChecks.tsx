@@ -8,28 +8,28 @@ export function PendingChecks({ items }: { items: PendingItem[] }) {
   if (items.length === 0) {
     return (
       <div>
-        <p className="text-mist">Nothing is waiting for your approval.</p>
-        <p className="mt-2 text-sm text-mist">When the agent places a swap, your custody provider holds it until you approve. It shows up here the moment Norr sends it, so you can check it before you sign.</p>
+        <p className="text-mute">Nothing is waiting for your approval.</p>
+        <p className="mt-2 text-sm text-mute">When the agent places a swap, your custody provider holds it until you approve. It shows up here the moment Norr sends it, so you can check it before you sign.</p>
       </div>
     );
   }
   return (
     <ul className="flex flex-col gap-8">
       {items.map((p) => (
-        <li key={p.requestId} className="border-l-2 border-brass pl-4">
-          <p className="text-ivory">
+        <li key={p.requestId} className="border-l border-line-strong pl-4">
+          <p className="text-fg">
             Norr asked to send <b className="mono font-medium">{amount(p.sends.amount)} {p.sends.symbol}</b> and receive at least{" "}
             <b className="mono font-medium">{amount(p.receivesAtLeast.amount)} {p.receivesAtLeast.symbol}</b>
             {p.venue === "confidential" ? ", confidentially" : ", publicly"}.
           </p>
-          <p className="mt-1 text-sm text-mist">Paid to the vault's own account ({shortId(p.recipient, 10, 6)}).</p>
+          <p className="mt-1 text-sm text-mute">Paid to the vault's own account ({shortId(p.recipient, 10, 6)}).</p>
           {p.requestHash && (
             <p className="mt-2 text-sm">
-              <span className="text-mist">Request hash: </span>
-              <span className="mono break-all text-ivory">{p.requestHash}</span>{" "}
+              <span className="text-mute">Request hash: </span>
+              <span className="mono break-all text-fg">{p.requestHash}</span>{" "}
               <button
                 type="button"
-                className="ml-1 underline decoration-line underline-offset-4 hover:text-ivory"
+                className="ml-1 underline decoration-line underline-offset-4 hover:text-fg"
                 onClick={() => {
                   void navigator.clipboard?.writeText(p.requestHash!);
                   setCopied(p.requestId);
@@ -39,8 +39,8 @@ export function PendingChecks({ items }: { items: PendingItem[] }) {
               </button>
             </p>
           )}
-          <p className="mt-2 text-sm text-mist">{p.check}</p>
-          <ol className="mt-3 list-decimal pl-5 text-sm text-mist">
+          <p className="mt-2 text-sm text-mute">{p.check}</p>
+          <ol className="mt-3 list-decimal pl-5 text-sm text-mute">
             <li>Open the approval screen with the button below.</li>
             <li>Find the request: same amounts, and it pays the vault's own account, not someone else's.</li>
             <li>If anything differs, reject it and pause the vault. If it matches, approve.</li>

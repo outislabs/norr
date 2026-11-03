@@ -73,7 +73,7 @@ export function FundingPanel({ api, vaultId, account = "", pollMs = 5000, onArri
     <div className="flex max-w-xl flex-col gap-5">
       <div>
         <h2 className="font-display text-xl">Fund this vault</h2>
-        <p className="mt-1 text-sm text-mist">
+        <p className="mt-1 text-sm text-mute">
           USDC sent to the one-time address below settles into the vault&apos;s confidential balance. You send it from your own wallet, so Norr never touches your keys.
         </p>
       </div>
@@ -86,11 +86,11 @@ export function FundingPanel({ api, vaultId, account = "", pollMs = 5000, onArri
             void request();
           }}
         >
-          <label className="flex flex-col gap-1 text-sm text-mist">
+          <label className="flex flex-col gap-1 text-sm text-mute">
             Amount in USDC (1 to 1000)
             <input className="field w-40" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Amount in USDC" />
           </label>
-          <label className="flex min-w-60 flex-col gap-1 text-sm text-mist">
+          <label className="flex min-w-60 flex-col gap-1 text-sm text-mute">
             Account you will send from (refunds go here)
             <input className="field" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="Account you will send from" placeholder="yourname.near" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
           </label>
@@ -100,28 +100,28 @@ export function FundingPanel({ api, vaultId, account = "", pollMs = 5000, onArri
         </form>
       ) : null}
 
-      {error && <p role="alert" className="text-rust">{error}</p>}
+      {error && <p role="alert" className="text-alert">{error}</p>}
 
       {offer && (
         <div className="flex flex-col gap-4 border-t border-line pt-5">
           {state === "arrived" ? (
-            <p className="text-verdigris" role="status">
+            <p className="text-ok" role="status">
               Arrived: {usd(status!.receivedUsdc)} USDC is in the vault&apos;s confidential balance (now {usd(status!.balanceUsdc)}). The balance is the custody provider&apos;s report.
               {status!.independentlyConfirmed ? " 1Click, which issued the address, independently confirms the delivery." : ""}
             </p>
           ) : (
             <>
-              <p className={expired ? "text-rust" : "text-brass"} role="status">
+              <p className={expired ? "text-alert" : "text-accent"} role="status">
                 {expired ? "This request has expired. If you already sent the money it will still arrive; otherwise get a new address." : `Waiting for ${usd(offer.amountUsdc)} USDC. Send within ${left(offer.expiresAt, now)}.`}
               </p>
               <div>
-                <p className="text-sm text-mist">Send exactly {offer.amountUsdc} {offer.asset.symbol} on {offer.asset.chain} to</p>
-                <p className="mono mt-1 break-all rounded-sm border border-line bg-vault p-3 text-[15px] text-ivory" data-testid="deposit-address">{offer.address}</p>
+                <p className="text-sm text-mute">Send exactly {offer.amountUsdc} {offer.asset.symbol} on {offer.asset.chain} to</p>
+                <p className="mono mt-1 break-all rounded-sm border border-line bg-raised p-3 text-[15px] text-fg" data-testid="deposit-address">{offer.address}</p>
                 <button type="button" className="btn btn-quiet mt-2" onClick={() => void copy()}>
                   {copied ? "Copied" : "Copy address"}
                 </button>
               </div>
-              <ul className="list-disc pl-5 text-sm text-mist">
+              <ul className="list-disc pl-5 text-sm text-mute">
                 <li>
                   Only {offer.asset.symbol} on {offer.asset.chain} (contract <span className="mono break-all">{offer.asset.contract}</span>). Any other asset or network sent here is lost.
                 </li>

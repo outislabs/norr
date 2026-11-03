@@ -1,41 +1,67 @@
 @import "tailwindcss";
-@import "@fontsource/fraunces/400.css";
-@import "@fontsource/fraunces/600.css";
-@import "@fontsource/ibm-plex-sans/400.css";
-@import "@fontsource/ibm-plex-sans/500.css";
-@import "@fontsource/ibm-plex-sans/600.css";
-@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/geist/latin-300.css";
+@import "@fontsource/geist/latin-400.css";
+@import "@fontsource/geist/latin-500.css";
+@import "@fontsource/geist-mono/latin-400.css";
 
-/* A private bank's vault room at night: deep slate-blue, ivory paper text, one brass accent,
-   verdigris for "fine" and rust for "stopped". Hairlines instead of boxes. */
+/* The landing page's system (docs/design/landing.dc.html): pure black and white, greys only for secondary
+   text and hairlines, Geist and Geist Mono, white pill buttons. Status is carried by words and marks,
+   never by colour alone, so there is no red or green. Tokens are named by role, not by colour. */
 @theme {
-  --font-display: "Fraunces", Georgia, serif;
-  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
-  --color-night: #171b26;
-  --color-vault: #1e2433;
-  --color-line: #323b52;
-  --color-ivory: #efe8d8;
-  --color-mist: #a3abbd;
-  --color-brass: #c8a46a;
-  --color-brass-deep: #a9854d;
-  --color-verdigris: #7ab5a4;
-  --color-rust: #d58265;
+  --font-display: "Geist", system-ui, sans-serif;
+  --font-sans: "Geist", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+  --color-bg: #000000;
+  --color-raised: #0a0a0a;
+  --color-line: #1f1f1f;
+  --color-line-strong: #333333;
+  --color-fg: #ffffff;
+  --color-mute: #a1a1a1;
+  --color-dim: #6e6e6e;
+  --color-accent: #ffffff;
+  --color-accent-deep: #e6e6e6;
+  --color-ok: #ffffff;
+  --color-alert: #ffffff;
+  --color-chart-2: #5c5c5c;
 }
 
 :root { color-scheme: dark; }
-html { -webkit-text-size-adjust: 100%; }
-body { background: var(--color-night); color: var(--color-ivory); font-family: var(--font-sans); font-size: 16px; line-height: 1.55; margin: 0; }
-::selection { background: var(--color-brass); color: var(--color-night); }
-:focus-visible { outline: 2px solid var(--color-brass); outline-offset: 2px; border-radius: 2px; }
+html { -webkit-text-size-adjust: 100%; background: var(--color-bg); }
+body { background: var(--color-bg); color: var(--color-fg); font-family: var(--font-sans); font-size: 16px; line-height: 1.55; margin: 0; -webkit-font-smoothing: antialiased; }
+::selection { background: var(--color-fg); color: var(--color-bg); }
+:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 3px; border-radius: 4px; }
+
+@layer base {
+  /* Headings: Geist 500 with the landing page's tight tracking. */
+  .font-display { font-weight: 500; letter-spacing: -0.03em; line-height: 1.15; }
+}
 
 @layer components {
-  .btn { @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-brass px-5 py-2 text-[15px] font-medium text-brass transition-colors hover:bg-brass hover:text-night disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-brass; }
-  .btn-solid { @apply bg-brass text-night hover:bg-brass-deep hover:border-brass-deep; }
-  .btn-danger { @apply border-rust text-rust hover:bg-rust hover:text-night; }
-  .btn-quiet { @apply border-line text-mist hover:border-mist hover:bg-transparent hover:text-ivory; }
-  .field { @apply min-h-11 w-full rounded-sm border border-line bg-vault px-3 py-2 font-mono text-[15px] text-ivory placeholder:text-mist/60; }
-  .label { @apply mb-1 block text-sm text-mist; }
+  /* Default: outlined pill (the landing's "Verify the enclave" button). */
+  .btn { @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-line-strong px-5 py-2 text-[15px] font-normal text-fg transition-colors hover:border-dim disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line-strong; }
+  /* Primary: solid white pill. */
+  .btn-solid { @apply border-fg bg-fg font-medium text-bg hover:border-accent-deep hover:bg-accent-deep disabled:hover:border-fg; }
+  /* Stop actions: a white outline that fills on hover, so they read as deliberate without a warning colour. */
+  .btn-danger { @apply border-fg text-fg hover:bg-fg hover:text-bg disabled:hover:bg-transparent disabled:hover:text-fg; }
+  .btn-danger.btn-solid { @apply bg-fg text-bg hover:bg-accent-deep; }
+  .btn-quiet { @apply border-line-strong text-mute hover:border-dim hover:text-fg; }
+  .field { @apply min-h-11 w-full rounded-lg border border-line-strong bg-raised px-3 py-2 font-mono text-[15px] text-fg placeholder:text-dim focus:border-dim; }
+  .label { @apply mb-1 block text-sm text-mute; }
   .rule { @apply border-t border-line; }
   .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .eyebrow { @apply font-mono text-[11px] uppercase tracking-[0.12em] text-dim; }
+
+  /* Mobile menu: the landing page's button and full-width sheet (Popover API). */
+  .menu-btn { @apply inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border border-line-strong bg-transparent p-0 text-fg; }
+  .menu-icon, .menu-icon::before { display: block; width: 16px; height: 1.5px; background: currentColor; transition: transform 0.15s ease; }
+  .menu-icon { position: relative; transform: translateY(-3px); }
+  .menu-icon::before { content: ""; position: absolute; left: 0; top: 6px; }
+  body:has(.menu-sheet:popover-open) .menu-icon { transform: translateY(0) rotate(45deg); }
+  body:has(.menu-sheet:popover-open) .menu-icon::before { top: 0; transform: rotate(-90deg); }
+  .menu-sheet:popover-open { @apply fixed inset-x-0 bottom-auto top-[77px] m-0 block w-full max-w-none border-x-0 border-t-0 border-b border-line bg-bg px-4 pb-2 text-fg; }
+  .menu-sheet::backdrop { background: rgb(0 0 0 / 0.45); }
+  .menu-sheet a, .menu-sheet button, .menu-sheet span { @apply flex min-h-14 w-full items-center border-b border-line text-left text-[17px]; }
+  .menu-sheet a[aria-current="page"] { @apply text-fg; }
+  .menu-sheet a:not([aria-current="page"]), .menu-sheet button { @apply text-mute; }
+  .menu-sheet > nav > :last-child { @apply border-b-0; }
 }
