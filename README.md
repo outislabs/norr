@@ -30,7 +30,7 @@ The service answers `/attestation?nonce=…` and `/info` publicly. The checks, r
 
 ```
 pnpm install
-pnpm exec tsx scripts/verify-attestation.mts https://85e1d6a557dae81985c9e30e28270f91bee5c0e9-8787.dstack-pha-prod5.phala.network
+pnpm exec tsx scripts/verify-attestation.mts https://api.norr.finance
 ```
 
 1. The quote is a TDX quote.
@@ -43,7 +43,7 @@ pnpm exec tsx scripts/verify-attestation.mts https://85e1d6a557dae81985c9e30e282
 
 Observed on 2026-11-03 for this deployment (7/7 checks): git commit `443dc88b7c3dbb73c8483ad0a42ba6ed3601d682`, compose hash `074435c24e6d3d353d72b6c085319baa2932a4088e106c4ea39b072e82665394`, image `ghcr.io/outislabs/norr@sha256:3240dae9a7b97e66f56748daf8cf8fb8b99c0ec41362ba034985f4cc0c5f160f` (both services), plus `ghcr.io/dstack-tee/dstack-ingress:2.8@sha256:60e682449534715a2f2e5b72326ca4229209c8e26c931c6f34d27e02200ac086`.
 
-**The domain, too.** `mcp.norr.finance` is served by Phala's dstack-ingress inside the CVM: TLS terminates there, and the certificate is published at `https://mcp.norr.finance/evidences/` with a TDX quote over it. `pnpm exec tsx scripts/verify-domain.mts mcp.norr.finance <service URL>` checks that the certificate your client sees is the attested one (passed on 2026-11-03).
+**The domains, too.** `api.norr.finance` (the service) and `mcp.norr.finance` (the MCP endpoint) are served by Phala's dstack-ingress inside the CVM: TLS terminates there, and the certificates are published at `https://<domain>/evidences/` with a TDX quote over them. `pnpm exec tsx scripts/verify-domain.mts <domain> https://api.norr.finance` checks that the certificate your client sees is the attested one (both passed on 2026-11-03). The Phala gateway URL (`https://85e1d6a557dae81985c9e30e28270f91bee5c0e9-8787.dstack-pha-prod5.phala.network`) reaches the same CVM.
 
 **What this proves and what it does not.** It proves which code and images booted, on genuine TDX hardware. It does not prove what secrets the VM was given, and Phala's key service (which releases the VM's encrypted environment) is a trust assumption. Details: `docs/DEPLOY-PHALA.md`, `docs/FINDINGS.md`.
 

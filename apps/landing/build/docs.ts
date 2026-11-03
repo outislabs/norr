@@ -234,7 +234,8 @@ export function llmsTxt(): string {
 
 - Dashboard: https://app.norr.finance (owners sign in with a NEAR wallet)
 - MCP: nine tools (list_assets, check_asset, get_market_data, get_quote, trade, get_portfolio, get_pnl, get_policy, get_activity) at https://mcp.norr.finance/mcp (streamable HTTP, \`Authorization: Bearer <agent token>\`; TLS terminates inside the attested CVM), or stdio from the repository
-- Verify: https://app.norr.finance/#/verify runs seven attestation checks in the browser, no account needed
+- REST API: https://api.norr.finance (OpenAPI: https://norr.finance/openapi.json), same bearer token
+- Verify: https://app.norr.finance/#/verify runs seven attestation checks in the browser, no account needed; scripts/verify-domain.mts checks that api. and mcp.norr.finance serve certificates held inside the attested CVM
 - Source and evidence: https://github.com/outislabs/norr (start with AGENTS.md; \`pnpm judge\` checks every claim in mock mode)
 - Status: hackathon build, unaudited, small balances; the hosted service runs on demand
 

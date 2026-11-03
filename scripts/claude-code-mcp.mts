@@ -3,6 +3,7 @@
  * Claude configuration: the server is passed with --mcp-config and --strict-mcp-config for this run only.
  *
  *   pnpm exec tsx scripts/claude-code-mcp.mts <MCP URL> [token file]
+ *   pnpm exec tsx scripts/claude-code-mcp.mts --stdio [token file]     (through `npx -y @norrfi/mcp`, as Claude Desktop runs it)
  *
  * The agent token is read from a file (default config/agent-token.local.txt, gitignored), never from the command line.
  * The prompts only read, except one trade request above the vault's per-trade limit, which Norr must refuse.
@@ -13,11 +14,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const [url, tokenFile = "config/agent-token.local.txt"] = process.argv.slice(2);
-if (!url) throw new Error("usage: tsx scripts/claude-code-mcp.mts <MCP URL> [token file]");
+if (!url) throw new Error("usage: tsx scripts/claude-code-mcp.mts <MCP URL | --stdio> [token file]");
+const stdio = url === "--stdio";
 const token = readFileSync(tokenFile, "utf8").trim();
 const dir = mkdtempSync(join(tmpdir(), "norr-cc-"));
 const config = join(dir, "mcp.json");
-writeFileSync(config, JSON.stringify({ mcpServers: { norr: { type: "http", url, headers: { Authorization: `Bearer ${token}` } } } }), { mode: 0o600 });
+const server = stdio ? { command: "npx", args: ["-y", "@norrfi/mcp"], env: { NORR_AGENT_TOKEN: token } } : { type: "http", url, headers: { Authorization: `Bearer ${token}` } };
+writeFileSync(config, JSON.stringify({ mcpServers: { norr: server } }), { mode: 0o600 });
 
 const READS = ["list_assets", "check_asset", "get_market_data", "get_quote", "get_portfolio", "get_pnl", "get_policy", "get_activity"].map((t) => `mcp__norr__${t}`);
 const prompts: { name: string; prompt: string; allow: string[]; expect: RegExp }[] = [

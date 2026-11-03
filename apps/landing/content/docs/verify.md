@@ -20,17 +20,18 @@ If the browser check cannot run, the page offers the quote to copy into [Phala's
 
 ```
 git clone https://github.com/outislabs/norr && cd norr && pnpm install
-pnpm exec tsx scripts/verify-attestation.mts https://85e1d6a557dae81985c9e30e28270f91bee5c0e9-8787.dstack-pha-prod5.phala.network
+pnpm exec tsx scripts/verify-attestation.mts https://api.norr.finance
 ```
 
 Same checks; the seventh asks Phala's verification API. The service runs on demand during the pilot, so it may be offline; the dashboard says so.
 
 ## Check the domain
 
-`mcp.norr.finance` is served by Phala's dstack-ingress inside the CVM: its TLS certificate is issued and held there, and published at `https://mcp.norr.finance/evidences/` with a TDX quote over it. This checks that the certificate your client sees belongs to the attested app:
+`api.norr.finance` (the service) and `mcp.norr.finance` (the MCP endpoint) are served by Phala's dstack-ingress inside the CVM: their TLS certificates are issued and held there, and published at `https://<domain>/evidences/` with a TDX quote over them. This checks that the certificate your client sees belongs to the attested app:
 
 ```
-pnpm exec tsx scripts/verify-domain.mts mcp.norr.finance https://85e1d6a557dae81985c9e30e28270f91bee5c0e9-8787.dstack-pha-prod5.phala.network
+pnpm exec tsx scripts/verify-domain.mts api.norr.finance https://api.norr.finance
+pnpm exec tsx scripts/verify-domain.mts mcp.norr.finance https://api.norr.finance
 ```
 
 It verifies the evidence quote's signature chain, that the quote covers the published certificate, that the certificate served over TLS is that one, and that the quote comes from the same VM and configuration as a fresh attestation of the service. It also reports whether CAA pins certificate issuance for the name to the CVM's own ACME account.

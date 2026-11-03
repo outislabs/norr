@@ -23,8 +23,8 @@ const PLACEHOLDER = "PASTE_YOUR_AGENT_TOKEN";
 /** The bridge's built-in endpoint; other endpoints are passed as NORR_MCP_URL. */
 const BRIDGE_DEFAULT = "https://mcp.norr.finance/mcp";
 const DOCS = "https://norr.finance/docs";
-/** Flip to true once @norrfi/mcp is on npm. Until then the stdio blocks use the generic mcp-remote bridge, which works today. */
-export const BRIDGE_PUBLISHED = false;
+/** @norrfi/mcp is on npm (0.1.0, 2026-11-03). Set to false to fall back to the generic mcp-remote bridge. */
+export const BRIDGE_PUBLISHED = true;
 
 /**
  * Copy-ready connections for every way an agent can reach Norr: MCP over streamable HTTP (any client), the npx stdio
@@ -48,7 +48,7 @@ export function mcpSnippets(mcpUrl: string, token: string | null, apiUrl = "http
       ],
       status: "tested",
       statusNote: bridgePublished
-        ? "The endpoint is tested with the MCP TypeScript SDK client over HTTP and through the @norrfi/mcp bridge."
+        ? "Tested on 2026-11-03 against the hosted endpoint: over HTTP (MCP SDK client, Claude Code) and through npx @norrfi/mcp from npm (MCP SDK client, Claude Code)."
         : "The endpoint is tested with the MCP TypeScript SDK client over HTTP; the mcp-remote bridge is a third-party package we have not run against Norr.",
       link: { href: `${DOCS}/connect-agent/`, label: "Connect your agent (docs)" },
     },
@@ -61,7 +61,7 @@ export function mcpSnippets(mcpUrl: string, token: string | null, apiUrl = "http
         ...(bridgePublished ? [{ label: "Or through the stdio bridge", language: "bash" as const, text: `claude mcp add norr ${bridgeEnvShell} -- npx -y @norrfi/mcp` }] : []),
       ],
       status: "tested",
-      statusNote: "Run against the hosted endpoint with Claude Code 2.1.80 on 2026-11-03: tools listed, rules and portfolio read, a refused trade reported as Norr gave it.",
+      statusNote: "Both run on 2026-11-03 with Claude Code 2.1.80 against mcp.norr.finance: tools listed, rules, portfolio and P&L read, an over-limit trade refused as Norr gave it.",
     },
     {
       client: "claude-desktop",
@@ -69,7 +69,7 @@ export function mcpSnippets(mcpUrl: string, token: string | null, apiUrl = "http
       note: "Merge this into mcpServers in claude_desktop_config.json (Settings, Developer, Edit Config), then quit and reopen Claude. Needs Node for npx.",
       blocks: [{ label: "claude_desktop_config.json", language: "json", text: JSON.stringify(stdio, null, 2) }],
       status: "not yet tested",
-      statusNote: "The local stdio path is tested in mock mode; this hosted path has not been run in Claude Desktop by us yet.",
+      statusNote: "Not yet run inside Claude Desktop by us. The same npx @norrfi/mcp command is tested against the hosted endpoint with Claude Code and the MCP SDK client.",
     },
     {
       client: "cursor",

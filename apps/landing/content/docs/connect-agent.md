@@ -29,33 +29,37 @@ URL:     <MCP URL>
 Header:  Authorization: Bearer <agent token>
 ```
 
-Clients that only start local commands can bridge with [mcp-remote](https://www.npmjs.com/package/mcp-remote) (needs Node):
+Clients that only start local commands can use the [@norrfi/mcp](https://www.npmjs.com/package/@norrfi/mcp) bridge (needs Node). It connects to `mcp.norr.finance` with your token, keeps no state and adds no tools of its own:
 
 ```json
 {
   "mcpServers": {
     "norr": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "<MCP URL>", "--header", "Authorization:${NORR_AUTH}"],
-      "env": { "NORR_AUTH": "Bearer <agent token>" }
+      "args": ["-y", "@norrfi/mcp"],
+      "env": { "NORR_AGENT_TOKEN": "<agent token>" }
     }
   }
 }
 ```
 
-Tested: the hosted endpoint (`mcp.norr.finance`) with Claude Code and with the MCP TypeScript SDK client, and the endpoint code in the repository's tests. `mcp-remote` is a third-party bridge we have not run against Norr.
+Set `NORR_MCP_URL` to use another endpoint (for example a local mock server).
+
+Tested on 2026-11-03 against `mcp.norr.finance`: over HTTP with the MCP TypeScript SDK client and Claude Code, and through `npx -y @norrfi/mcp` from npm with both.
 
 ## Claude Code (tested)
 
 ```
-claude mcp add --transport http norr <MCP URL> --header "Authorization: Bearer <agent token>"
+claude mcp add --transport http norr https://mcp.norr.finance/mcp --header "Authorization: Bearer <agent token>"
 ```
 
-Run against `https://mcp.norr.finance/mcp` on 2026-11-03 with Claude Code 2.1.80: it listed the tools, read the rules, the portfolio and the P&L, and reported Norr's refusal of an over-limit trade word for word (`OVER_TRADE_LIMIT`). The repository's `scripts/claude-code-mcp.mts` repeats that check against any endpoint without changing your Claude configuration.
+Or through the bridge: `claude mcp add norr --env NORR_AGENT_TOKEN=<agent token> -- npx -y @norrfi/mcp`.
+
+Run against `https://mcp.norr.finance/mcp` on 2026-11-03 with Claude Code 2.1.80: it listed the tools, read the rules, the portfolio and the P&L, and reported Norr's refusal of an over-limit trade word for word (`OVER_TRADE_LIMIT`), both over HTTP and through `npx -y @norrfi/mcp`. The repository's `scripts/claude-code-mcp.mts` repeats that check against any endpoint without changing your Claude configuration.
 
 ## Claude Desktop (not yet tested)
 
-Merge into `mcpServers` in `claude_desktop_config.json` (Settings, Developer, Edit Config), then quit and reopen Claude. The same `mcp-remote` config as above.
+Merge the `npx @norrfi/mcp` config above into `mcpServers` in `claude_desktop_config.json` (Settings, Developer, Edit Config), then quit and reopen Claude. Not yet run inside Claude Desktop by us; the same command is tested with Claude Code.
 
 The local path (Norr in mock mode, MCP over stdio) is tested; step by step in [docs/MCP.md](https://github.com/outislabs/norr/blob/main/docs/MCP.md).
 
@@ -118,16 +122,16 @@ OpenAI's documentation does not say whether this field adds the `Bearer` prefix.
 Every tool is also a plain HTTPS call, for agents and scripts that do not use MCP. Same token, same rules. Full reference: [API reference](/docs/api/) and [openapi.json](/openapi.json).
 
 ```
-curl -X POST <service URL>/v1/quote \
+curl -X POST https://api.norr.finance/v1/quote \
   -H "Authorization: Bearer <agent token>" -H "content-type: application/json" \
   -d '{"side":"buy","asset":"NVDA","amountUsd":40}'
 
-curl -X POST <service URL>/v1/trade \
+curl -X POST https://api.norr.finance/v1/trade \
   -H "Authorization: Bearer <agent token>" -H "content-type: application/json" \
   -d '{"side":"buy","asset":"NVDA","amountUsd":40,"reason":"why, for the owner only"}'
 ```
 
-The service URL is `https://85e1d6a557dae81985c9e30e28270f91bee5c0e9-8787.dstack-pha-prod5.phala.network` (the Connect tab shows it filled in). Tested by the repository's tests and `pnpm judge` in mock mode, with responses checked against the OpenAPI spec.
+The service URL is `https://api.norr.finance` (the Connect tab shows it filled in); TLS for it also terminates inside the attested CVM. Tested by the repository's tests and `pnpm judge` in mock mode, with responses checked against the OpenAPI spec.
 
 ## Norr agent (tested)
 

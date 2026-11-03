@@ -46,7 +46,7 @@ describe("mcpSnippets", () => {
     expect(after.every((s) => all(s).includes("norr_agent_abc") && !all(s).includes("PASTE_YOUR"))).toBe(true);
   });
 
-  it("until @norrfi/mcp is published, the stdio blocks use mcp-remote, with the token in env, not args", () => {
+  it("with the bridge switched off, the stdio blocks fall back to mcp-remote, with the token in env, not args", () => {
     const desk = mcpSnippets("https://x/mcp", "norr_agent_abc", undefined, false).find((s) => s.client === "claude-desktop")!;
     const parsed = JSON.parse(desk.blocks[0]!.text) as { mcpServers: { norr: { args: string[]; env: Record<string, string> } } };
     expect(parsed.mcpServers.norr.args).toEqual(["-y", "mcp-remote", "https://x/mcp", "--header", "Authorization:${NORR_AUTH}"]);
@@ -63,6 +63,10 @@ describe("mcpSnippets", () => {
     expect(onDefault.mcpServers.norr.env).toEqual({ NORR_AGENT_TOKEN: "t" });
     const cursor = JSON.parse(mcpSnippets("https://x/mcp", "t").find((s) => s.client === "cursor")!.blocks[0]!.text);
     expect(cursor).toEqual({ mcpServers: { norr: { url: "https://x/mcp", headers: { Authorization: "Bearer t" } } } });
+  });
+
+  it("now that @norrfi/mcp is published, the default stdio blocks use it", () => {
+    expect(mcpSnippets("https://mcp.norr.finance/mcp", "t").find((s) => s.client === "claude-desktop")!.blocks[0]!.text).toContain("@norrfi/mcp");
   });
 
   it("labels as tested only the paths we have run", () => {

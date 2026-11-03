@@ -8,7 +8,7 @@
     "license": { "name": "MIT", "url": "https://github.com/outislabs/norr/blob/main/LICENSE" }
   },
   "servers": [
-    { "url": "https://api.norr.finance", "description": "Hosted service (TLS terminates inside the attested CVM). Runs on demand during the pilot." },
+    { "url": "https://api.norr.finance", "description": "Hosted service. TLS terminates inside the attested CVM (check the certificate with scripts/verify-domain.mts). Runs on demand during the pilot." },
     { "url": "https://85e1d6a557dae81985c9e30e28270f91bee5c0e9-8787.dstack-pha-prod5.phala.network", "description": "The same CVM through Phala's gateway." },
     { "url": "http://localhost:8787", "description": "Local mock mode (pnpm dev:mock): fixed prices, no funds." }
   ],
