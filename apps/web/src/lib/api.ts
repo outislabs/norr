@@ -111,7 +111,7 @@ export function createApi(o: ApiOptions) {
     issueToken: (id: string) => call<{ token: string; note: string }>(`/owner/v1/vaults/${encodeURIComponent(id)}/tokens`, { body: {} }),
     revokeTokens: (id: string) => call<{ revoked: boolean }>(`/owner/v1/vaults/${encodeURIComponent(id)}/tokens`, { method: "DELETE" }),
     fundingSources: () => call<{ sources: FundingSource[] }>("/owner/v1/funding/sources"),
-    requestFunding: (id: string, r: { amountUsd: number; source?: string; refundTo?: string }) => call<FundingOffer>(`/owner/v1/vaults/${encodeURIComponent(id)}/funding`, { body: { amountUsd: r.amountUsd, ...(r.source ? { source: r.source } : {}), ...(r.refundTo ? { refundTo: r.refundTo } : {}) } }),
+    requestFunding: (id: string, r: { amountUsd: number; source?: string; refundTo?: string }) => call<FundingOffer>(`/owner/v1/vaults/${encodeURIComponent(id)}/funding`, { body: { amountUsd: r.amountUsd, amountUsdc: r.amountUsd /* services before 2026-11-03 read this name */, ...(r.source ? { source: r.source } : {}), ...(r.refundTo ? { refundTo: r.refundTo } : {}) } }),
     fundingStatus: (id: string, fid: string) => call<FundingStatus>(`/owner/v1/vaults/${encodeURIComponent(id)}/funding/${encodeURIComponent(fid)}`),
     sealKey: () => call<{ publicKey: string | null }>("/owner/v1/seal-key"),
     enrollSealKey: (publicKey: string) => call<{ publicKey: string; resealed: number }>("/owner/v1/seal-key", { method: "PUT", body: { publicKey } }),
