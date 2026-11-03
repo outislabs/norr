@@ -28,6 +28,7 @@
         <img src="/brand/norr-wordmark.png" alt="Norr" width="56" height="20" />
       </a>
       <nav aria-label="Main" class="nav-links">
+        <a href="/docs/" class="muted nav-text">Docs</a>
         <a href="https://app.norr.finance/#/verify" class="muted nav-text">Verify</a>
         <a href="https://github.com/outislabs/norr/blob/main/docs/PRIVACY.md" class="muted nav-text">Privacy</a>
         <a href="https://github.com/outislabs/norr" class="muted nav-text">GitHub</a>
@@ -40,6 +41,7 @@
     </header>
     <div id="menu" popover class="menu-sheet">
       <nav aria-label="Menu">
+        <a href="/docs/">Docs</a>
         <a href="https://app.norr.finance/#/verify">Verify</a>
         <a href="https://github.com/outislabs/norr/blob/main/docs/PRIVACY.md">Privacy</a>
         <a href="https://github.com/outislabs/norr">GitHub</a>
@@ -59,28 +61,30 @@
 
       <section class="ledger" aria-label="What you see versus what the public chain sees">
         <div class="ledger-head"><span>Your view</span><span>Public chain</span></div>
-        <div class="ledger-row">
+        <ul class="ledger-list">
+        <li class="ledger-row">
           <div class="ledger-text"><span class="ledger-action">Bought $5.50 of NVDA</span><span class="ledger-result">executed · confidential</span></div>
           <div class="ledger-bars" aria-label="hidden"><span class="bar bar-l"></span><span class="bar bar-s"></span></div>
-        </div>
-        <div class="ledger-row">
+        </li>
+        <li class="ledger-row">
           <div class="ledger-text"><span class="ledger-action">Put $20 into TSLA</span><span class="ledger-result">blocked · over your $10 limit</span></div>
           <div class="ledger-bars" aria-label="hidden"><span class="bar bar-l"></span><span class="bar bar-s"></span></div>
-        </div>
-        <div class="ledger-row">
+        </li>
+        <li class="ledger-row">
           <div class="ledger-text"><span class="ledger-action">Ape $5 into RUGPULL</span><span class="ledger-result">blocked · scam risk 100/100</span></div>
           <div class="ledger-bars" aria-label="hidden"><span class="bar bar-l"></span><span class="bar bar-s"></span></div>
-        </div>
+        </li>
+        </ul>
       </section>
 
       <section class="layers wrap">
         <h2 class="h2 h2-gap">Private at every layer.</h2>
-        <div class="layer-grid">
-          <div class="layer"><span class="layer-n">01</span><h3>Thinking</h3><p>The agent reasons on NEAR AI inside a hardware enclave.</p></div>
-          <div class="layer"><span class="layer-n">02</span><h3>Trades</h3><p>Swaps settle in NEAR Confidential Intents, off the public chain.</p></div>
-          <div class="layer"><span class="layer-n">03</span><h3>Engine</h3><p>Norr runs in an attested Intel TDX enclave. Even we can’t look inside.</p></div>
-          <div class="layer"><span class="layer-n">04</span><h3>Record</h3><p>Reasoning is sealed to your wallet key. Only you can read it.</p></div>
-        </div>
+        <ul class="layer-grid">
+          <li class="layer"><span class="layer-n">01</span><h3>Thinking</h3><p>The agent reasons on NEAR AI inside a hardware enclave.</p></li>
+          <li class="layer"><span class="layer-n">02</span><h3>Trades</h3><p>Swaps settle in NEAR Confidential Intents, off the public chain.</p></li>
+          <li class="layer"><span class="layer-n">03</span><h3>Engine</h3><p>Norr runs in an attested Intel TDX enclave. Even we can’t look inside.</p></li>
+          <li class="layer"><span class="layer-n">04</span><h3>Record</h3><p>Reasoning is sealed to your wallet key. Only you can read it.</p></li>
+        </ul>
       </section>
 
       <section class="proof">
@@ -90,27 +94,27 @@
             <p>Your browser asks the engine for a fresh hardware attestation and checks it itself. Nothing on that screen is our word.</p>
             <a href="https://app.norr.finance/#/verify" class="underline">Run the checks →</a>
           </div>
-          <div class="checks">
-            <div class="check"><span>Genuine hardware quote</span><span class="mono-val">Intel TDX v4</span></div>
-            <div class="check"><span>Fresh for your request</span><span class="mono-val">nonce</span></div>
-            <div class="check"><span>Configuration matches</span><span class="mono-val">compose hash</span></div>
-            <div class="check"><span>Event log replays</span><span class="mono-val">RTMR3</span></div>
-            <div class="check"><span>Production OS</span><span class="mono-val">dstack-0.5.12</span></div>
-            <div class="check"><span>Exact image</span><span class="mono-val">sha256 pinned</span></div>
-          </div>
+          <dl class="checks">
+            <div class="check"><dt>Genuine hardware quote</dt><dd class="mono-val">Intel TDX v4</dd></div>
+            <div class="check"><dt>Fresh for your request</dt><dd class="mono-val">nonce</dd></div>
+            <div class="check"><dt>Configuration matches</dt><dd class="mono-val">compose hash</dd></div>
+            <div class="check"><dt>Event log replays</dt><dd class="mono-val">RTMR3</dd></div>
+            <div class="check"><dt>Production OS</dt><dd class="mono-val">dstack-0.5.12</dd></div>
+            <div class="check"><dt>Exact image</dt><dd class="mono-val">sha256 pinned</dd></div>
+          </dl>
         </div>
       </section>
 
       <section class="features wrap">
         <h2 class="h2 h2-gap">It trades.<br /><span class="dim">It never holds the keys.</span></h2>
-        <div class="feature-grid">
-          <div class="feature"><div class="feature-text"><span class="feature-title">Stocks and crypto</span><span class="feature-body">NVDA, TSLA, SOL and more, in one vault.</span></div><span class="feature-tag">from $5</span></div>
-          <div class="feature"><div class="feature-text"><span class="feature-title">No keys, no exits</span><span class="feature-body">The agent can’t withdraw or change your rules.</span></div><span class="feature-tag">custody</span></div>
-          <div class="feature"><div class="feature-text"><span class="feature-title">Scam Shield</span><span class="feature-body">Risky tokens are refused before any trade.</span></div><span class="feature-tag">pre-trade</span></div>
-          <div class="feature"><div class="feature-text"><span class="feature-title">Caps and kill switch</span><span class="feature-body">Trade limits, daily caps, one-tap pause.</span></div><span class="feature-tag">control</span></div>
-          <div class="feature"><div class="feature-text"><span class="feature-title">Any agent</span><span class="feature-body">Claude, ChatGPT or your own bot, over MCP.</span></div><span class="feature-tag">mcp</span></div>
-          <div class="feature"><div class="feature-text"><span class="feature-title">Any chain</span><span class="feature-body">Fund from EVM or Solana wallets.</span></div><span class="feature-tag">soon</span></div>
-        </div>
+        <ul class="feature-grid">
+          <li class="feature"><div class="feature-text"><span class="feature-title">Stocks and crypto</span><span class="feature-body">NVDA, TSLA, SOL and more, in one vault.</span></div><span class="feature-tag">from $5</span></li>
+          <li class="feature"><div class="feature-text"><span class="feature-title">No keys, no exits</span><span class="feature-body">The agent can’t withdraw or change your rules.</span></div><span class="feature-tag">custody</span></li>
+          <li class="feature"><div class="feature-text"><span class="feature-title">Scam Shield</span><span class="feature-body">Risky tokens are refused before any trade.</span></div><span class="feature-tag">pre-trade</span></li>
+          <li class="feature"><div class="feature-text"><span class="feature-title">Caps and kill switch</span><span class="feature-body">Trade limits, daily caps, one-tap pause.</span></div><span class="feature-tag">control</span></li>
+          <li class="feature"><div class="feature-text"><span class="feature-title">Any agent</span><span class="feature-body">Claude, ChatGPT or your own bot, over MCP.</span></div><span class="feature-tag">mcp</span></li>
+          <li class="feature"><div class="feature-text"><span class="feature-title">Any chain</span><span class="feature-body">Fund from EVM or Solana wallets.</span></div><span class="feature-tag">soon</span></li>
+        </ul>
       </section>
 
       <section class="cta wrap">
@@ -125,6 +129,7 @@
         <img src="/brand/norr-wordmark.png" alt="Norr" width="45" height="16" />
         <div class="footer-stack">NEAR Intents · NEAR AI · OutLayer · Phala</div>
         <div class="footer-links">
+          <a href="/docs/" class="muted">Docs</a>
           <a href="https://github.com/outislabs/norr" class="muted">GitHub</a>
           <a href="https://x.com/norrfi" class="muted">X</a>
           <a href="https://app.norr.finance" class="muted">App</a>

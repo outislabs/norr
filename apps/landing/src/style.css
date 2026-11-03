@@ -213,6 +213,81 @@ h1 {
 .footer-stack { font-family: var(--mono); font-size: 12px; color: #6e6e6e; }
 .footer-links { display: flex; gap: 24px; font-size: 14px; flex-wrap: wrap; }
 
+/* Semantic lists and definition lists keep the design's spacing. */
+.ledger-list, .layer-grid, .feature-grid { list-style: none; margin: 0; padding: 0; }
+.checks { margin: 0; }
+.check dt, .check dd { margin: 0; }
+.nav-active { color: #ffffff; }
+
+/* ---------- Docs (norr.finance/docs) ---------- */
+.docs-layout {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 64px;
+  padding-top: 48px;
+  padding-bottom: 120px;
+}
+.docs-side { position: sticky; top: 32px; align-self: start; }
+.docs-nav ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.docs-nav a {
+  display: block;
+  padding: 8px 0 8px 14px;
+  border-left: 1px solid #1f1f1f;
+  font-size: 14px;
+  color: #8f8f8f;
+}
+.docs-nav a:hover { color: #ffffff; }
+.docs-nav a[aria-current="page"] { color: #ffffff; border-left-color: #ffffff; }
+.docs-main { min-width: 0; max-width: 720px; }
+.docs-mobile-nav { display: none; }
+
+.prose { color: #c4c4c4; font-size: 16px; line-height: 1.7; font-weight: 300; }
+.prose > :first-child { margin-top: 0; }
+.prose h1 { font-size: clamp(32px, 4.4vw, 48px); line-height: 1.05; letter-spacing: -0.04em; font-weight: 500; color: #ffffff; margin: 0 0 24px; }
+.prose h2 { font-size: 24px; letter-spacing: -0.02em; font-weight: 500; color: #ffffff; margin: 56px 0 16px; line-height: 1.2; }
+.prose h3 { font-size: 18px; font-weight: 500; color: #ffffff; margin: 36px 0 12px; }
+.prose h2 .anchor, .prose h3 .anchor { color: inherit; }
+.prose h2 .anchor:hover, .prose h3 .anchor:hover { color: #bdbdbd; }
+.prose p, .prose ul, .prose ol { margin: 0 0 16px; }
+.prose ul, .prose ol { padding-left: 20px; }
+.prose li { margin: 6px 0; }
+.prose li::marker { color: #5c5c5c; }
+.prose strong { color: #ffffff; font-weight: 500; }
+.prose a { color: #ffffff; border-bottom: 1px solid #444444; }
+.prose a:hover { color: #ffffff; border-bottom-color: #ffffff; }
+.prose h2 a.anchor, .prose h3 a.anchor { border-bottom: 0; }
+.prose code { font-family: var(--mono); font-size: 0.86em; color: #ffffff; background: #111111; border: 1px solid #1f1f1f; border-radius: 6px; padding: 1px 6px; overflow-wrap: break-word; }
+.prose pre { margin: 0 0 20px; padding: 16px 18px; background: #0a0a0a; border: 1px solid #1f1f1f; border-radius: 12px; overflow-x: auto; line-height: 1.6; }
+.prose pre code { background: none; border: 0; padding: 0; font-size: 13px; overflow-wrap: normal; white-space: pre; }
+.table-wrap { margin: 0 0 24px; overflow-x: auto; border-top: 1px solid #1f1f1f; }
+.prose table { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.55; }
+.prose th { text-align: left; font-family: var(--mono); font-size: 11px; font-weight: 400; letter-spacing: 0.08em; text-transform: uppercase; color: #6e6e6e; padding: 12px 16px 12px 0; border-bottom: 1px solid #1f1f1f; white-space: nowrap; }
+.prose td { padding: 12px 16px 12px 0; border-bottom: 1px solid #1f1f1f; vertical-align: top; }
+.prose td:first-child { color: #ffffff; }
+.prose td code, .prose th code { white-space: nowrap; }
+.prose td:first-child { white-space: nowrap; }
+.prose hr { border: 0; border-top: 1px solid #1f1f1f; margin: 40px 0; }
+
+.docs-pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 64px; padding-top: 24px; border-top: 1px solid #1f1f1f; }
+.docs-pager a { display: flex; flex-direction: column; gap: 4px; font-size: 15px; }
+.docs-pager a span { font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6e6e6e; }
+.docs-pager a.next { text-align: right; margin-left: auto; }
+
+@media (max-width: 900px) {
+  .docs-layout { grid-template-columns: minmax(0, 1fr); gap: 0; padding-top: 24px; }
+  .docs-side { display: none; }
+  .docs-mobile-nav { display: block; margin-bottom: 32px; border-top: 1px solid #1f1f1f; border-bottom: 1px solid #1f1f1f; }
+  .docs-mobile-nav summary { cursor: pointer; padding: 14px 0; min-height: 44px; font-size: 14px; color: #a1a1a1; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+  .docs-mobile-nav summary::-webkit-details-marker { display: none; }
+  .docs-mobile-nav summary::after { content: "+"; font-family: var(--mono); color: #6e6e6e; }
+  .docs-mobile-nav[open] summary::after { content: "−"; }
+  .docs-mobile-nav .docs-nav a { padding: 12px 0 12px 14px; min-height: 44px; display: flex; align-items: center; }
+  .docs-mobile-nav .docs-nav { padding-bottom: 12px; }
+  /* Tables keep readable columns and scroll inside their own box; the page itself never scrolls sideways. */
+  .prose table { min-width: 600px; }
+  .table-wrap { margin-right: -24px; padding-right: 24px; }
+}
+
 /* Mobile menu (hidden on desktop). */
 .menu-btn { display: none; }
 .menu-sheet { display: none; }

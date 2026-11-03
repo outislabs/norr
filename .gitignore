@@ -22,3 +22,6 @@ data/
 
 # Deployment secrets file for `phala deploy -e` (see docs/FIRST-DEPLOY.md): never commit
 deploy/.env.phala
+
+# Generated from apps/landing/content/docs at build time
+apps/landing/docs/

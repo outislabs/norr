@@ -16,6 +16,7 @@
   "include": [
     "packages/*/src",
     "apps/*/src",
+    "apps/landing/build",
     "scripts"
   ],
   "exclude": [

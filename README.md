@@ -4,7 +4,7 @@
 
 Norr is a private trading layer for AI agents. An agent (Claude, ChatGPT, your own bot) connects over MCP and trades **crypto and tokenized US stocks and ETFs** across chains through **NEAR Intents**. Trades settle in the **Confidential Intents** layer when the vault holds its funds there, so pair, size and price stay off the public chain. The engine that enforces your rules runs in an **Intel TDX enclave on Phala** that anyone can check. The agent holds **one token, scoped to one vault**: it cannot withdraw, change the rules, or choose a destination.
 
-**Site:** [norr.finance](https://norr.finance) · **Dashboard:** [app.norr.finance](https://app.norr.finance) · **X:** [@norrfi](https://x.com/norrfi)
+**Site:** [norr.finance](https://norr.finance) · **Docs:** [norr.finance/docs](https://norr.finance/docs/) · **Dashboard:** [app.norr.finance](https://app.norr.finance) · **X:** [@norrfi](https://x.com/norrfi)
 
 Built for the NEAR hackathon (Nov 1 to Nov 14, 2026). Tracks: Privacy & Private AI, Unstoppable DeFi, AI Security, Agent Economy. The project was built with Claude Code as the main implementation assistant, directed by the repository owner. Read [Timeline & disclosure](#timeline--disclosure) for exactly what was built when.
 
@@ -172,6 +172,7 @@ scripts/           live trade runner, verify-attestation, research probes (live 
 - **Confidential swaps have no independent audit trail.** They are checked from balances and the provider's own report, and labelled `custody-reported`.
 - **Funding and withdrawals are public**, and the custody provider and NEAR Intents operator can see confidential trades. A funding transfer and the next hop can be correlated by timing and amount.
 - **Shield feed key pending**: the deployed service blocks all trades until it is set. Live trades so far used a dev-only bypass locally.
+- **One vault per deployment, set up by the operator.** There is no self-serve vault creation yet; a deployment's vault is configured for a named NEAR account.
 - **Owning a vault needs a NEAR account.** EVM and Solana users can fund a vault from their own chain (the Fund tab), but cannot sign in or approve swaps yet: NEAR's Ethereum-wallets module does not implement `signMessage`/NEP-413 (`docs/AURORA.md`). The sign-in page points them to HOT Wallet, which gives a NEAR account alongside EVM and Solana ones.
 - **Limit orders are out of v1**: two test limit orders never filled.
 - **Small orders**: the stock minimum is a quote-time floor that moves (about $5 on liquid tickers at US market open, higher at other times and for other tickers).

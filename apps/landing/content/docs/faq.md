@@ -1,0 +1,45 @@
+# FAQ
+
+## Can my agent steal the money?
+
+It holds one token, scoped to one vault, that can read the vault, get prices and request trades. It cannot withdraw, change rules, or choose where money goes: trades stay in the vault, and withdrawals go only to your whitelisted address with your approval. The most a misbehaving agent can do is make trades within your rules until you pause the vault or revoke its token.
+
+## Does Norr hold my keys?
+
+No. The vault's keys live in OutLayer's custody (in its enclave). The Norr service holds an API key for the vault's custody wallet, which is bounded by the limits you set in OutLayer. Custody is not trustless; see [Privacy model](/docs/privacy/).
+
+## What if the Norr service is offline?
+
+Nothing trades. Your funds stay in the custody wallet, and you can still withdraw through OutLayer's own dashboard to your whitelisted address. During the pilot the hosted service runs on demand.
+
+## Which chains can I fund from?
+
+USDC on NEAR, Ethereum, Base, Arbitrum, Optimism, Polygon, BNB Chain or Solana, or ETH or SOL. It arrives as USDC in the vault's confidential balance. USDC routes cost about 0.01% and take under a minute.
+
+## Do I need a NEAR wallet?
+
+To own a vault, yes: sign-in is a NEAR signed message, and swap approvals happen on your NEAR account in OutLayer. [HOT Wallet](https://hot-labs.org/wallet/) gives you a NEAR account next to your EVM and Solana ones. Funding can come from any listed chain.
+
+## Why do I approve every swap?
+
+On OutLayer, swaps and withdrawals share one transaction type, so approvals cannot be turned off for swaps without also turning them off for withdrawals. Keeping them is what guarantees the agent can never move money out. The Approvals tab shows what Norr asked for, so you can compare before you sign.
+
+## Which agents work?
+
+Any MCP client: Claude Code, Claude Desktop (through `mcp-remote`), or your own. The repository includes a reference agent whose model runs on NEAR AI Cloud. See [Connect your agent](/docs/connect-agent/).
+
+## What is the smallest trade?
+
+Crypto: a few dollars. Tokenized stocks: the smallest order that quotes, about $5 on the most liquid tickers at US market open and $26 for others, higher outside market hours.
+
+## Can US persons trade stocks?
+
+No. Ondo's tokenized stocks are offered to non-US persons only. You confirm non-US status before stocks are enabled. This is not legal advice.
+
+## What does it cost?
+
+Norr charges nothing in the pilot. Routes have their own costs: a $1.5 USDC to SOL round trip cost about 0.15%, and a $6 stock round trip about 1.2%.
+
+## Is it audited?
+
+No. It is a hackathon build, run with small balances. The code, tests and evidence are public: [github.com/outislabs/norr](https://github.com/outislabs/norr).
