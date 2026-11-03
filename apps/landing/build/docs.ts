@@ -233,7 +233,7 @@ export function llmsTxt(): string {
 > Norr is a private trading layer for AI agents. An agent connects over MCP with a token scoped to one vault and trades crypto and tokenized US stocks through NEAR Intents, in the Confidential Intents layer when the vault holds its funds there. Rules and a scam check are enforced by the Norr service, which runs in an attested Intel TDX enclave on Phala. Keys stay with OutLayer's custody: the agent's token cannot withdraw, change rules or choose a destination.
 
 - Dashboard: https://app.norr.finance (owners sign in with a NEAR wallet)
-- MCP: nine tools (list_assets, check_asset, get_market_data, get_quote, trade, get_portfolio, get_pnl, get_policy, get_activity), streamable HTTP with \`Authorization: Bearer <agent token>\`, or stdio from the repository
+- MCP: nine tools (list_assets, check_asset, get_market_data, get_quote, trade, get_portfolio, get_pnl, get_policy, get_activity) at https://mcp.norr.finance/mcp (streamable HTTP, \`Authorization: Bearer <agent token>\`; TLS terminates inside the attested CVM), or stdio from the repository
 - Verify: https://app.norr.finance/#/verify runs seven attestation checks in the browser, no account needed
 - Source and evidence: https://github.com/outislabs/norr (start with AGENTS.md; \`pnpm judge\` checks every claim in mock mode)
 - Status: hackathon build, unaudited, small balances; the hosted service runs on demand

@@ -18,7 +18,7 @@ Built for the NEAR hackathon (Nov 1 to Nov 14, 2026). Tracks: Privacy & Private 
 | **Confidential trades** | Confidential swaps and a tokenized-stock round trip have run on mainnet through OutLayer custody, with tiny amounts. | $6 NVDAon buy and sell back, 2026-10-30, round trip cost 0.0719 USDC (about 1.2%); a 1.5 USDC to SOL and back swap; `docs/FINDINGS.md`, `docs/PRIVACY.md` |
 | **Stocks and crypto from about $5** | Ondo tokenized stocks and crypto, 24/7. On liquid tickers (NVDAon, TSLAon, AAPLon, QQQon, AMZNon, GOOGLon) the confidential route quoted from $5.05; other tickers needed $26. The floor moves with the market. | `docs/EQUITY-MINIMUMS.md` (measured 2026-10-30) |
 | **Owner dashboard** | Sign in with a NEAR wallet; fund the vault; edit the rules; read the agent's private reasoning; approve with a request-versus-approval check; kill switch; status bar; Verify screen that works without signing in. | https://app.norr.finance |
-| **MCP server** | Nine tools over stdio and streamable HTTP, in the same attested VM. | `docs/MCP.md`; `apps/mcp` |
+| **MCP server** | Nine tools over stdio and streamable HTTP at `https://mcp.norr.finance/mcp` (TLS terminates inside the attested VM). Claude Code tested against it. | `docs/MCP.md`; `apps/mcp`; [norr.finance/docs/connect-agent](https://norr.finance/docs/connect-agent/) |
 | **Private model for the agent** | The reference agent runs its model on NEAR AI Cloud and verifies the hardware-backed signature of every response it uses. | `apps/agent`; `docs/AGENT-MODELS.md` |
 | **Mock mode** | The whole flow runs locally with no funds and no network. | [Run it in 5 minutes](#run-it-in-5-minutes-mock-mode-no-funds) |
 
@@ -41,7 +41,9 @@ pnpm exec tsx scripts/verify-attestation.mts https://85e1d6a557dae81985c9e30e282
 6. Every container image in the configuration is pinned by digest.
 7. The quote's signature chain verifies up to Intel's root certificate. The dashboard does this in your browser with Phala's `dcap-qvl` compiled to WebAssembly: it fetches Intel-signed certificate data from Phala's PCCS (a cache that cannot forge it) and sends the quote nowhere. The terminal script asks Phala's verification API instead.
 
-Observed on 2026-11-02 for this deployment: git commit `b28a094a48a8f05b8b14e4df2177bff2765dfa43`, compose hash `772658e2944d1224a12a22e269173a68a27b92a3715868226b0e67a12d360db7`, image `ghcr.io/outislabs/norr@sha256:011d93f0fa2cf6be08da90bdb9066573ff4f440c35ae7b9264f77c6648e26b56`.
+Observed on 2026-11-03 for this deployment (7/7 checks): git commit `443dc88b7c3dbb73c8483ad0a42ba6ed3601d682`, compose hash `074435c24e6d3d353d72b6c085319baa2932a4088e106c4ea39b072e82665394`, image `ghcr.io/outislabs/norr@sha256:3240dae9a7b97e66f56748daf8cf8fb8b99c0ec41362ba034985f4cc0c5f160f` (both services), plus `ghcr.io/dstack-tee/dstack-ingress:2.8@sha256:60e682449534715a2f2e5b72326ca4229209c8e26c931c6f34d27e02200ac086`.
+
+**The domain, too.** `mcp.norr.finance` is served by Phala's dstack-ingress inside the CVM: TLS terminates there, and the certificate is published at `https://mcp.norr.finance/evidences/` with a TDX quote over it. `pnpm exec tsx scripts/verify-domain.mts mcp.norr.finance <service URL>` checks that the certificate your client sees is the attested one (passed on 2026-11-03).
 
 **What this proves and what it does not.** It proves which code and images booted, on genuine TDX hardware. It does not prove what secrets the VM was given, and Phala's key service (which releases the VM's encrypted environment) is a trust assumption. Details: `docs/DEPLOY-PHALA.md`, `docs/FINDINGS.md`.
 
@@ -213,6 +215,23 @@ Organizers confirmed pre-window work is permitted. The hackathon rules count cod
 - **Nov 2:** first deployment on Phala Cloud (a smoke CVM, then the production CVM on a production OS image); attestation checked for the first time against our own hardware; a startup fix found by the smoke test (the service now starts and retries when 1Click is unreachable, and blocks trades with `PRICING_UNAVAILABLE` meanwhile); a check that fails debug OS images; dashboard status bar, onboarding, Connect-agent page, value history, clearer approvals, and a Verify screen that works without signing in; the landing page; MIT license; this README; the dashboard hosted at app.norr.finance.
 - **Nov 3:** landing page and dashboard redesigned (black and white, Geist), a strict Content-Security-Policy on the dashboard, the quote's signature chain verified in the browser (`dcap-qvl` WebAssembly), HOT sign-in tested on a phone against the live CVM, and funding from other chains (USDC on Ethereum, Base, Arbitrum, Optimism, Polygon, BNB Chain or Solana, or ETH, SOL) through Norr's own 1Click quote. Aurora's widget was evaluated and not used: it cannot pay into the vault's confidential balance (`docs/AURORA.md`).
 - **Planned:** the first mainnet funding from another chain, demo rehearsal, video and submission.
+
+## Built with
+
+- **AI:** Claude Code (Anthropic) wrote most of the code, tests and docs, directed and reviewed by the repository owner. The reference agent runs its model on NEAR AI Cloud.
+- **Libraries:** TypeScript, Node.js, pnpm, vitest, zod, Hono (`@hono/node-server`), the MCP TypeScript SDK (`@modelcontextprotocol/sdk`), `@phala/dstack-sdk`, `@phala/dcap-qvl-web`, `near-api-js`, NEAR Wallet Selector (core, modal UI, HOT, Meteor, MyNearWallet), React, Vite, Tailwind CSS, `@noble/curves` and `@noble/hashes`, `marked`, `qrcode-generator`, Geist fonts (`@fontsource`), and Phala's `dstack-ingress` container.
+- **Services:** NEAR Intents (1Click API, Confidential Intents, Shield feed), OutLayer Agent Custody, Phala Cloud (dstack, TDX), NEAR AI Cloud, DexScreener (read-only market data), Cloudflare Pages, GitHub Actions and GHCR.
+- **Own earlier code:** none; everything is in this repository's history.
+
+## Image provenance
+
+Images are built by `.github/workflows/image.yml` from this repository and signed with build provenance (Sigstore, via GitHub). Check the deployed one:
+
+```
+gh attestation verify oci://ghcr.io/outislabs/norr@sha256:3240dae9a7b97e66f56748daf8cf8fb8b99c0ec41362ba034985f4cc0c5f160f --repo outislabs/norr
+```
+
+It confirms the image was built from commit `443dc88` by that workflow. `deploy/docker-compose.yml` pins it by digest, and the attestation above shows the CVM runs that compose file.
 
 ## License
 

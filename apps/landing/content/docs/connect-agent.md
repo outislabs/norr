@@ -15,10 +15,10 @@ In the dashboard, open the vault, then **Connect**, then **Create an agent token
 The hosted MCP endpoint (streamable HTTP):
 
 ```
-https://85e1d6a557dae81985c9e30e28270f91bee5c0e9-8788.dstack-pha-prod5.phala.network/mcp
+https://mcp.norr.finance/mcp
 ```
 
-The Connect tab always shows the current URL. The service runs on demand during the pilot, so it may be offline.
+TLS for this name terminates inside the attested CVM, and its certificate is published with attested evidence, so you can check it is the enclave you are talking to ([Verify the enclave](/docs/verify/#check-the-domain)). The service runs on demand during the pilot, so it may be offline.
 
 ## Any MCP client (tested)
 
@@ -43,7 +43,7 @@ Clients that only start local commands can bridge with [mcp-remote](https://www.
 }
 ```
 
-Tested: the hosted endpoint with Claude Code, and the endpoint with the MCP TypeScript SDK client in the repository's tests. `mcp-remote` is a third-party bridge we have not run against Norr.
+Tested: the hosted endpoint (`mcp.norr.finance`) with Claude Code and with the MCP TypeScript SDK client, and the endpoint code in the repository's tests. `mcp-remote` is a third-party bridge we have not run against Norr.
 
 ## Claude Code (tested)
 
@@ -51,7 +51,7 @@ Tested: the hosted endpoint with Claude Code, and the endpoint with the MCP Type
 claude mcp add --transport http norr <MCP URL> --header "Authorization: Bearer <agent token>"
 ```
 
-Run against the hosted endpoint on 2026-11-03 with Claude Code 2.1.80: it listed the tools, read the rules and the portfolio, and reported Norr's refusal of a trade word for word. The repository's `scripts/claude-code-mcp.mts` repeats that check against any endpoint without changing your Claude configuration.
+Run against `https://mcp.norr.finance/mcp` on 2026-11-03 with Claude Code 2.1.80: it listed the tools, read the rules, the portfolio and the P&L, and reported Norr's refusal of an over-limit trade word for word (`OVER_TRADE_LIMIT`). The repository's `scripts/claude-code-mcp.mts` repeats that check against any endpoint without changing your Claude configuration.
 
 ## Claude Desktop (not yet tested)
 
@@ -127,7 +127,7 @@ curl -X POST <service URL>/v1/trade \
   -d '{"side":"buy","asset":"NVDA","amountUsd":40,"reason":"why, for the owner only"}'
 ```
 
-The service URL is the MCP host with port 8787 instead of 8788 (the Connect tab shows it filled in). Tested by the repository's tests and `pnpm judge` in mock mode, with responses checked against the OpenAPI spec.
+The service URL is `https://85e1d6a557dae81985c9e30e28270f91bee5c0e9-8787.dstack-pha-prod5.phala.network` (the Connect tab shows it filled in). Tested by the repository's tests and `pnpm judge` in mock mode, with responses checked against the OpenAPI spec.
 
 ## Norr agent (tested)
 

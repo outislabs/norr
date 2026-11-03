@@ -25,6 +25,16 @@ pnpm exec tsx scripts/verify-attestation.mts https://85e1d6a557dae81985c9e30e282
 
 Same checks; the seventh asks Phala's verification API. The service runs on demand during the pilot, so it may be offline; the dashboard says so.
 
+## Check the domain
+
+`mcp.norr.finance` is served by Phala's dstack-ingress inside the CVM: its TLS certificate is issued and held there, and published at `https://mcp.norr.finance/evidences/` with a TDX quote over it. This checks that the certificate your client sees belongs to the attested app:
+
+```
+pnpm exec tsx scripts/verify-domain.mts mcp.norr.finance https://85e1d6a557dae81985c9e30e28270f91bee5c0e9-8787.dstack-pha-prod5.phala.network
+```
+
+It verifies the evidence quote's signature chain, that the quote covers the published certificate, that the certificate served over TLS is that one, and that the quote comes from the same VM and configuration as a fresh attestation of the service. It also reports whether CAA pins certificate issuance for the name to the CVM's own ACME account.
+
 ## Match the code
 
 The checks report the git commit, the compose hash and the image digests. Compare them with the repository:
