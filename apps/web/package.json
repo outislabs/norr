@@ -13,6 +13,7 @@
     "@near-wallet-selector/my-near-wallet": "^10.1.4",
     "@norr/core": "workspace:*",
     "@norr/shared": "workspace:*",
+    "@phala/dcap-qvl-web": "0.3.3",
     "buffer": "^6.0.3",
     "near-api-js": "^6.5.1",
     "react": "^19.3.1",

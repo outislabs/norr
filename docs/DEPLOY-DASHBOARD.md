@@ -28,13 +28,14 @@ Then:
 2. **Origin for the service:** put the production address, with no trailing slash, in `NORR_ALLOWED_ORIGINS` in `deploy/.env.phala` (for example `https://norr.pages.dev`). A custom domain later (`app.norr.finance`) means adding it to that list and redeploying the CVM's environment.
 3. **Headers and routing:** the build writes `dist/_headers` (see `apps/web/vite.config.ts`), including the Content-Security-Policy. Routing is hash-based, so there are no redirect or rewrite rules to set.
 4. **Without Git access:** build locally and upload instead: `VITE_NORR_API_URL=https://<service-host> pnpm --filter @norr/web build && pnpm dlx wrangler pages deploy apps/web/dist --project-name norr`. The build writes `_headers` with the CSP for that host.
-5. **Content-Security-Policy** (`apps/web/src/lib/csp.ts`, added 2026-11-03). Strict: scripts, styles and fonts only from the dashboard itself, no inline code, no `eval`, no framing of the dashboard, no plugins, no form posts. The Norr service origin is taken from `VITE_NORR_API_URL` at build time, so changing that variable and redeploying keeps the CSP correct. The third-party origins it allows were observed in a browser while opening each wallet, not guessed:
+5. **Content-Security-Policy** (`apps/web/src/lib/csp.ts`, added 2026-11-03). Strict: scripts, styles and fonts only from the dashboard itself, no inline code, no JavaScript `eval` (`'wasm-unsafe-eval'` allows compiling WebAssembly only, for the `dcap-qvl` verifier), no framing of the dashboard, no plugins, no form posts. The Norr service origin is taken from `VITE_NORR_API_URL` at build time, so changing that variable and redeploying keeps the CSP correct. The third-party origins it allows were observed in a browser while opening each wallet, not guessed:
 
    | Origin | Directive | Why |
    |---|---|---|
    | `https://hot-labs.org` | frame-src | HOT Wallet's connect widget (an iframe) |
    | `https://h4n.app` | connect-src | HOT Wallet's relay |
    | `https://storage.herewallet.app` | img-src | HOT Wallet's logo in the picker |
+   | `https://pccs.phala.network` | connect-src | Intel-signed certificate data (TCB info, QE identity, CRLs) for Verify's in-browser signature check; the only PCCS that allows browsers |
    | `https://free.rpc.fastnear.com`, `https://mw.rpc.fastnear.com`, `https://rpc.mainnet.near.org` | connect-src | NEAR RPC used by the wallet selector and Meteor |
 
    Meteor and MyNearWallet open their own windows, which a CSP does not restrict. Meteor's bundle (zod) probes once whether it may use `eval` and falls back when it may not; the browser logs that one report, nothing breaks. The wallet picker's stylesheet `@import`s Google Fonts: the build strips remote `@import`s from dependency CSS, so opening the picker no longer tells Google who you are, and the picker uses Geist. Adding a wallet means checking its origins the same way and adding them to `csp.ts`.

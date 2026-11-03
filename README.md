@@ -39,7 +39,7 @@ pnpm exec tsx scripts/verify-attestation.mts https://85e1d6a557dae81985c9e30e282
 4. Replaying the boot event log reproduces the quote's RTMR3.
 5. The OS image is a production dstack image, not a debug one (a known debug image fails the check).
 6. Every container image in the configuration is pinned by digest.
-7. Phala's verification service confirms the quote's signature chain up to Intel's certificates (the one check that sends the quote to a third party; the dashboard runs it on request).
+7. The quote's signature chain verifies up to Intel's root certificate. The dashboard does this in your browser with Phala's `dcap-qvl` compiled to WebAssembly: it fetches Intel-signed certificate data from Phala's PCCS (a cache that cannot forge it) and sends the quote nowhere. The terminal script asks Phala's verification API instead.
 
 Observed on 2026-11-02 for this deployment: git commit `b28a094a48a8f05b8b14e4df2177bff2765dfa43`, compose hash `772658e2944d1224a12a22e269173a68a27b92a3715868226b0e67a12d360db7`, image `ghcr.io/outislabs/norr@sha256:011d93f0fa2cf6be08da90bdb9066573ff4f440c35ae7b9264f77c6648e26b56`.
 

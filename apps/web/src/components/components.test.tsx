@@ -9,6 +9,7 @@ import { PendingChecks } from "./PendingChecks";
 import { fromForm, PolicyForm, toForm } from "./PolicyForm";
 import { FundingPanel } from "./FundingPanel";
 import { AttestationPanel, DetailText } from "./AttestationPanel";
+import type { Qvl } from "../lib/qvl";
 import { fixture } from "../../../../packages/shared/src/attestation.fixture";
 import type { Api, FundingOffer, FundingStatus } from "../lib/api";
 
@@ -188,6 +189,7 @@ describe("FundingPanel", () => {
 });
 
 describe("AttestationPanel", () => {
+  const passingQvl: () => Promise<Qvl> = async () => ({ getCollateral: async () => ({}), verify: () => ({ status: "UpToDate" }) });
   /** A service that answers any nonce the way an honest TEE would, or with a swapped configuration. */
   const apiFor = (tamper = false) => {
     const swapped = JSON.stringify({ docker_compose_file: "services:\n  a:\n    image: x/a:latest\n" });
@@ -199,36 +201,38 @@ describe("AttestationPanel", () => {
 
   it("runs the checks in the browser against a fresh nonce and shows each result", async () => {
     const api = apiFor();
-    render(<AttestationPanel api={api} />);
+    render(<AttestationPanel api={api} qvl={passingQvl} />);
     fireEvent.click(screen.getByRole("button", { name: "Check attestation" }));
-    await waitFor(() => expect(screen.getByText("Every image is pinned by digest")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("The quote's signature chain is genuine")).toBeTruthy());
     const text = document.body.textContent ?? "";
     for (const label of ["The quote is a TDX quote", "The quote answers the nonce we just sent", "The configuration is the one that was measured", "The event log is the one the hardware measured"]) expect(text).toContain(label);
     expect(text).not.toMatch(/✕|fail:/);
-    expect(text).toContain("signature chain is genuine"); // listed as not run until verified
-    expect(text).toContain("Not run");
+    expect(text).toContain("Verified in this browser against Intel's root certificate");
+    expect(screen.queryByRole("button", { name: "Copy the quote" })).toBeNull(); // no fallback needed
     expect(text).toContain("abc123");
     const nonce = (api.attestation as unknown as { mock: { calls: string[][] } }).mock.calls[0]![0]!;
     expect(nonce).toMatch(/^[0-9a-f]{64}$/); // 32 random bytes, hex
   });
 
   it("shows a swapped configuration as failed, not as a pass", async () => {
-    render(<AttestationPanel api={apiFor(true)} />);
+    render(<AttestationPanel api={apiFor(true)} qvl={passingQvl} />);
     fireEvent.click(screen.getByRole("button", { name: "Check attestation" }));
     await waitFor(() => expect(screen.getByText("The configuration is the one that was measured")).toBeTruthy());
     expect(document.body.textContent).toContain("✕");
     expect(document.body.textContent).toContain("Not pinned by digest");
   });
 
-  it("hands the quote to Phala's explorer instead of sending it anywhere itself", async () => {
+  it("offers Phala's explorer when the signature cannot be checked here, and sends the quote nowhere itself", async () => {
     const f = vi.fn(async () => new Response("{}"));
     const write = vi.fn(async () => undefined);
     vi.stubGlobal("fetch", f);
     Object.defineProperty(navigator, "clipboard", { value: { writeText: write }, configurable: true });
     try {
-      render(<AttestationPanel api={apiFor()} />);
+      const unreachable: () => Promise<Qvl> = async () => ({ getCollateral: async () => { throw new Error("PCCS down"); }, verify: () => ({ status: "UpToDate" }) });
+      render(<AttestationPanel api={apiFor()} qvl={unreachable} />);
       fireEvent.click(screen.getByRole("button", { name: "Check attestation" }));
-      await waitFor(() => expect(screen.getByText("Every image is pinned by digest")).toBeTruthy());
+      await waitFor(() => expect(screen.getByRole("button", { name: "Copy the quote" })).toBeTruthy());
+      expect(document.body.textContent).toContain("skipped: The quote's signature chain is genuine");
       expect(f).not.toHaveBeenCalled(); // the quote does not leave the browser
       expect(screen.getByRole("link", { name: /Open the explorer/ }).getAttribute("href")).toBe("https://proof.t16z.com/");
       fireEvent.click(screen.getByRole("button", { name: "Copy the quote" }));

@@ -123,11 +123,11 @@ Endpoint: `POST https://nearhackathon.com/api/applications` (or the form at http
 }
 ```
 
-`idea` (20 to 2000 characters; 1,953 at drafting, so keep edits short):
+`idea` (20 to 2000 characters; 1,973 after the 2026-11-03 edit, so keep edits short):
 
 > Norr is a private trading layer for AI agents. An agent (Claude, ChatGPT or your own bot) connects over MCP and trades crypto and tokenized US stocks and ETFs through NEAR Intents. When the vault holds its funds in the confidential layer, trades settle there, so pair, size and price stay off the public chain. The agent holds one token scoped to one vault: it cannot withdraw, change the rules or choose a destination.
 >
-> What is live: the Norr service runs in an Intel TDX confidential VM on Phala. Its attestation endpoints are public, and the dashboard's Verify screen (no sign-in needed) checks the quote, freshness, configuration hash, boot event log, production OS image, image digests and Phala's signature chain. Custody is an OutLayer wallet per vault, with owner-set limits, a withdrawal whitelist and owner approval for every swap. Norr adds the asset registry with multi-issuer routing, Scam Shield, the NEAR Intents incident feed, equity eligibility, per-vault rules (trade size, daily spend and loss caps, cooldown, allowlists), a kill switch, post-trade verification of every swap, and an encrypted ledger where the agent's reasoning is sealed to the owner's wallet. The owner dashboard covers funding from any chain, rules, activity, approvals and agent setup. A reference agent runs its model on NEAR AI Cloud and verifies each response's hardware-backed signature.
+> What is live: the Norr service runs in an Intel TDX confidential VM on Phala. Its attestation endpoints are public, and the dashboard's Verify screen (no sign-in needed) checks the quote, freshness, configuration hash, boot event log, production OS image, image digests and Intel's signature chain, all in the browser. Custody is an OutLayer wallet per vault, with owner-set limits, a withdrawal whitelist and owner approval for every swap. Norr adds the asset registry with multi-issuer routing, Scam Shield, the NEAR Intents incident feed, equity eligibility, per-vault rules (trade size, daily spend and loss caps, cooldown, allowlists), a kill switch, post-trade verification of every swap, and an encrypted ledger where the agent's reasoning is sealed to the owner's wallet. The owner dashboard covers funding from any chain, rules, activity, approvals and agent setup. A reference agent runs its model on NEAR AI Cloud and verifies each response's hardware-backed signature.
 >
 > Mainnet evidence, with tiny balances: confidential swaps, and a $6 tokenized Nvidia buy and sell back (cost about 1.2%).
 >

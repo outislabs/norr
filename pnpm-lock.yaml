@@ -128,6 +128,9 @@ importers:
       '@norr/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@phala/dcap-qvl-web':
+        specifier: 0.3.3
+        version: 0.3.3
       buffer:
         specifier: ^6.0.3
         version: 6.0.3
@@ -626,6 +629,9 @@ packages:
 
   '@oxc-project/types@0.156.0':
     resolution: {integrity: sha512-1Duyg48TdJNdyhEB8Xn1L36bT9Pv6GUtlKjHxOys8xkaF/rQq3XJE+bAurSK/AgIz5mGFsb77cn9Pb20+WCScw==}
+
+  '@phala/dcap-qvl-web@0.3.3':
+    resolution: {integrity: sha512-pCSZVCMT13K5dAU+Cb5TURT0GXZ6MKvHfgQxUbELAMY8OiQglztpVN42WOjUt17z2iQjBHUWhpwodPgGO+D+CQ==}
 
   '@phala/dstack-sdk@0.5.8':
     resolution: {integrity: sha512-VANlyo0Jj6pxmJl3zksHJ4/5y3VflApVmgsfcfmokk3KYKRBkW5oMkexBTR6lZaGVPOqJ48QGOLP/7CF3IEvFg==}
@@ -2980,6 +2986,8 @@ snapshots:
   '@noble/hashes@1.8.0': {}
 
   '@oxc-project/types@0.156.0': {}
+
+  '@phala/dcap-qvl-web@0.3.3': {}
 
   '@phala/dstack-sdk@0.5.8(@noble/curves@1.9.7)(@noble/hashes@1.8.0)(@solana/web3.js@1.99.0(bufferutil@4.1.0)(typescript@5.9.3))':
     dependencies:

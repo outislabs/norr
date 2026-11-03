@@ -13,18 +13,19 @@ describe("dashboard CSP", () => {
 
   it("has no inline or eval escape hatches and cannot be framed", () => {
     const csp = buildCsp(SERVICE);
-    expect(csp).not.toMatch(/unsafe-inline|unsafe-eval|\*/);
-    expect(directive(csp, "script-src")).toEqual(["'self'"]);
+    expect(csp).not.toMatch(/unsafe-inline|[^-]'unsafe-eval'|\*/);
+    expect(directive(csp, "script-src")).toEqual(["'self'", "'wasm-unsafe-eval'"]); // WebAssembly only, never JS eval
     expect(directive(csp, "style-src")).toEqual(["'self'"]);
     expect(directive(csp, "frame-ancestors")).toEqual(["'none'"]);
     expect(directive(csp, "object-src")).toEqual(["'none'"]);
   });
 
-  it("lets the HOT wallet widget and the NEAR RPC through, and nothing sends the quote to Phala", () => {
+  it("lets the HOT wallet widget, the NEAR RPC and the certificate cache through, and nothing sends the quote to Phala", () => {
     const csp = buildCsp(SERVICE);
     expect(directive(csp, "frame-src")).toEqual(["https://hot-labs.org"]);
     expect(directive(csp, "connect-src")).toEqual(expect.arrayContaining(["https://h4n.app", "https://free.rpc.fastnear.com"]));
     expect(csp).not.toContain("cloud-api.phala.network");
+    expect(directive(csp, "connect-src")).toContain("https://pccs.phala.network"); // Intel-signed collateral for the in-browser check
   });
 
   it("writes a Pages _headers file that keeps the existing headers", () => {
