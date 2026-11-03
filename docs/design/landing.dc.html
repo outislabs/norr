@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Norr — private trading for AI agents</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&amp;family=Geist+Mono:wght@400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#000}
+a{color:#FFFFFF;text-decoration:none}a:hover{color:#BDBDBD}
+.bar{display:inline-block;height:10px;border-radius:1px;background:#2B2B2B;vertical-align:middle}
+</style>
+</helmet>
+
+<div style="background: #000000; color: #FFFFFF; font-family: Geist, system-ui, sans-serif; -webkit-font-smoothing: antialiased">
+
+  <!-- NAV -->
+  <header style="max-width: 1160px; margin: 0 auto; padding: 28px 24px; display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap">
+    <a href="https://norr.finance" aria-label="Norr home" style="display: flex; align-items: center">
+      <img src="/_blob/e0cd680647767a026ef1d3dd51f471a2" alt="Norr" style="height: 20px; width: auto; display: block">
+    </a>
+    <nav aria-label="Main" style="display: flex; align-items: center; gap: 28px; flex-wrap: wrap; font-size: 14px">
+      <a href="https://app.norr.finance/#/verify" style="color: #A1A1A1">Verify</a>
+      <a href="https://github.com/outislabs/norr/blob/main/docs/PRIVACY.md" style="color: #A1A1A1">Privacy</a>
+      <a href="https://github.com/outislabs/norr" style="color: #A1A1A1">GitHub</a>
+      <a href="https://app.norr.finance" style="display: inline-flex; align-items: center; min-height: 40px; padding: 0 18px; border-radius: 999px; background: #FFFFFF; color: #000000; font-weight: 500">Open app</a>
+    </nav>
+  </header>
+
+  <!-- HERO -->
+  <section style="max-width: 1160px; margin: 0 auto; padding: 120px 24px 96px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 28px">
+    <div style="font-family: 'Geist Mono', monospace; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #8F8F8F">Private trading for AI agents</div>
+    <h1 style="margin: 0; font-size: clamp(48px, 8.4vw, 112px); line-height: 0.95; letter-spacing: -0.05em; font-weight: 500">Your agent trades.<br><span style="color: #5C5C5C">Nobody watches.</span></h1>
+    <p style="margin: 0; max-width: 560px; font-size: 18px; line-height: 1.6; color: #A1A1A1; font-weight: 300">Crypto and tokenized stocks, traded confidentially by an engine you can verify. Your agent gets rules. Never the keys.</p>
+    <div style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 8px">
+      <a href="https://app.norr.finance" style="display: inline-flex; align-items: center; min-height: 48px; padding: 0 26px; border-radius: 999px; background: #FFFFFF; color: #000000; font-weight: 500; font-size: 15px">Open app</a>
+      <a href="https://app.norr.finance/#/verify" style="display: inline-flex; align-items: center; min-height: 48px; padding: 0 26px; border-radius: 999px; border: 1px solid #333333; color: #FFFFFF; font-weight: 400; font-size: 15px">Verify the enclave</a>
+    </div>
+  </section>
+
+  <!-- LEDGER -->
+  <section style="max-width: 760px; margin: 0 auto; padding: 0 24px 140px">
+    <div style="display: flex; justify-content: space-between; padding-bottom: 14px; border-bottom: 1px solid #1F1F1F; font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6E6E6E">
+      <span>Your view</span><span>Public chain</span>
+    </div>
+    <sc-for list="{{rows}}" as="r" hint-placeholder-count="3">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 20px 0; border-bottom: 1px solid #1F1F1F; flex-wrap: wrap">
+        <div style="display: flex; flex-direction: column; gap: 4px; text-align: left">
+          <span style="font-size: 15px; color: #FFFFFF">{{r.action}}</span>
+          <span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #7A7A7A">{{r.result}}</span>
+        </div>
+        <div style="display: flex; gap: 6px; align-items: center">
+          <span class="bar" style="width: 72px"></span><span class="bar" style="width: 36px"></span>
+        </div>
+      </div>
+    </sc-for>
+  </section>
+
+  <!-- LAYERS -->
+  <section style="max-width: 1160px; margin: 0 auto; padding: 0 24px 140px">
+    <h2 style="margin: 0 0 64px; font-size: clamp(32px, 4.4vw, 56px); letter-spacing: -0.04em; font-weight: 500; line-height: 1">Private at every layer.</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 40px 32px">
+      <sc-for list="{{layers}}" as="l" hint-placeholder-count="4">
+        <div style="border-top: 1px solid #2A2A2A; padding-top: 20px; display: flex; flex-direction: column; gap: 10px">
+          <span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #6E6E6E">{{l.n}}</span>
+          <h3 style="margin: 0; font-size: 19px; font-weight: 500; letter-spacing: -0.01em">{{l.title}}</h3>
+          <p style="margin: 0; font-size: 15px; line-height: 1.55; color: #9A9A9A; font-weight: 300">{{l.body}}</p>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- PROOF -->
+  <section style="border-top: 1px solid #1A1A1A; border-bottom: 1px solid #1A1A1A">
+    <div style="max-width: 1160px; margin: 0 auto; padding: 120px 24px; display: flex; flex-wrap: wrap; gap: 56px; align-items: flex-start">
+      <div style="flex: 1 1 380px; display: flex; flex-direction: column; gap: 20px">
+        <h2 style="margin: 0; font-size: clamp(32px, 4.4vw, 56px); letter-spacing: -0.04em; font-weight: 500; line-height: 1">Proof,<br>not promises.</h2>
+        <p style="margin: 0; max-width: 420px; font-size: 16px; line-height: 1.6; color: #9A9A9A; font-weight: 300">Your browser asks the engine for a fresh hardware attestation and checks it itself. Nothing on that screen is our word.</p>
+        <a href="https://app.norr.finance/#/verify" style="align-self: flex-start; font-size: 15px; border-bottom: 1px solid #FFFFFF; padding-bottom: 3px">Run the checks →</a>
+      </div>
+      <div style="flex: 1 1 420px; display: flex; flex-direction: column">
+        <sc-for list="{{checks}}" as="c" hint-placeholder-count="6">
+          <div style="display: flex; justify-content: space-between; gap: 16px; padding: 14px 0; border-bottom: 1px solid #1F1F1F; font-size: 14px; flex-wrap: wrap">
+            <span style="color: #FFFFFF">{{c.label}}</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #7A7A7A">{{c.value}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section style="max-width: 1160px; margin: 0 auto; padding: 140px 24px">
+    <h2 style="margin: 0 0 64px; font-size: clamp(32px, 4.4vw, 56px); letter-spacing: -0.04em; font-weight: 500; line-height: 1">It trades.<br><span style="color: #5C5C5C">It never holds the keys.</span></h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0 48px">
+      <sc-for list="{{features}}" as="f" hint-placeholder-count="6">
+        <div style="display: flex; justify-content: space-between; gap: 24px; padding: 22px 0; border-top: 1px solid #1F1F1F">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="font-size: 16px; font-weight: 500">{{f.title}}</span>
+            <span style="font-size: 14px; line-height: 1.55; color: #8F8F8F; font-weight: 300">{{f.body}}</span>
+          </div>
+          <span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #6E6E6E; white-space: nowrap">{{f.tag}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section style="max-width: 1160px; margin: 0 auto; padding: 0 24px 140px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 28px">
+    <h2 style="margin: 0; font-size: clamp(36px, 5.6vw, 72px); letter-spacing: -0.045em; font-weight: 500; line-height: 1">Trade in the dark.</h2>
+    <a href="https://app.norr.finance" style="display: inline-flex; align-items: center; min-height: 48px; padding: 0 26px; border-radius: 999px; background: #FFFFFF; color: #000000; font-weight: 500; font-size: 15px">Open app</a>
+    <p style="margin: 0; max-width: 520px; font-size: 13px; line-height: 1.6; color: #7A7A7A">Funding is a public transfer, and the custody provider and solvers see trades to execute them. <a href="https://github.com/outislabs/norr/blob/main/docs/PRIVACY.md" style="color: #BDBDBD; border-bottom: 1px solid #444444">Who sees what</a></p>
+  </section>
+
+  <!-- FOOTER -->
+  <footer style="border-top: 1px solid #1A1A1A">
+    <div style="max-width: 1160px; margin: 0 auto; padding: 32px 24px 44px; display: flex; flex-wrap: wrap; gap: 20px; justify-content: space-between; align-items: center">
+      <img src="/_blob/e0cd680647767a026ef1d3dd51f471a2" alt="Norr" style="height: 16px; width: auto; display: block">
+      <div style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #6E6E6E">NEAR Intents · NEAR AI · OutLayer · Phala</div>
+      <div style="display: flex; gap: 24px; font-size: 14px; flex-wrap: wrap">
+        <a href="https://github.com/outislabs/norr" style="color: #A1A1A1">GitHub</a>
+        <a href="https://x.com/norrfi" style="color: #A1A1A1">X</a>
+        <a href="https://app.norr.finance" style="color: #A1A1A1">App</a>
+      </div>
+    </div>
+  </footer>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":3600}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      rows: [
+        { action: 'Bought $5.50 of NVDA', result: 'executed · confidential' },
+        { action: 'Put $20 into TSLA', result: 'blocked · over your $10 limit' },
+        { action: 'Ape $5 into RUGPULL', result: 'blocked · scam risk 100/100' }
+      ],
+      layers: [
+        { n: '01', title: 'Thinking', body: 'The agent reasons on NEAR AI inside a hardware enclave.' },
+        { n: '02', title: 'Trades', body: 'Swaps settle in NEAR Confidential Intents, off the public chain.' },
+        { n: '03', title: 'Engine', body: 'Norr runs in an attested Intel TDX enclave. Even we can’t look inside.' },
+        { n: '04', title: 'Record', body: 'Reasoning is sealed to your wallet key. Only you can read it.' }
+      ],
+      checks: [
+        { label: 'Genuine hardware quote', value: 'Intel TDX v4' },
+        { label: 'Fresh for your request', value: 'nonce' },
+        { label: 'Configuration matches', value: 'compose hash' },
+        { label: 'Event log replays', value: 'RTMR3' },
+        { label: 'Production OS', value: 'dstack-0.5.12' },
+        { label: 'Exact image', value: 'sha256 pinned' }
+      ],
+      features: [
+        { title: 'Stocks and crypto', body: 'NVDA, TSLA, SOL and more, in one vault.', tag: 'from $5' },
+        { title: 'No keys, no exits', body: 'The agent can’t withdraw or change your rules.', tag: 'custody' },
+        { title: 'Scam Shield', body: 'Risky tokens are refused before any trade.', tag: 'pre-trade' },
+        { title: 'Caps and kill switch', body: 'Trade limits, daily caps, one-tap pause.', tag: 'control' },
+        { title: 'Any agent', body: 'Claude, ChatGPT or your own bot, over MCP.', tag: 'mcp' },
+        { title: 'Any chain', body: 'Fund from EVM or Solana wallets.', tag: 'soon' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

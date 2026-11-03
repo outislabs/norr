@@ -1,138 +1,135 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#171b26" />
-    <meta name="color-scheme" content="dark" />
-    <title>Norr: your agent trades, nobody watches</title>
-    <meta name="description" content="Norr is a private trading layer for AI agents. Crypto and tokenized stocks in one vault, confidential by default, inside an enclave you can verify. The agent never holds the keys." />
-    <meta property="og:title" content="Norr: your agent trades. Nobody watches." />
-    <meta property="og:description" content="A private trading layer for AI agents on NEAR Intents. The agent never holds the keys." />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Norr — private trading for AI agents</title>
+    <meta name="description" content="Crypto and tokenized stocks, traded confidentially by an engine you can verify. Your agent gets rules. Never the keys." />
+    <meta name="theme-color" content="#000000" />
+    <link rel="canonical" href="https://norr.finance/" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://norr.finance" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta property="og:url" content="https://norr.finance/" />
+    <meta property="og:title" content="Norr — Your agent trades. Nobody watches." />
+    <meta property="og:description" content="Private trading for AI agents. Crypto and tokenized stocks, traded confidentially by an engine you can verify." />
+    <meta property="og:image" content="https://norr.finance/brand/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@norrfi" />
+    <meta name="twitter:image" content="https://norr.finance/brand/og.png" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <header class="top">
-      <a class="wordmark" href="/">Norr</a>
-      <nav aria-label="Main">
-        <a href="#proof">Verify</a>
-        <a href="#hide">Privacy</a>
-        <a class="btn btn-small" href="https://app.norr.finance">Open dashboard</a>
+    <header class="nav wrap">
+      <a href="https://norr.finance" aria-label="Norr home" class="nav-logo">
+        <img src="/brand/norr-wordmark.png" alt="Norr" width="56" height="20" />
+      </a>
+      <nav aria-label="Main" class="nav-links">
+        <a href="https://app.norr.finance/#/verify" class="muted nav-text">Verify</a>
+        <a href="https://github.com/outislabs/norr/blob/main/docs/PRIVACY.md" class="muted nav-text">Privacy</a>
+        <a href="https://github.com/outislabs/norr" class="muted nav-text">GitHub</a>
+        <a href="https://app.norr.finance" class="pill pill-solid pill-sm">Open app</a>
+        <!-- Mobile menu: the native Popover API gives open/close, Escape and tap-outside without any script (CSP: script-src 'none'). -->
+        <button type="button" class="menu-btn" popovertarget="menu" aria-label="Menu" aria-controls="menu">
+          <span class="menu-icon" aria-hidden="true"></span>
+        </button>
       </nav>
     </header>
+    <div id="menu" popover class="menu-sheet">
+      <nav aria-label="Menu">
+        <a href="https://app.norr.finance/#/verify">Verify</a>
+        <a href="https://github.com/outislabs/norr/blob/main/docs/PRIVACY.md">Privacy</a>
+        <a href="https://github.com/outislabs/norr">GitHub</a>
+      </nav>
+    </div>
 
     <main>
-      <section class="hero">
-        <p class="eyebrow">A private trading layer for AI agents</p>
-        <h1>Your agent trades.<br />Nobody watches.</h1>
-        <p class="lede">Crypto and tokenized stocks in one vault, traded through NEAR Intents' confidential layer, by an engine that runs in an enclave you can check yourself. Your agent gets rules and a token. It never gets the keys.</p>
-        <div class="cta">
-          <a class="btn btn-solid" href="https://app.norr.finance">Open dashboard</a>
-          <a class="btn" href="https://github.com/outislabs/norr">GitHub</a>
-          <a class="btn" href="https://x.com/norrfi">X @norrfi</a>
+      <section class="hero wrap">
+        <div class="eyebrow">Private trading for AI agents</div>
+        <h1>Your agent trades.<br /><span class="dim">Nobody watches.</span></h1>
+        <p class="lede">Crypto and tokenized stocks, traded confidentially by an engine you can verify. Your agent gets rules. Never the keys.</p>
+        <div class="hero-actions">
+          <a href="https://app.norr.finance" class="pill pill-solid">Open app</a>
+          <a href="https://app.norr.finance/#/verify" class="pill pill-ghost">Verify the enclave</a>
         </div>
       </section>
 
-      <section id="layers">
-        <h2>Private at every layer</h2>
-        <p class="sub">Four places a strategy usually leaks, and what Norr does at each.</p>
-        <ol class="layers">
-          <li>
-            <h3>Thinking</h3>
-            <p>Run your agent's model inside a NEAR AI Cloud enclave. Norr's reference agent checks the hardware-backed signature on every response it uses, so "private model" is verified, not assumed.</p>
-          </li>
-          <li>
-            <h3>Trades</h3>
-            <p>Swaps settle in the confidential layer of NEAR Intents whenever the vault holds its funds there. Pair, size and price stay off the public chain.</p>
-          </li>
-          <li>
-            <h3>Engine</h3>
-            <p>The Norr service runs in an Intel TDX enclave on Phala. Its configuration and the exact container images it booted are measured and public.</p>
-          </li>
-          <li>
-            <h3>Record</h3>
-            <p>The agent's stated reasoning is sealed to a key derived from your wallet. The service can write it but cannot read it back; only you can open it.</p>
-          </li>
-        </ol>
+      <section class="ledger" aria-label="What you see versus what the public chain sees">
+        <div class="ledger-head"><span>Your view</span><span>Public chain</span></div>
+        <div class="ledger-row">
+          <div class="ledger-text"><span class="ledger-action">Bought $5.50 of NVDA</span><span class="ledger-result">executed · confidential</span></div>
+          <div class="ledger-bars" aria-label="hidden"><span class="bar bar-l"></span><span class="bar bar-s"></span></div>
+        </div>
+        <div class="ledger-row">
+          <div class="ledger-text"><span class="ledger-action">Put $20 into TSLA</span><span class="ledger-result">blocked · over your $10 limit</span></div>
+          <div class="ledger-bars" aria-label="hidden"><span class="bar bar-l"></span><span class="bar bar-s"></span></div>
+        </div>
+        <div class="ledger-row">
+          <div class="ledger-text"><span class="ledger-action">Ape $5 into RUGPULL</span><span class="ledger-result">blocked · scam risk 100/100</span></div>
+          <div class="ledger-bars" aria-label="hidden"><span class="bar bar-l"></span><span class="bar bar-s"></span></div>
+        </div>
       </section>
 
-      <section id="proof" class="band">
-        <h2>Proof, not promises</h2>
-        <p class="sub">Anyone can ask the running service to prove what it is. The dashboard's Verify screen runs these checks in your browser, with a fresh random nonce each time.</p>
-        <ul class="checks">
-          <li>The quote is a genuine Intel TDX quote, verified through Phala's service</li>
-          <li>It was made for your request, not replayed</li>
-          <li>The configuration matches what the hardware measured</li>
-          <li>The boot event log reproduces the hardware's register</li>
-          <li>The VM runs a production OS image, not a debug one</li>
-          <li>Every container image is pinned by digest</li>
-        </ul>
-        <p><a class="btn btn-solid" href="https://app.norr.finance/#/verify">Check the enclave yourself</a></p>
-        <p class="fine">Attestation shows which code and images the machine booted. It does not show what secrets it was given, and Phala's key service is a trust assumption we name below.</p>
+      <section class="layers wrap">
+        <h2 class="h2 h2-gap">Private at every layer.</h2>
+        <div class="layer-grid">
+          <div class="layer"><span class="layer-n">01</span><h3>Thinking</h3><p>The agent reasons on NEAR AI inside a hardware enclave.</p></div>
+          <div class="layer"><span class="layer-n">02</span><h3>Trades</h3><p>Swaps settle in NEAR Confidential Intents, off the public chain.</p></div>
+          <div class="layer"><span class="layer-n">03</span><h3>Engine</h3><p>Norr runs in an attested Intel TDX enclave. Even we can’t look inside.</p></div>
+          <div class="layer"><span class="layer-n">04</span><h3>Record</h3><p>Reasoning is sealed to your wallet key. Only you can read it.</p></div>
+        </div>
       </section>
 
-      <section id="keys">
-        <h2>Your agent never holds the keys</h2>
-        <p class="sub">The agent holds one token, scoped to one vault. The funds sit in an OutLayer custody wallet whose limits you set.</p>
-        <dl class="grid">
-          <div><dt>Rules you set</dt><dd>Largest trade, daily spend cap, daily loss cap, allowed assets, cooldown. Enforced before every trade.</dd></div>
-          <div><dt>Scam Shield</dt><dd>Unknown or thin tokens are scored on liquidity and age and blocked when high risk. A live Shield incident feed can stop an asset outright.</dd></div>
-          <div><dt>Kill switch</dt><dd>One tap pauses every vault. The next request the agent makes is refused.</dd></div>
-          <div><dt>No way out for the agent</dt><dd>It cannot withdraw, change the rules, or choose a destination. Withdrawals go only to your address and need your approval.</dd></div>
-        </dl>
+      <section class="proof">
+        <div class="proof-inner wrap">
+          <div class="proof-copy">
+            <h2 class="h2">Proof,<br />not promises.</h2>
+            <p>Your browser asks the engine for a fresh hardware attestation and checks it itself. Nothing on that screen is our word.</p>
+            <a href="https://app.norr.finance/#/verify" class="underline">Run the checks →</a>
+          </div>
+          <div class="checks">
+            <div class="check"><span>Genuine hardware quote</span><span class="mono-val">Intel TDX v4</span></div>
+            <div class="check"><span>Fresh for your request</span><span class="mono-val">nonce</span></div>
+            <div class="check"><span>Configuration matches</span><span class="mono-val">compose hash</span></div>
+            <div class="check"><span>Event log replays</span><span class="mono-val">RTMR3</span></div>
+            <div class="check"><span>Production OS</span><span class="mono-val">dstack-0.5.12</span></div>
+            <div class="check"><span>Exact image</span><span class="mono-val">sha256 pinned</span></div>
+          </div>
+        </div>
       </section>
 
-      <section class="band">
-        <h2>Stocks and crypto, one private vault, from $5</h2>
-        <p class="sub">Ask for a ticker. Norr finds every routable version and takes the best quote. Tokenized stocks trade around the clock; small orders on liquid names start at about $5.</p>
-        <ul class="plain">
-          <li>Crypto across chains, and tokenized US stocks and ETFs (Ondo)</li>
-          <li>Fund from any chain NEAR Intents supports</li>
-          <li>Every swap carries a minimum output and is checked after it runs</li>
-          <li>Tokenized stocks are not available to US persons; you confirm your status when you set the rules</li>
-        </ul>
+      <section class="features wrap">
+        <h2 class="h2 h2-gap">It trades.<br /><span class="dim">It never holds the keys.</span></h2>
+        <div class="feature-grid">
+          <div class="feature"><div class="feature-text"><span class="feature-title">Stocks and crypto</span><span class="feature-body">NVDA, TSLA, SOL and more, in one vault.</span></div><span class="feature-tag">from $5</span></div>
+          <div class="feature"><div class="feature-text"><span class="feature-title">No keys, no exits</span><span class="feature-body">The agent can’t withdraw or change your rules.</span></div><span class="feature-tag">custody</span></div>
+          <div class="feature"><div class="feature-text"><span class="feature-title">Scam Shield</span><span class="feature-body">Risky tokens are refused before any trade.</span></div><span class="feature-tag">pre-trade</span></div>
+          <div class="feature"><div class="feature-text"><span class="feature-title">Caps and kill switch</span><span class="feature-body">Trade limits, daily caps, one-tap pause.</span></div><span class="feature-tag">control</span></div>
+          <div class="feature"><div class="feature-text"><span class="feature-title">Any agent</span><span class="feature-body">Claude, ChatGPT or your own bot, over MCP.</span></div><span class="feature-tag">mcp</span></div>
+          <div class="feature"><div class="feature-text"><span class="feature-title">Any chain</span><span class="feature-body">Fund from EVM or Solana wallets.</span></div><span class="feature-tag">soon</span></div>
+        </div>
       </section>
 
-      <section id="hide">
-        <h2>What we don't hide</h2>
-        <p class="sub">Private from the public is not the same as private from everyone. The honest list:</p>
-        <ul class="plain">
-          <li><b>Funding is public.</b> Depositing to the vault, and shielding funds into the confidential layer, show on public chains.</li>
-          <li><b>Your custody provider sees every operation.</b> OutLayer builds and signs each swap. NEAR Intents' operator and solvers can read confidential intents.</li>
-          <li><b>Norr sees decisions.</b> The service reads trades to enforce your caps, and the agent can read its own activity. Only the agent's reasoning is sealed to you.</li>
-          <li><b>Confidential swaps have no independent audit trail.</b> We check them against balances and the provider's own report, and say so on every result.</li>
-          <li><b>Trust assumptions.</b> OutLayer's gateway builds swap routes, Phala's key service holds the enclave's keys, and traffic from Norr is identifiable as Norr.</li>
-        </ul>
-        <p><a href="https://github.com/outislabs/norr/blob/main/docs/PRIVACY.md">Read the full privacy table (PRIVACY.md)</a></p>
-      </section>
-
-      <section class="band">
-        <h2>Built on</h2>
-        <ul class="stack">
-          <li>NEAR Intents</li>
-          <li>Confidential Intents</li>
-          <li>NEAR AI Cloud</li>
-          <li>OutLayer</li>
-          <li>Phala</li>
-        </ul>
-      </section>
-
-      <section class="status">
-        <h2>Where this stands</h2>
-        <p>Built for the NEAR hackathon, November 2026. Real mainnet trades have run with small balances, including a confidential round trip in a tokenized stock. Each swap currently waits for the owner's approval in the custody dashboard. Limit orders are not supported. This is a hackathon build, not audited software: do not put in money you cannot lose.</p>
+      <section class="cta wrap">
+        <h2 class="cta-title">Trade in the dark.</h2>
+        <a href="https://app.norr.finance" class="pill pill-solid">Open app</a>
+        <p class="fineprint">Funding is a public transfer, and the custody provider and solvers see trades to execute them. <a href="https://github.com/outislabs/norr/blob/main/docs/PRIVACY.md">Who sees what</a></p>
       </section>
     </main>
 
-    <footer>
-      <span class="wordmark">Norr</span>
-      <nav aria-label="Footer">
-        <a href="https://app.norr.finance">Dashboard</a>
-        <a href="https://github.com/outislabs/norr">GitHub</a>
-        <a href="https://x.com/norrfi">@norrfi</a>
-      </nav>
+    <footer class="footer">
+      <div class="footer-inner wrap">
+        <img src="/brand/norr-wordmark.png" alt="Norr" width="45" height="16" />
+        <div class="footer-stack">NEAR Intents · NEAR AI · OutLayer · Phala</div>
+        <div class="footer-links">
+          <a href="https://github.com/outislabs/norr" class="muted">GitHub</a>
+          <a href="https://x.com/norrfi" class="muted">X</a>
+          <a href="https://app.norr.finance" class="muted">App</a>
+        </div>
+      </div>
     </footer>
   </body>
 </html>
