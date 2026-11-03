@@ -22,6 +22,10 @@ describe("resolveMcpUrl", () => {
     expect(resolveMcpUrl("", "/api")).toBe("http://127.0.0.1:8788/mcp");
   });
 
+  it("derives mcp.<domain> from a service at api.<domain> (the custom domains)", () => {
+    expect(resolveMcpUrl(undefined, "https://api.norr.finance")).toBe("https://mcp.norr.finance/mcp");
+  });
+
   it("refuses a remote endpoint over plain http", () => {
     expect(() => resolveMcpUrl("http://mcp.example.com/mcp", "/api")).toThrow(/https/);
   });

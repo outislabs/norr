@@ -29,6 +29,9 @@ export function resolveMcpUrl(raw: string | undefined, apiBase: string): string 
     if (u.protocol !== "https:" && !(local && u.protocol === "http:")) throw new Error("VITE_NORR_MCP_URL must be https (http is only allowed for localhost)");
     return v.replace(/\/+$/, "");
   }
+  // Custom domains (dstack-ingress): the service at api.<domain>, MCP at mcp.<domain>.
+  if (/^https:\/\/api\./.test(apiBase)) return `${apiBase.replace("https://api.", "https://mcp.")}/mcp`;
+  // Phala's gateway URLs: the service on port 8787, MCP on 8788 of the same app.
   if (/-8787\./.test(apiBase)) return `${apiBase.replace("-8787.", "-8788.")}/mcp`;
   return "http://127.0.0.1:8788/mcp";
 }

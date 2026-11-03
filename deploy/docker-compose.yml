@@ -45,5 +45,37 @@ services:
     depends_on:
       - norr
 
+  # api.norr.finance and mcp.norr.finance: Phala's dstack-ingress terminates TLS inside this CVM (HAProxy, L4) and
+  # routes by name. Certificates come from Let's Encrypt over TLS-ALPN-01, so nothing in this CVM holds DNS credentials:
+  # the owner creates the CNAME, TXT and CAA records by hand once (the container prints them on first start). The
+  # certificates and the ACME account are published at https://<domain>/evidences/ with a TDX quote over their hashes,
+  # so a client can check that the certificate it was served was issued to this attested app.
+  # Pinned: dstack-ingress 2.8 (https://github.com/Dstack-TEE/dstack-examples/tree/main/custom-domain/dstack-ingress).
+  ingress:
+    image: ghcr.io/dstack-tee/dstack-ingress:2.8@sha256:60e682449534715a2f2e5b72326ca4229209c8e26c931c6f34d27e02200ac086
+    restart: unless-stopped
+    ports:
+      - "443:443"
+    environment:
+      CHALLENGE_TYPE: tls-alpn-01
+      DOMAINS: |
+        api.norr.finance
+        mcp.norr.finance
+      ROUTING_MAP: |
+        api.norr.finance=norr:8787
+        mcp.norr.finance=mcp:8788
+      GATEWAY_DOMAIN: gateway.dstack-pha-prod5.phala.network
+      # Wait for the hand-made DNS records before asking Let's Encrypt (the default); the records are printed in the logs.
+      DNS_SETUP_MODE: wait
+    volumes:
+      - /var/run/dstack.sock:/var/run/dstack.sock
+      - cert-data:/etc/letsencrypt
+      - evidences:/evidences
+    depends_on:
+      - norr
+      - mcp
+
 volumes:
   norr-data: {}
+  cert-data: {}
+  evidences: {}
