@@ -50,7 +50,7 @@ Researched in `docs/SOLVER-FEASIBILITY.md` (Norr as a solver, PancakeSwap depth,
 - `list_assets` shows each stock's `minimumUsd` ($5.10 for NVDA, TSLA, AAPL, QQQ, AMZN, GOOGL; $26 for the rest) with a note that it can be higher outside US market hours; `get_quote` shows `statedMinimumUsd`.
 - When a stock trade finds no liquidity, Norr probes larger sizes with free dry quotes (up to the vault's per-trade limit) and returns `NO_LIQUIDITY` with `suggestedUsd`, the smallest size that quotes right now, or says honestly that none does.
 - Sells that would leave a remainder under $5.10 return a `warnings` entry (in `get_quote` and in the result); they are not blocked.
-- The numbers are a static table (`packages/core/src/equity-minimums.ts`) from one afternoon of measurements. The scheduled re-runs (`scripts/research/run-at.sh`, results in `docs/research/`) are what should update it.
+- The numbers are a static table (`packages/core/src/equity-minimums.ts`) from one afternoon of measurements. The scheduled re-runs (`scripts/research/run-at.sh`) are what should update it; their results would be written to `docs/research/`, and none have been committed yet.
 
 ## Re-running
 `set -a; . ./.env; set +a; python3 scripts/research/equity-min-map.py --venue both` at different hours and on a weekend; compare with the table above and update this file.

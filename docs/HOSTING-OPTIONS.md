@@ -59,4 +59,4 @@ Arithmetic for the $50 cap if there is no credit: a `tdx.medium` run for the who
 - OutLayer: [NEAR docs](https://docs.near.org/primitives/off-chain-compute/outlayer), [getting started](https://app.outlayer.ai/docs/getting-started), [projects](https://app.outlayer.ai/docs/projects), [pricing and limits](https://app.outlayer.ai/docs/pricing)
 - NEAR AI Cloud: [pricing](https://near.ai/pricing), [verification](https://docs.near.ai/cloud/verification)
 - Phala: [pricing](https://cloud.phala.com/about/pricing), [CLI guide](https://docs.phala.network/phala-cloud/phala-cloud-user-guides/advanced-deployment-options/start-from-cloud-cli), [launch post](https://phala.network/posts/introducing-phala-cloud-pricing-affordable-secure-scalable)
-- Hackathon: [Gate.com report](https://www.gate.com/en-us/news/detail/near-protocol-launches-hackathon-with-250k-prize-pool-starting-november-1-17905435)
+- Hackathon: the organizers' rules, https://nearhackathon.com/HACKATHON.md (a news report on Gate.com was the first source; that site blocks automated readers)

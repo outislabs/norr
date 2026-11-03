@@ -51,9 +51,11 @@ Requires Node 22 and pnpm 10 (`.node-version` and `packageManager` pin them).
 
 ```
 pnpm install
-pnpm test                # 492 tests, no network
+pnpm judge               # typecheck, every test, the demo through a real MCP client, a dashboard build: PASS/FAIL per check
 pnpm dev:mock            # the Norr service on :8787 with a funded demo vault
 ```
+
+`AGENTS.md` maps every claim to the code, the tests and the live evidence.
 
 The server prints an agent token. Then, for example (wait ten seconds between trades: the demo rules have a cooldown):
 
@@ -75,7 +77,7 @@ Owner dashboard, in a second terminal:
 pnpm dev:web             # http://localhost:5173, proxies /api to the service on :8787
 ```
 
-Choose "Use the demo owner (mock mode)". You can see balances by layer, edit the rules, read the agent's reasoning, create an agent token with copy-ready MCP config, pause one vault or everything, and run the Verify screen (in mock mode there is no TEE, and it says so).
+Choose "Use the demo owner". You can see balances by layer, edit the rules, read the agent's reasoning, create an agent token with copy-ready MCP config, pause one vault or everything, and run the Verify screen (in mock mode there is no TEE, and it says so).
 
 ## How it works
 

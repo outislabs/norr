@@ -15,7 +15,8 @@
     "dev:mock": "NORR_MOCK=1 tsx apps/enclave/src/main.ts",
     "start": "tsx apps/enclave/src/main.ts",
     "live:trade": "tsx scripts/live-trade.mts",
-    "dev:web": "pnpm --filter @norr/web dev"
+    "dev:web": "pnpm --filter @norr/web dev",
+    "judge": "tsx scripts/judge.mts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
