@@ -1,4 +1,5 @@
 import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import type { BookRepair } from "./book-repair";
 import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import type { Book, DayPnl, DaySum, Fill } from "@norr/core";
@@ -54,6 +55,7 @@ interface SavedVault {
   book: Book;
   pnl: DayPnl;
   spend: DaySum;
+  bookRepair?: BookRepair;
 }
 
 /** The vault store with its mutable state kept in `<dir>/vaults/<id>.json`, re-read before every use. */
@@ -96,6 +98,7 @@ export class FileVaultStore extends MemoryVaultStore {
     v.book = saved.book;
     v.pnl = saved.pnl;
     v.spend = saved.spend;
+    if (saved.bookRepair) v.bookRepair = saved.bookRepair;
     v.state = { ...v.state, lastTradeAtMs: saved.lastTradeAtMs };
     if (saved.pauseReason !== null) this.pauseReasons.set(id, saved.pauseReason);
     else this.pauseReasons.delete(id);
@@ -105,7 +108,7 @@ export class FileVaultStore extends MemoryVaultStore {
   private save(id: string): void {
     const v = super.get(id);
     if (!v) return;
-    const saved: SavedVault = { policy: v.policy, pauseReason: this.pauseReasons.get(id) ?? null, lastTradeAtMs: v.state.lastTradeAtMs, book: v.book, pnl: v.pnl, spend: v.spend };
+    const saved: SavedVault = { policy: v.policy, pauseReason: this.pauseReasons.get(id) ?? null, lastTradeAtMs: v.state.lastTradeAtMs, book: v.book, pnl: v.pnl, spend: v.spend, ...(v.bookRepair ? { bookRepair: v.bookRepair } : {}) };
     writeAtomic(this.path(id), JSON.stringify({ v: 1, ...this.cipher.encrypt(JSON.stringify(saved), `vault:${id}`) }));
   }
 
@@ -137,6 +140,14 @@ export class FileVaultStore extends MemoryVaultStore {
 
   override resume(id: string): void {
     this.mutate(id, () => super.resume(id));
+  }
+
+  override repairBookOnce(id: string, rebuild: Parameters<MemoryVaultStore["repairBookOnce"]>[1]): BookRepair | null {
+    let out: BookRepair | null = null;
+    this.mutate(id, () => {
+      out = super.repairBookOnce(id, rebuild);
+    });
+    return out;
   }
 
   override recordTrade(id: string, atMs: number): void {

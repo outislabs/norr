@@ -190,7 +190,12 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
     });
   });
 
-  app.get("/v1/pnl", (c) => c.json(vaultPnl(deps, c.get("vaultId"))));
+  app.get("/v1/pnl", (c) => {
+    const id = c.get("vaultId");
+    const repair = deps.vaults.get(id)?.bookRepair;
+    // The one-off cost-book correction, if it ran: positions and cost only, as the P&L above already shows them.
+    return c.json({ ...vaultPnl(deps, id), ...(repair ? { costBookRepair: repair } : {}) });
+  });
 
   // Market data for one asset: the listed price (1Click's token list) and, for crypto, the read-only signals Scam Shield
   // scores (liquidity, market cap, age) with its verdict. Numbers only; Norr does not recommend trades.

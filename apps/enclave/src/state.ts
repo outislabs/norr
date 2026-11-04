@@ -1,6 +1,7 @@
 import { addRealized, addToDay, applyFill, dayKey, emptyDay, releaseFromDay, type Book, type DayPnl, type DaySum, type Fill, type VaultState } from "@norr/core";
 import type { Custody } from "@norr/intents";
 import type { Decision, Policy, TradeRequest } from "@norr/shared";
+import type { BookRepair } from "./book-repair";
 import type { SealedReason } from "./seal";
 import type { PendingSettlement } from "./trade";
 
@@ -20,6 +21,8 @@ export interface Vault {
   pnl: DayPnl;
   /** Buys today (UTC), reserved when a swap is sent, for the daily spend cap. */
   spend: DaySum;
+  /** Set once the one-off cost-book repair has run (see book-repair.ts); it never runs again. */
+  bookRepair?: BookRepair;
 }
 
 export interface VaultStore {
@@ -38,6 +41,8 @@ export interface VaultStore {
   reserveSpend(id: string, usd: number, atMs: number): string;
   /** Give a reservation back when the swap definitely did not run. */
   releaseSpend(id: string, day: string, usd: number): void;
+  /** Run the one-off cost-book repair if it has not run yet. `rebuild` returns the corrected book and its record, or null to leave it. */
+  repairBookOnce(id: string, rebuild: (v: Vault) => { book: Book; record: BookRepair } | null): BookRepair | null;
 }
 
 export interface LedgerEntry {
@@ -100,6 +105,16 @@ export class MemoryVaultStore implements VaultStore {
     if (!v) return;
     v.policy = { ...v.policy, paused: false };
     this.pauseReasons.delete(id);
+  }
+
+  repairBookOnce(id: string, rebuild: (v: Vault) => { book: Book; record: BookRepair } | null): BookRepair | null {
+    const v = this.vaults.get(id);
+    if (!v || v.bookRepair) return null;
+    const r = rebuild(v);
+    if (!r) return null;
+    v.book = r.book;
+    v.bookRepair = r.record;
+    return r.record;
   }
 
   recordTrade(id: string, atMs: number): void {

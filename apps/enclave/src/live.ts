@@ -10,6 +10,7 @@ import { OwnerAuth, RpcAccessKeyChecker } from "./owner/auth";
 import { BYPASS_BANNER, bypassWarning, resolveShieldMode } from "./shield-mode";
 import { walletCredentials } from "./wallet-env";
 import { FileLedger, FileVaultStore, dataDir } from "./persist";
+import { repairBook } from "./book-repair";
 import { DataCipher, FileSealKeys, SealingLedger } from "./seal";
 import { newVault } from "./state";
 import { AgentTokens } from "./tokens";
@@ -50,7 +51,6 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env, opts: 
     onFailure: (n, m) => console.warn(`  pricing: 1Click token list unavailable (attempt ${n}): ${m}. Trades are blocked until it loads; retrying.`),
     onReady: (n) => console.log(`  pricing: token list loaded (attempt ${n}). Trades are allowed.`),
   });
-  void pricing.start();
   const registry = pricing.registry;
   // Until the list loads, USDC is not in the registry; this placeholder keeps read paths working and trades are blocked by the gate.
   const quoteAsset = new Proxy({ id: USDC_NEAR, symbol: "USDC", name: "USDC", class: "crypto", chain: "near", decimals: 6, ticker: "USDC", issuer: null, priceUsd: 1, coingeckoId: null, contractAddress: null } as RegistryEntry, {
@@ -78,6 +78,12 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env, opts: 
   // The agent's reasoning is never stored in the clear: sealed to the owner's key (or, until they enroll one, to the service key).
   const ledger = new SealingLedger(new FileLedger(dir, cipher), sealKeys, cipher, (id) => vaults.get(id)?.owner);
   ledger.sealExisting(policy.vaultId);
+  // Not awaited, like the token list. Once it loads, the one-off cost-book repair runs (book-repair.ts; recorded, never twice).
+  void pricing.start().then(() => {
+    if (!pricing.ready()) return;
+    const r = repairBook({ vaults, ledger, registry, now }, policy.vaultId);
+    if (r) console.log(`  cost book: rebuilt from the ledger (${r.fills} executed trades); before/after on /v1/pnl.`);
+  });
 
   const shield = env.SHIELD_API_KEY ? new ShieldClient({ apiKey: env.SHIELD_API_KEY }).feed : async () => null;
   // Scam Shield's inputs: market data (DexScreener) and contract checks (GoPlus), fetched together. Scam Shield scores
