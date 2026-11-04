@@ -465,6 +465,11 @@ export async function settle(deps: TradeDeps, vaultId: string, ctx: PendingSettl
 export async function reconcile(deps: TradeDeps, ledgerId: string): Promise<Decision | null> {
   const row = deps.ledger.get(ledgerId);
   if (!row?.pending) return null;
+  // Already settled (a row written before cleared fields were persisted): clear the marker, never settle or book it twice.
+  if (row.decision.status !== "pending_approval") {
+    deps.ledger.update(ledgerId, { pending: undefined });
+    return row.decision;
+  }
   const vault = deps.vaults.get(row.vaultId);
   if (!vault) return null;
   const st = await vault.custody.status(row.pending.requestId).catch(() => null);

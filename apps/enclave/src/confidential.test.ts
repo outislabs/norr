@@ -129,6 +129,23 @@ describe("approval and ordering", () => {
     expect(await reconcile(h.deps, row.id)).toMatchObject({ status: "executed", venue: "confidential", verification: "custody-reported" });
   });
 
+  it("settles a swap once: the next trade is not blocked, and reading the activity again books nothing more (seen live 2026-11-04)", async () => {
+    const h = harness({ mock: { ...confidentialFunded, requireApproval: true } });
+    const first = await executeTrade(h.deps, req());
+    h.rails.approve((first as { requestId: string }).requestId);
+    const row = h.ledger.list("v1")[0]!;
+    await reconcile(h.deps, row.id);
+    const book = structuredClone(h.vaults.get("v1")!.book);
+    expect(h.ledger.get(row.id)!.pending).toBeUndefined();
+    expect(await reconcile(h.deps, row.id)).toBeNull();
+    // A row settled by an earlier version still carrying its marker: cleared, not settled or booked again.
+    h.ledger.update(row.id, { pending: row.pending });
+    expect(await reconcile(h.deps, row.id)).toMatchObject({ status: "executed" });
+    expect(h.ledger.get(row.id)!.pending).toBeUndefined();
+    expect(h.vaults.get("v1")!.book).toEqual(book);
+    expect((await executeTrade(h.deps, req({ asset: "SOL", amountUsd: 5 }))).status).not.toBe("failed");
+  });
+
   it("a public swap waiting for the owner does not block a confidential one", async () => {
     const h = harness({ policy: { privacy: "prefer" }, mock: { requireApproval: true } });
     expect((await executeTrade(h.deps, req())).status).toBe("pending_approval"); // public: no confidential funds

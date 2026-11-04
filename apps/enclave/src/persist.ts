@@ -158,7 +158,8 @@ export class FileVaultStore extends MemoryVaultStore {
   }
 }
 
-type LedgerOp = { op: "append"; entry: LedgerEntry } | { op: "update"; id: string; patch: Partial<Omit<LedgerEntry, "id">> };
+/** `unset` lists fields the update cleared: JSON drops `undefined`, so without it a cleared field (such as `pending`) would come back on the next read. */
+type LedgerOp = { op: "append"; entry: LedgerEntry } | { op: "update"; id: string; patch: Partial<Omit<LedgerEntry, "id">>; unset?: string[] };
 
 /**
  * An append-only ledger in `<dir>/ledger.jsonl`. Updates are written as further lines and folded in
@@ -208,7 +209,10 @@ export class FileLedger implements Ledger {
       if (op.op === "append") byId.set(op.entry.id, op.entry);
       else {
         const row = byId.get(op.id);
-        if (row) byId.set(op.id, { ...row, ...op.patch });
+        if (!row) continue;
+        const next: Record<string, unknown> = { ...row, ...op.patch };
+        for (const k of op.unset ?? []) delete next[k];
+        byId.set(op.id, next as unknown as LedgerEntry);
       }
     }
     return [...byId.values()];
@@ -221,7 +225,8 @@ export class FileLedger implements Ledger {
   }
 
   update(id: string, patch: Partial<Omit<LedgerEntry, "id">>): void {
-    this.write({ op: "update", id, patch });
+    const unset = Object.keys(patch).filter((k) => patch[k as keyof typeof patch] === undefined);
+    this.write({ op: "update", id, patch, ...(unset.length ? { unset } : {}) });
   }
 
   get(id: string): LedgerEntry | undefined {

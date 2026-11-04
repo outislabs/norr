@@ -169,3 +169,17 @@ describe("encryption at rest", () => {
     expect(() => new DataCipher(Buffer.alloc(16))).toThrow(/32 bytes/);
   });
 });
+
+describe("FileLedger: a cleared field stays cleared", () => {
+  it("an update that clears `pending` survives the JSON log (JSON drops undefined), for this reader and a new one", () => {
+    const dir = tmp();
+    const l = new FileLedger(dir, CIPHER);
+    const pending = { venue: "confidential", requestId: "r1" } as unknown as NonNullable<ReturnType<FileLedger["get"]>>["pending"];
+    const row = l.append({ vaultId: "v1", at: T0, request: req(), decision: { status: "pending_approval", requestId: "r1", message: "wait" }, pending });
+    expect(l.get(row.id)!.pending).toBeDefined();
+    l.update(row.id, { decision: { status: "failed", message: "x" }, pending: undefined });
+    expect(l.get(row.id)!.pending).toBeUndefined();
+    expect(new FileLedger(dir, CIPHER).get(row.id)).toMatchObject({ decision: { status: "failed" } });
+    expect("pending" in new FileLedger(dir, CIPHER).get(row.id)!).toBe(false);
+  });
+});
