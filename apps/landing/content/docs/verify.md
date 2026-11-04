@@ -36,6 +36,17 @@ pnpm exec tsx scripts/verify-domain.mts mcp.norr.finance https://api.norr.financ
 
 It verifies the evidence quote's signature chain, that the quote covers the published certificate, that the certificate served over TLS is that one, and that the quote comes from the same VM and configuration as a fresh attestation of the service. It also reports whether CAA pins certificate issuance for the name to the CVM's own ACME account.
 
+## Advanced: reach the CVM directly through Phala's gateway
+
+`api.norr.finance` and `mcp.norr.finance` are the normal addresses. To bypass norr.finance DNS entirely, the same CVM answers through Phala's gateway, with TLS terminated at Phala's gateway instead of inside the CVM:
+
+```
+https://85e1d6a557dae81985c9e30e28270f91bee5c0e9-8787.dstack-pha-prod5.phala.network          (the service)
+https://85e1d6a557dae81985c9e30e28270f91bee5c0e9-8788.dstack-pha-prod5.phala.network/mcp      (MCP)
+```
+
+Attestation works the same way on either address, since it is bound to your nonce, not to the hostname.
+
 ## Match the code
 
 The checks report the git commit, the compose hash and the image digests. Compare them with the repository:

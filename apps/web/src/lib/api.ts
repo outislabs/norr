@@ -51,7 +51,7 @@ export interface FundingOffer {
 }
 export interface FundingStatus { state: "waiting" | "arrived" | "expired"; receivedUsdc: number; balanceUsdc: number; expiresAt: string; reportedBy: string; independentlyConfirmed?: boolean }
 export interface VerifyInfo { mode: "mock" | "live"; attested: boolean; note: string; commit: string | null; dirty?: boolean; source?: "env" | "git" | "unknown" }
-export interface ServiceStatus { mock: boolean; pricing: "ready" | "retrying"; shield: "ok" | "incidents" | "unavailable"; enclave: boolean; vaults: { total: number; paused: number } }
+export interface ServiceStatus { mock: boolean; pricing: "ready" | "retrying"; shield: "ok" | "incidents" | "unavailable" | "not_configured"; enclave: boolean; vaults: { total: number; paused: number } }
 export interface ValuePoint { t: number; totalUsd: number; cryptoUsd: number; equityUsd: number }
 export interface AssetPnl { asset: string; trades: number; boughtUsd: number; soldUsd: number; realizedUsd: number; qtyHeld: number; costBasisUsd: number; avgCostUsd: number | null; priceUsd: number | null; marketValueUsd: number | null; unrealizedUsd: number | null }
 export interface VaultPnl { since: string | null; scope: string; assets: AssetPnl[]; totals: { boughtUsd: number; soldUsd: number; realizedUsd: number; unrealizedUsd: number; totalUsd: number; costBasisUsd: number }; unpriced: string[] }
@@ -97,7 +97,7 @@ export function createApi(o: ApiOptions) {
     return body as T;
   }
   return {
-    health: () => call<{ ok: boolean; mock: boolean; mockOwner?: string }>("/health"),
+    health: () => call<{ ok: boolean; mock: boolean; mockOwner?: string; incidentFeed?: "active" | "not_configured" }>("/health"),
     challenge: () => call<Challenge>("/owner/v1/challenge"),
     login: (b: { accountId: string; publicKey: string; signature: string; nonce: string }) => call<SessionInfo>("/owner/v1/login", { body: b }),
     logout: () => call<{ ok: boolean }>("/owner/v1/logout", { body: {} }),

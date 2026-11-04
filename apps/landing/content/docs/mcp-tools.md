@@ -38,7 +38,7 @@ Nine tools. Eight only read; `trade` can move money, inside the vault only. No t
 | `EQUITY_LIMIT` | Would push stocks above the vault's allowed share. |
 | `INELIGIBLE` | Stocks are off until the owner confirms non-US status. |
 | `SCAM_RISK` | Scam Shield rates the token high risk (or medium, when the vault does not allow medium). |
-| `SHIELD_INCIDENT` | An active NEAR Intents security incident touches the asset, or the incident feed cannot be read (Norr fails closed). |
+| `SHIELD_INCIDENT` | Only when the deployment has the incident feed configured: an active NEAR Intents security incident touches the asset, or the feed cannot be read (Norr fails closed). Every answer's `incidentFeed` field says whether the feed is active or not configured. |
 | `PRICE_SANITY` | The quoted stock price is more than 2% from the reference price, or there is no reliable reference. |
 | `UNKNOWN_ASSET` | Not in the asset list. |
 | `NO_LIQUIDITY` | No route quoted for that size. |

@@ -1,4 +1,4 @@
-import { checkShield, EQUITY_DISCLAIMER, equityMinimum, MINIMUMS_NOTE, sumToday, unitsToNumber, type RiskResult } from "@norr/core";
+import { checkShield, EQUITY_DISCLAIMER, equityMinimum, incidentFeedInfo, MINIMUMS_NOTE, sumToday, unitsToNumber, type IncidentFeedStatus, type RiskResult } from "@norr/core";
 import { TradeInput, type Decision, type TradeRequest } from "@norr/shared";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -77,7 +77,10 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
   });
 
   // In mock mode the demo owner is public, so the dashboard can offer a one-click demo sign-in.
-  app.get("/health", (c) => c.json({ ok: true, mock, pricing: deps.pricingReady?.() === false ? "retrying" : "ready", ...(mock ? { mockOwner: deps.vaults.list()[0]?.owner } : {}) }));
+  // The incident feed's status is a deployment setting (a partner key is configured or not), reported on every answer.
+  const feedStatus = (): IncidentFeedStatus => deps.incidentFeed ?? "active";
+  const feedInfo = () => incidentFeedInfo(feedStatus());
+  app.get("/health", (c) => c.json({ ok: true, mock, pricing: deps.pricingReady?.() === false ? "retrying" : "ready", incidentFeed: feedStatus(), ...(mock ? { mockOwner: deps.vaults.list()[0]?.owner } : {}) }));
 
   app.use("/v1/*", async (c, next) => {
     const m = /^Bearer (.+)$/.exec(c.req.header("authorization") ?? "");
@@ -113,10 +116,11 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
     if (!q) return c.json({ error: "asset is required" }, 400);
     const res = deps.registry.resolve(q);
     if (!res) return c.json({ found: false, message: `"${q}" is not a tradable asset.` });
-    const feed = await deps.shield().catch(() => null);
+    const active = feedStatus() === "active";
+    const feed = active ? await deps.shield().catch(() => null) : null;
     const versions = await Promise.all(
       res.candidates.map(async (e) => {
-        const shield = checkShield(feed, e);
+        const shield = active ? checkShield(feed, e) : null;
         const risk: RiskResult | null = res.class === "crypto" ? await deps.risk.assess(e) : null;
         return { symbol: e.symbol, issuer: e.issuer, chain: e.chain, shieldBlocked: shield?.message ?? null, risk };
       }),
@@ -127,6 +131,7 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
       ticker: res.ticker,
       versions,
       ...(res.class === "equity" ? { eligible: vault.policy.nonUsConfirmed, notice: EQUITY_DISCLAIMER } : {}),
+      incidentFeed: feedInfo(),
     });
   });
 
@@ -141,7 +146,7 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
     const request = await parseTrade(c, vault.id);
     if (!request) return c.json({ error: "invalid request" }, 400);
     const planned = await planTrade(deps, vault, request);
-    if ("decision" in planned) return c.json(planned.decision);
+    if ("decision" in planned) return c.json({ ...planned.decision, incidentFeed: feedInfo() });
     const { plan } = planned;
     const out = plan.side === "buy" ? plan.candidate : deps.quoteAsset;
     return c.json({
@@ -156,6 +161,7 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
       venue: plan.venue,
       ...(plan.candidate.class === "equity" ? { statedMinimumUsd: equityMinimum(plan.candidate.ticker).usd } : {}),
       ...(plan.warnings.length ? { warnings: plan.warnings } : {}),
+      incidentFeed: feedInfo(),
     });
   });
 
@@ -163,7 +169,7 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
     const request = await parseTrade(c, c.get("vaultId"));
     if (!request) return c.json({ error: "invalid request" }, 400);
     const decision: Decision = await executeTrade(deps, request);
-    return c.json(decision);
+    return c.json({ ...decision, incidentFeed: feedInfo() });
   });
 
   app.get("/v1/portfolio", async (c) => {
@@ -197,6 +203,7 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
       equitiesEnabled: p.nonUsConfirmed,
       privacy: p.privacy,
       paused: p.paused,
+      incidentFeed: feedInfo(),
     });
   });
 
@@ -218,7 +225,7 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
         return { ...base, liquidityUsd: signals?.liquidityUsd ?? null, marketCapUsd: signals?.marketCapUsd ?? null, ageDays: signals?.ageDays ?? null, routable: signals?.routable ?? null, risk: risk ? { level: risk.level, score: risk.score } : null };
       }),
     );
-    return c.json({ found: true, class: res.class, ticker: res.ticker, versions, source: res.class === "crypto" ? "Price: NEAR Intents token list. Liquidity, market cap and age: DexScreener (read-only), as scored by Scam Shield." : "Price: NEAR Intents token list." });
+    return c.json({ found: true, class: res.class, ticker: res.ticker, versions, incidentFeed: feedInfo(), source: res.class === "crypto" ? "Price: NEAR Intents token list. Liquidity, market cap and age: DexScreener (read-only), as scored by Scam Shield." : "Price: NEAR Intents token list." });
   });
 
   app.get("/v1/activity", async (c) => {

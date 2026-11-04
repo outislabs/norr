@@ -96,7 +96,7 @@ export function createNorrServer(client: EnclaveClient): McpServer {
     {
       title: "Your rules",
       description:
-        "The rules you must stay within: the largest single trade, the daily spending cap and how much of it is left today, the daily loss cap, the share of the vault allowed in stocks, which assets are allowed, the cooldown between trades, whether stocks are enabled, and whether the vault is paused. Read this to plan trades that will not be blocked.",
+        "The rules you must stay within: the largest single trade, the daily spending cap and how much of it is left today, the daily loss cap, the share of the vault allowed in stocks, which assets are allowed, the cooldown between trades, whether stocks are enabled, whether the vault is paused, and whether this deployment checks the NEAR Intents incident feed (incidentFeed; every trade answer carries it too). Read this to plan trades that will not be blocked.",
       annotations: read,
     },
     () => run(() => client.get("/v1/policy")),

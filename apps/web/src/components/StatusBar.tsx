@@ -68,7 +68,9 @@ export function statusPills(enclave: EnclaveState, status: ServiceStatus | null)
       ? { id: "shield", label: "Shield clear", tone: "ok", title: "The NEAR Intents incident feed reports no incidents." }
       : status.shield === "incidents"
         ? { id: "shield", label: "Shield incident", tone: "warn", title: "The incident feed lists an active incident. Trades in affected assets are blocked." }
-        : { id: "shield", label: "Shield unavailable", tone: "bad", title: "The incident feed cannot be read (no key yet, or it is down). Trades fail closed: all are blocked until it answers." },
+        : status.shield === "not_configured"
+          ? { id: "shield", label: "Incident feed: not configured", tone: "warn", title: "Incident feed: not configured (partner key pending). This deployment has no NEAR Intents partner key for the incident feed, so trades that pass your rules and Scam Shield are not checked against it. Every answer to your agent says so." }
+          : { id: "shield", label: "Shield unavailable", tone: "bad", title: "The incident feed is configured but cannot be read. Trades fail closed: all are blocked until it answers." },
   );
   pills.push(
     status.vaults.total === 0

@@ -40,7 +40,7 @@ No preset confirms non-US status; you do that yourself.
 In this order: Scam Shield (crypto) or eligibility (stocks), then your rules, then the incident feed. A trade that breaks one of your rules is refused with that rule's reason; only trades that pass every rule reach the feed.
 
 - **Scam Shield (crypto).** Scores liquidity, market cap and token age from read-only market data; known stablecoins and majors are allowlisted, and anything not routable through NEAR Intents is high risk. 65 or more is high (refused), 35 to 64 medium (refused unless you allow it). Unknown data counts as risk, so it fails closed. It is a set of heuristics, not a guarantee.
-- **Shield incident feed.** An active NEAR Intents security incident touching the asset blocks the trade. If the feed cannot be read, trades are blocked (fail closed).
+- **Incident feed (optional, a deployment setting).** With a NEAR Intents partner key configured, an active security incident touching the asset blocks the trade, and a feed that cannot be read blocks every trade (fail closed). Without a key there is no feed to check: the step is skipped, every other check still runs, and every answer says "Incident feed: not configured (partner key pending)". The hosted service has no key yet. NEAR Intents publishes no keyless incident or status signal.
 - **Price sanity (stocks).** A stock quote more than 2% from the reference price is refused.
 - **Minimum output.** Every swap carries a positive minimum taken from Norr's own quote, and the result is checked afterwards against that quote. A mismatch, or a result that cannot be checked, pauses the vault; the dashboard shows it paused until you resume.
 

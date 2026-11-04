@@ -57,6 +57,15 @@ describe("preTradeChecks", () => {
       expect(await preTradeChecks(base({ ...incidentOnSol, request: request({ asset: "SOL", amountUsd: 5 }) }))).toMatchObject({ code: "SHIELD_INCIDENT" });
     });
 
+    it("with no feed configured on the deployment, rule-abiding trades pass and every rule and scam check still applies", async () => {
+      const off = { shield: null, incidentFeed: "not_configured" as const };
+      expect(isBlock(await preTradeChecks(base({ ...off, request: request({ asset: "SOL", amountUsd: 5 }) })))).toBe(false);
+      expect(await preTradeChecks(base({ ...off, policy: policy({ maxTradeUsd: 50 }), request: request({ asset: "TSLA", amountUsd: 150 }) }))).toMatchObject({ code: "OVER_TRADE_LIMIT" });
+      expect(await preTradeChecks(base({ ...off, request: request({ asset: "RUGCOIN", amountUsd: 5 }) }))).toMatchObject({ code: "SCAM_RISK" });
+      // A configured feed that cannot be read still fails closed.
+      expect(await preTradeChecks(base({ shield: null, incidentFeed: "active", request: request({ asset: "SOL", amountUsd: 5 }) }))).toMatchObject({ code: "SHIELD_INCIDENT" });
+    });
+
     it("the owner's explicit dev bypass still lets a rule-abiding trade through when the feed is down", async () => {
       expect(isBlock(await preTradeChecks(base({ ...down, shieldOnUnavailable: "allow", request: request({ asset: "SOL", amountUsd: 5 }) })))).toBe(false);
     });

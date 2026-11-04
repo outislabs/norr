@@ -77,6 +77,8 @@ export function apiReferenceMd(spec: Obj): string {
     "",
     ...spec.servers.map((s: Obj) => `- \`${s.url}\`: ${s.description}`),
     "",
+    "MCP endpoint (the same operations as tools): `https://mcp.norr.finance/mcp`.",
+    "",
     "## Authentication",
     "",
     "Send the vault's agent token on every `/v1` request: `Authorization: Bearer <agent token>`. Create one in the dashboard (Connect). A token works for one vault only.",

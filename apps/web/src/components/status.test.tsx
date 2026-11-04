@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Api, ServiceStatus } from "../lib/api";
 import { ConnectAgent } from "./ConnectAgent";
+import { VerifyPage } from "../pages/VerifyPage";
 import { Onboarding } from "./Onboarding";
 import { PnlPanel, signedUsd } from "./PnlPanel";
 import { Portfolio } from "./Portfolio";
@@ -31,6 +32,12 @@ describe("statusPills", () => {
 
   it("treats an unreachable service as offline (the engine runs on demand), not as a failed check", () => {
     expect(statusPills("offline", null)).toEqual([expect.objectContaining({ id: "enclave", label: "Offline", tone: "idle", href: "#/verify" })]);
+  });
+
+  it("labels an incident feed that is not configured, without calling it a failure", () => {
+    const p = byId(statusPills("pass", { ...ok, shield: "not_configured" }));
+    expect(p.shield).toMatchObject({ tone: "warn", label: "Incident feed: not configured" });
+    expect(p.shield!.title).toContain("partner key pending");
   });
 
   it("explains pricing retrying and an unreadable Shield feed as the reason trades are blocked", () => {
@@ -148,5 +155,14 @@ describe("ConnectAgent", () => {
     fireEvent.click(screen.getByRole("tab", { name: "REST API" }));
     expect(screen.getByRole("tabpanel").textContent).toContain("curl -X POST https://api.example/v1/trade");
     expect(screen.getByRole("tabpanel").textContent).toContain("Bearer norr_agent_abc123");
+  });
+});
+
+describe("VerifyPage", () => {
+  it("shows anyone, signed in or not, that the incident feed is not configured on this deployment", async () => {
+    const api = { health: vi.fn(async () => ({ ok: true, mock: false, incidentFeed: "not_configured" })) } as unknown as Api;
+    render(<VerifyPage api={api} signedIn={false} />);
+    const row = await screen.findByTestId("deployment-settings");
+    expect(row.textContent).toContain("Not configured (partner key pending)");
   });
 });

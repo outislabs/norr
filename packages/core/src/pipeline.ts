@@ -2,7 +2,7 @@ import type { Policy, TradeRequest, Asset } from "@norr/shared";
 import { evaluatePolicy } from "./policy";
 import type { Registry, RegistryEntry } from "./registry";
 import { checkEquityEligibility, gateRisk, type RiskProvider, type RiskResult } from "./risk";
-import { checkShield, type ShieldFeed } from "./shield";
+import { checkShield, type IncidentFeedStatus, type ShieldFeed } from "./shield";
 import { block, type Block, type VaultState } from "./types";
 
 export interface PreTradeInput {
@@ -13,6 +13,8 @@ export interface PreTradeInput {
   risk: RiskProvider;
   shield: ShieldFeed | null;
   shieldOnUnavailable?: "block" | "allow";
+  /** "not_configured" (no partner key): the feed step is skipped; the answer says so (see incidentFeedInfo). */
+  incidentFeed?: IncidentFeedStatus;
   nowMs: number;
 }
 
@@ -72,7 +74,10 @@ export async function preTradeChecks(i: PreTradeInput): Promise<PreTradePass | B
   if (policyFailure) return policyFailure;
 
   // 3. The NEAR Intents incident feed, last, for trades that pass every rule. Still fail-closed: an active incident, or a
-  //    feed that cannot be read, blocks the candidate.
+  //    feed that cannot be read, blocks the candidate. Skipped only when the deployment has no feed configured.
+  if (i.incidentFeed === "not_configured") {
+    return { ok: true, class: res.class, ticker: res.ticker, candidates: kept.map((s) => s.entry), risk: Object.fromEntries(kept.map((s) => [s.entry.id, s.risk])) };
+  }
   let shieldFailure: Block | null = null;
   const clear = survivors.filter((s) => {
     const f = checkShield(i.shield, s.entry, { onUnavailable: i.shieldOnUnavailable });

@@ -158,6 +158,9 @@ describe("owner routes", () => {
   it("status says whether pricing, Shield and the enclave are up, and how many vaults are paused", async () => {
     const { m, req, token } = await boot();
     expect(await (await req("/owner/v1/status", { token })).json()).toMatchObject({ mock: true, pricing: "ready", shield: "ok", vaults: { total: 1, paused: 0 } });
+    m.deps.incidentFeed = "not_configured";
+    expect((await (await req("/owner/v1/status", { token })).json()).shield).toBe("not_configured");
+    m.deps.incidentFeed = "active";
     m.deps.pricingReady = () => false;
     m.deps.shield = async () => null;
     expect(await (await req("/owner/v1/status", { token })).json()).toMatchObject({ pricing: "retrying", shield: "unavailable" });

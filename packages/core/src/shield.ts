@@ -24,6 +24,21 @@ export function incidentAffects(i: ShieldIncident, asset: RegistryEntry, address
 }
 
 /**
+ * Whether this deployment reads the NEAR Intents incident feed (Shield). It is a deployment setting, decided only by
+ * whether a partner key is configured (SHIELD_API_KEY), and it is reported to owners and agents everywhere:
+ * - "active": the feed is checked for every trade that passes the rules, and fails closed (unreachable or an incident blocks);
+ * - "not_configured": no key, so there is no feed to check; every other check still runs, and every answer says so.
+ * NEAR Intents offers no keyless incident or status signal (checked 2026-11-04), so there is no lighter substitute.
+ */
+export type IncidentFeedStatus = "active" | "not_configured";
+
+export const INCIDENT_FEED_NOT_CONFIGURED = "Incident feed: not configured (partner key pending)";
+
+/** What every answer carries about the feed: its status, and the plain label when it is not configured. */
+export const incidentFeedInfo = (s: IncidentFeedStatus): { status: IncidentFeedStatus; note?: string } =>
+  s === "active" ? { status: "active" } : { status: "not_configured", note: INCIDENT_FEED_NOT_CONFIGURED };
+
+/**
  * Pre-trade check against the incident feed. A null feed means the feed was unreachable:
  * fail closed by default, since this is a safety check. Pass `onUnavailable: "allow"` to fail open.
  */

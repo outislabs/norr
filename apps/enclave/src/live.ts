@@ -87,6 +87,8 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env, opts: 
     risk: new HeuristicRiskProvider(market.signals),
     marketSignals: market.signals,
     shield,
+    // A deployment setting, reported to owners and agents: with no partner key there is no feed to check.
+    incidentFeed: env.SHIELD_API_KEY ? "active" : "not_configured",
     shieldOnUnavailable: shieldMode.onUnavailable,
     onShieldBypass: (vaultId) => console.warn(bypassWarning(vaultId)),
     quoter: oneclick,

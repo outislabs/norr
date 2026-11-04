@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { apiOrigin, buildCsp, headersFile } from "./csp";
 
 const directive = (csp: string, name: string): string[] => csp.split("; ").find((d) => d.startsWith(`${name} `))!.split(" ").slice(1);
-const SERVICE = "https://85e1d6a557dae81985c9e30e28270f91bee5c0e9-8787.dstack-pha-prod5.phala.network";
+const SERVICE = "https://api.norr.finance";
 
 describe("dashboard CSP", () => {
   it("allows exactly the configured service origin, not its path", () => {

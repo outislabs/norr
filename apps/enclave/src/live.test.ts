@@ -79,3 +79,18 @@ describe("live service boot with 1Click down", () => {
     expect(l.deps.pricingReady?.()).toBe(true);
   });
 });
+
+describe("incident feed as a deployment setting", () => {
+  it("is not configured without a partner key, active with one", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const oc = await fakeOneClick();
+    cleanup.push(oc.close);
+    const without = await buildLiveDeps(env(oc.url), { pricingRetryBaseMs: 20 });
+    cleanup.push(() => without.pricing.stop());
+    expect(without.deps.incidentFeed).toBe("not_configured");
+    const withKey = await buildLiveDeps({ ...env(oc.url), SHIELD_API_KEY: "partner-key" }, { pricingRetryBaseMs: 20 });
+    cleanup.push(() => withKey.pricing.stop());
+    expect(withKey.deps.incidentFeed).toBe("active");
+  });
+});

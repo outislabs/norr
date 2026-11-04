@@ -18,6 +18,7 @@ import {
   verifyConfidentialSwap,
   verifyExecution,
   type CryptoSignals,
+  type IncidentFeedStatus,
   type Holdings,
   type IntendedSwap,
   type Registry,
@@ -39,6 +40,8 @@ export interface TradeDeps {
   marketSignals?: (asset: RegistryEntry) => Promise<CryptoSignals>;
   /** The Shield incident feed; null when unreachable (fails closed). */
   shield: () => Promise<ShieldFeed | null>;
+  /** Whether this deployment reads the incident feed at all (a partner key is configured). Defaults to "active". */
+  incidentFeed?: IncidentFeedStatus;
   /** What to do when the feed is unreachable. Defaults to "block"; "allow" is the dev-only bypass (see shield-mode.ts). */
   shieldOnUnavailable?: "block" | "allow";
   /** Called on every evaluation that used the bypass, so it can be logged loudly. */
@@ -149,9 +152,11 @@ export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeReq
   }
 
   const layers = await refreshState(deps, vault);
-  const feed = await deps.shield().catch(() => null);
-  // The bypass applies only when the feed is unreachable. An incident the feed reports still blocks.
-  const shieldBypassed = feed === null && deps.shieldOnUnavailable === "allow";
+  // No feed configured on this deployment: nothing to ask, and every answer says so (incidentFeedInfo).
+  const feedActive = (deps.incidentFeed ?? "active") === "active";
+  const feed = feedActive ? await deps.shield().catch(() => null) : null;
+  // The bypass applies only when a configured feed is unreachable. An incident the feed reports still blocks.
+  const shieldBypassed = feedActive && feed === null && deps.shieldOnUnavailable === "allow";
   if (shieldBypassed) deps.onShieldBypass?.(vault.id);
   const pre = await preTradeChecks({
     request,
@@ -161,6 +166,7 @@ export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeReq
     risk: deps.risk,
     shield: feed,
     shieldOnUnavailable: deps.shieldOnUnavailable,
+    incidentFeed: deps.incidentFeed ?? "active",
     nowMs: deps.now(),
   });
   if (isBlock(pre)) return { decision: blocked(pre.code, pre.message), shieldBypassed };

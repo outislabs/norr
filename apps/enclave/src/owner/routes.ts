@@ -392,11 +392,12 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
   app.get("/owner/v1/status", async (c) => {
     const owner = c.get("owner") as string;
     const mine_ = deps.vaults.list().filter((v) => v.owner === owner);
-    const feed = await deps.shield().catch(() => null);
+    const feedConfigured = (deps.incidentFeed ?? "active") === "active";
+    const feed = feedConfigured ? await deps.shield().catch(() => null) : null;
     return c.json({
       mock: ctx.mock,
       pricing: deps.pricingReady?.() === false ? "retrying" : "ready",
-      shield: feed === null ? "unavailable" : feed.status === "operational" ? "ok" : "incidents",
+      shield: !feedConfigured ? "not_configured" : feed === null ? "unavailable" : feed.status === "operational" ? "ok" : "incidents",
       enclave: Boolean(ctx.attestor),
       vaults: { total: mine_.length, paused: mine_.filter((v) => v.policy.paused).length },
     });

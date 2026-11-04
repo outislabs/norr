@@ -10,7 +10,7 @@
 - **One vault per deployment, set up by the operator.** There is no self-serve vault creation yet.
 - **Funding from other chains is quoted, not yet proven.** USDC on NEAR is proven on mainnet; the other chains were quoted live but not run with real funds.
 - **Owning a vault needs a NEAR account.** EVM and Solana users can fund a vault but not sign in or approve swaps.
-- **The Shield incident feed needs a key.** Without it the hosted service blocks every trade (it fails closed).
+- **The incident feed is not configured.** The NEAR Intents partner key for it has not been granted, so the hosted service does not check it; every answer says "Incident feed: not configured (partner key pending)". With a key it is checked and fails closed.
 - **Limit orders are out of v1**: two test limit orders never filled.
 - **Stock minimums move** with the market and the time of day.
 - **Stock eligibility** follows third-party sources; this is not legal advice and has not been reviewed by counsel.

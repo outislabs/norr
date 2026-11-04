@@ -6,6 +6,8 @@ export function VerifyPage({ api, signedIn }: { api: Api; signedIn: boolean }) {
   // The owner-only parts (mode label, what you have done here) need a session; the attestation checks do not.
   const { data, error, loading } = useAsync(() => (signedIn ? api.verify() : Promise.resolve(null)), `verify-${signedIn}`);
   const audit = useAsync(() => (signedIn ? api.audit() : Promise.resolve(null)), `audit-${signedIn}`);
+  // Public: how this deployment is set up, so anyone checking the enclave also sees what it does not check.
+  const health = useAsync(() => api.health().catch(() => null), "verify-health");
   return (
     <section className="max-w-3xl">
       <h1 className="font-display text-3xl">Verify</h1>
@@ -14,6 +16,12 @@ export function VerifyPage({ api, signedIn }: { api: Api; signedIn: boolean }) {
         <p className="mt-6 text-mute">
           You do not need an account for this. Your browser asks the running service to prove which code and images it booted, on genuine Intel TDX hardware, and checks the answer itself.
         </p>
+      )}
+      {health.data && (
+        <dl className="mt-6 grid grid-cols-[8rem_minmax(0,1fr)] gap-y-2 text-[15px]" data-testid="deployment-settings">
+          <dt className="text-mute">Incident feed</dt>
+          <dd>{health.data.incidentFeed === "not_configured" ? "Not configured (partner key pending). Trades that pass the rules and Scam Shield are not checked against the NEAR Intents incident feed; every answer says so." : "Active: checked for every trade that passes the rules, fail-closed."}</dd>
+        </dl>
       )}
       {loading && signedIn && <p className="mt-6 text-mute">Loading…</p>}
       {error && <p role="alert" className="mt-6 text-alert">{error}</p>}
