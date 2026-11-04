@@ -29,6 +29,9 @@ describe("NewVault (the empty state)", () => {
     render(<NewVault api={{} as Api} account="alice.near" beta={{ ...beta, signupsOpen: false }} />);
     expect(screen.getByText("New vaults are paused for now")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Create vault" })).toBeNull();
+    // An invited account can still try; the service decides.
+    fireEvent.click(screen.getByRole("button", { name: "I was invited" }));
+    expect(screen.getByRole("button", { name: "Create vault" })).toBeTruthy();
   });
 });
 

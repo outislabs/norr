@@ -11,12 +11,17 @@ export function NewVault({ api, account, beta, onCreated, navigate = (h) => (win
   const [nonUs, setNonUs] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [invited, setInvited] = useState(false);
 
-  if (!beta.signupsOpen) {
+  // Closed to the public, the service still lets invited accounts in; it decides, the page only offers.
+  if (!beta.signupsOpen && !invited) {
     return (
       <div className="border-l border-line-strong pl-4">
         <p className="font-display text-xl">New vaults are paused for now</p>
         <p className="mt-1 text-mute">The public beta is not taking new vaults at the moment. Vaults that already exist keep working. Check back soon.</p>
+        <button type="button" className="btn btn-quiet mt-3" onClick={() => setInvited(true)}>
+          I was invited
+        </button>
       </div>
     );
   }
