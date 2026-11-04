@@ -171,7 +171,7 @@ scripts/           live trade runner, verify-attestation, research probes (live 
 ## Known limitations
 
 - **Custody trust** and **Phala key service trust**, as above.
-- **Every swap needs the owner's approval.** On OutLayer, swaps and withdrawals share one transaction type (`confidential`), so approvals cannot be turned off for swaps alone (`docs/FINDINGS.md`, "Autonomy"). The owner approves in Norr's dashboard; the in-dashboard vote is tested against a mock of OutLayer's approval API and has not yet been used on a live trade.
+- **Every swap needs the owner's approval.** On OutLayer, swaps and withdrawals share one transaction type (`confidential`), so approvals cannot be turned off for swaps alone (`docs/FINDINGS.md`, "Autonomy"). The owner approves in Norr's dashboard: first used live on 2026-11-04 with HOT Wallet (`docs/FINDINGS.md`).
 - **Confidential swaps have no independent audit trail.** They are checked from balances and the provider's own report, and labelled `custody-reported`.
 - **Funding and withdrawals are public**, and the custody provider and NEAR Intents operator can see confidential trades. A funding transfer and the next hop can be correlated by timing and amount.
 - **Incident feed not configured**: the NEAR Intents partner key for the incident feed (Shield) has not been granted, so the hosted service does not check it. It says so on every answer; with a key it would be checked and fail closed. No keyless substitute exists.

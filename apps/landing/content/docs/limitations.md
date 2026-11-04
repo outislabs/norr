@@ -4,7 +4,7 @@
 
 - **Custody trust.** For swaps, OutLayer's gateway builds the route and the deposit address, and its enclave does not re-check token or amount; its swap endpoint also ignores the minimum output. Norr checks every result afterwards and pauses the vault on a mismatch. Funds can still be lost to a dishonest or compromised gateway, up to what your limits allow.
 - **Phala's key service** releases the VM's encrypted settings and is a second trust assumption.
-- **Every swap needs your approval** (in Norr's Approvals tab or OutLayer's dashboard), because swaps and withdrawals share one transaction type in OutLayer. In-dashboard approval is tested against a mock of OutLayer's approval API; its first live use is pending.
+- **Every swap needs your approval** (in Norr's Approvals tab or OutLayer's dashboard), because swaps and withdrawals share one transaction type in OutLayer.
 - **Confidential swaps have no independent audit trail.** They are checked from balances and the provider's own report, and labelled `custody-reported`.
 - **Funding and withdrawals are public**, and the custody provider and NEAR Intents operator see confidential trades. A funding transfer and the next hop can be correlated by timing and amount.
 - **One vault per deployment, set up by the operator.** There is no self-serve vault creation yet.
