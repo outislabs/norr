@@ -47,6 +47,12 @@ Set `NORR_MCP_URL` to use another endpoint (for example a local mock server).
 
 Tested on 2026-11-03 against `mcp.norr.finance`: over HTTP with the MCP TypeScript SDK client and Claude Code, and through `npx -y @norrfi/mcp` from npm with both.
 
+## Claude app: connector with sign-in (not yet tested)
+
+No token to paste. In Claude (claude.ai, desktop or mobile), open **Settings, Connectors, Add custom connector**, and enter `https://mcp.norr.finance/mcp`. Claude sends you to Norr: sign in with your NEAR wallet, check which app is asking, pick the one vault it may use, and approve. It gets the same access as a token (read, quote, trade within your rules; never withdraw or change rules), with a one-hour access token that Claude refreshes. It shows under **Agents with access** in the vault's Connect tab, where you can revoke it.
+
+This is MCP authorization (spec 2025-06-18): the MCP endpoint answers 401 with its protected-resource metadata, and the Norr service is the authorization server (dynamic client registration, PKCE S256, refresh-token rotation). Tested end to end against Norr's own OAuth client; not yet from the Claude app itself.
+
 ## Claude Code (tested)
 
 ```

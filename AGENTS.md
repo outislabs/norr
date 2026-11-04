@@ -32,7 +32,7 @@ Last line on success: `PASS: 21/21 checks passed`. `pnpm judge --no-tests` skips
 | `POST /v1/trade {"side":"buy","asset":"NVDA","amountUsd":40,"reason":"demo"}` | `executed`, venue `confidential`. |
 | `POST /v1/trade {"side":"buy","asset":"TSLA","amountUsd":150}` | `blocked`, `OVER_TRADE_LIMIT`, with a plain-language message. |
 | `POST /v1/trade {"side":"buy","asset":"RUGPULL","amountUsd":5}` | `blocked`, `SCAM_RISK`, with the reasons. |
-| `pnpm dev:web`, open http://localhost:5173, "Use the demo owner" | The owner dashboard: balances by layer, rules, the agent's activity, Fund (pick a chain), Connect (MCP config), Pause everything, Verify. |
+| `pnpm dev:web`, open http://localhost:5173, "Use the demo owner" | The owner dashboard: balances by layer, rules, the agent's activity, Fund (pick a chain), Connect (MCP config), Pause everything, Verify. Below the demo vault, **Create your vault** walks the self-serve flow (terms, custody policy signed by the owner, activation); a new mock vault starts with $100 of pretend USDC. |
 | Connect Claude Desktop or Claude Code with `docs/MCP.md` | Nine tools; ask it to buy $150 of TSLA and it reports the block. |
 | `pnpm exec tsx scripts/verify-attestation.mts <service URL>` against the live CVM (URL in README) | Seven attestation checks, including Intel's signature chain. Only while the CVM is running. |
 
@@ -70,6 +70,10 @@ Last line on success: `PASS: 21/21 checks passed`. `pnpm judge --no-tests` skips
 | The quote's signature chain is verified in the browser | `apps/web/src/lib/qvl.ts` | `apps/web/src/lib/qvl.test.ts` (a real quote from our CVM verifies; one flipped byte fails) | Live: 7/7 on app.norr.finance against the running CVM, 2026-11-03 (`docs/FINDINGS.md`) |
 | The dashboard has a strict CSP | `apps/web/src/lib/csp.ts`, `apps/web/vite.config.ts` | `csp.test.ts` | `curl -I https://app.norr.finance` |
 | Images are built in CI with signed provenance | `.github/workflows/image.yml` | | `gh attestation verify oci://ghcr.io/outislabs/norr@sha256:… --repo outislabs/norr` (README "Image provenance") |
+| Anyone can create a vault; its owner, not Norr, controls the custody policy (owner's wallet stores it; activation checks the chain and the stored policy) | `apps/enclave/src/onboarding.ts`, `packages/core/src/custody-policy.ts`, `packages/intents/src/outlayer-provision.ts` | `onboarding.test.ts` (flow, hijack and weaker-policy refusals, frozen wallet), `custody-policy.test.ts` | Contract rule read from `out-layer/outlayer` `contract/src/wallet.rs`; demo wallet controller `norrfi.near` on chain (`docs/MULTI-USER.md`) |
+| One owner can never read or act on another's vault | `apps/enclave/src/owner/routes.ts`, `tenants.ts`, `tokens.ts`, `persist.ts` (per-vault files bound to the vault id) | `onboarding.test.ts` (every owner `:id` route answers 404 to another owner; tokens; files moved between vaults do not decrypt) | (mock and tests) |
+| Public-beta safeguards: deposit cap, terms, operator switch, rate limits | `apps/enclave/src/beta.ts`, `trade.ts` (`VAULT_CAP`) | `onboarding.test.ts`, `pipeline.test.ts` | `GET https://api.norr.finance/beta` (after the next redeploy) |
+| MCP clients can connect with OAuth, scoped to one vault, revocable | `apps/enclave/src/oauth.ts`, `apps/mcp/src/http.ts`, `apps/web/src/pages/AuthorizePage.tsx` | `oauth.test.ts`, `apps/mcp/src/e2e.test.ts`, `apps/web/src/pages/setup.test.tsx` | Not yet run from the Claude app |
 
 ## Mock versus live
 

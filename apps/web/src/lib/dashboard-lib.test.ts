@@ -35,15 +35,18 @@ describe("mcpSnippets", () => {
   const all = (s: { blocks: { text: string }[] }) => s.blocks.map((b) => b.text).join("\n");
 
   it("offers any MCP client first, then the named clients and the REST API", () => {
-    expect(mcpSnippets("https://x/mcp", null).map((s) => s.client)).toEqual(["any", "claude-code", "claude-desktop", "cursor", "openai", "rest", "norr-agent"]);
+    expect(mcpSnippets("https://x/mcp", null).map((s) => s.client)).toEqual(["any", "claude-app", "claude-code", "claude-desktop", "cursor", "openai", "rest", "norr-agent"]);
   });
 
   it("uses a placeholder until a token exists, then the token; MCP snippets use the endpoint, REST the service URL", () => {
     const before = mcpSnippets("https://x-8788.example/mcp", null, "https://x-8787.example");
-    expect(before.every((s) => all(s).includes("PASTE_YOUR_AGENT_TOKEN"))).toBe(true);
+    // The Claude app signs in with OAuth: its snippet is the URL alone, never a token.
+    const tokenFree = (s: { client: string }) => s.client === "claude-app";
+    expect(before.filter((s) => !tokenFree(s)).every((s) => all(s).includes("PASTE_YOUR_AGENT_TOKEN"))).toBe(true);
     for (const s of before) expect(all(s)).toContain(s.client === "rest" ? "https://x-8787.example/v1/trade" : "https://x-8788.example/mcp");
     const after = mcpSnippets("https://x-8788.example/mcp", "norr_agent_abc");
-    expect(after.every((s) => all(s).includes("norr_agent_abc") && !all(s).includes("PASTE_YOUR"))).toBe(true);
+    expect(after.filter((s) => !tokenFree(s)).every((s) => all(s).includes("norr_agent_abc") && !all(s).includes("PASTE_YOUR"))).toBe(true);
+    expect(after.filter(tokenFree).every((s) => !all(s).includes("norr_agent_"))).toBe(true);
   });
 
   it("with the bridge switched off, the stdio blocks fall back to mcp-remote, with the token in env, not args", () => {

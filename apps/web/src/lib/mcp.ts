@@ -1,4 +1,4 @@
-export type Client = "any" | "claude-code" | "claude-desktop" | "cursor" | "openai" | "rest" | "norr-agent";
+export type Client = "any" | "claude-app" | "claude-code" | "claude-desktop" | "cursor" | "openai" | "rest" | "norr-agent";
 
 export interface SnippetBlock {
   label: string;
@@ -51,6 +51,14 @@ export function mcpSnippets(mcpUrl: string, token: string | null, apiUrl = "http
         ? "Tested on 2026-11-03 against the hosted endpoint: over HTTP (MCP SDK client, Claude Code) and through npx @norrfi/mcp from npm (MCP SDK client, Claude Code)."
         : "The endpoint is tested with the MCP TypeScript SDK client over HTTP; the mcp-remote bridge is a third-party package we have not run against Norr.",
       link: { href: `${DOCS}/connect-agent/`, label: "Connect your agent (docs)" },
+    },
+    {
+      client: "claude-app",
+      title: "Claude app",
+      note: "No token to paste. In Claude (claude.ai, desktop or mobile), open Settings, Connectors, Add custom connector, and enter this URL. Claude sends you to Norr to sign in with your wallet and pick the vault it may use. Disconnect it any time under Agents with access.",
+      blocks: [{ label: "Connector URL", language: "text", text: mcpUrl }],
+      status: "not yet tested",
+      statusNote: "OAuth sign-in (MCP authorization) is tested end to end against Norr's own test client; not yet run from the Claude app itself.",
     },
     {
       client: "claude-code",

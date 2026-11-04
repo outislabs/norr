@@ -141,7 +141,7 @@ describe("ConnectAgent", () => {
     render(<ConnectAgent api={api} vaultId="demo" mcpUrl="https://mcp.example/mcp" apiUrl="https://api.example" />);
     expect(document.body.textContent).toContain("Works with any MCP-compatible agent, or any code that can call the REST API.");
     const tabs = screen.getAllByRole("tab").map((t) => t.textContent);
-    expect(tabs).toEqual(["Any MCP client", "Claude Code", "Claude Desktop", "Cursor", "ChatGPT / OpenAI", "REST API", "Norr agent"]);
+    expect(tabs).toEqual(["Any MCP client", "Claude app", "Claude Code", "Claude Desktop", "Cursor", "ChatGPT / OpenAI", "REST API", "Norr agent"]);
     expect(screen.getByRole("tab", { name: "Any MCP client" }).getAttribute("aria-selected")).toBe("true");
 
     fireEvent.click(screen.getByRole("button", { name: "Create an agent token" }));
