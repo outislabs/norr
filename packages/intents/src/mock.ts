@@ -18,6 +18,8 @@ export interface MockOptions {
   /** Skew every quoted price (basis points) to exercise the price-sanity check. */
   skewBps?: number;
   requireApproval?: boolean;
+  /** Distinguishes approval ids when several mock vaults run side by side (8 hex characters). Default "00000000". */
+  approvalPrefix?: string;
   /** Alter what the swap "actually did", to simulate a tampering gateway. */
   tamper?: (executed: ExecutedSwap) => ExecutedSwap;
   /** The independent public-layer status endpoint cannot be reached. */
@@ -104,7 +106,7 @@ export function createMockRails(entries: RegistryEntry[], vaultAccount: string, 
       // Only the public layer has an independent record to audit.
       const depositAddress = venue === "public" ? `mock-deposit-${n}` : undefined;
       if (depositAddress) executed.set(depositAddress, done);
-      const rec: Record_ = { venue, done, state: o.requireApproval ? "pending_approval" : "success", depositAddress, ...(o.requireApproval ? { approvalId: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`, createdAt: Date.now() } : {}) };
+      const rec: Record_ = { venue, done, state: o.requireApproval ? "pending_approval" : "success", depositAddress, ...(o.requireApproval ? { approvalId: `${o.approvalPrefix ?? "00000000"}-0000-4000-8000-${String(n).padStart(12, "0")}`, createdAt: Date.now() } : {}) };
       records.set(id, rec);
       if (rec.state === "success") apply(venue, done);
       return view(id, rec);

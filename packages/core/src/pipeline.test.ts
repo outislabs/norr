@@ -1,7 +1,7 @@
 import { BlockCode } from "@norr/shared";
 import { describe, expect, it } from "vitest";
 import { NVDA_ON, NVDA_X, RUG, USDC_FAKE, policy, registry, request, riskProvider, state } from "./fixtures";
-import { isBlock, noLiquidity, preTradeChecks, pricingUnavailable, privacyUnavailable, type PreTradeInput } from "./pipeline";
+import { isBlock, noLiquidity, preTradeChecks, pricingUnavailable, privacyUnavailable, vaultCapReached, type PreTradeInput } from "./pipeline";
 import { checkPriceSanity } from "./risk";
 
 const base = (over: Partial<PreTradeInput> = {}): PreTradeInput => ({
@@ -103,6 +103,7 @@ const cases: [string, () => Promise<unknown>][] = [
   ["PRIVACY_UNAVAILABLE", async () => privacyUnavailable("the vault holds no confidential funds.")],
   ["SHIELD_INCIDENT", () => preTradeChecks(base({ shield: null }))],
   ["PRICING_UNAVAILABLE", async () => pricingUnavailable()],
+  ["VAULT_CAP", async () => vaultCapReached(120, 100)],
 ];
 
 describe("every block code is reachable", () => {

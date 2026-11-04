@@ -1,5 +1,8 @@
 import { HeuristicRiskProvider, ONDO, Registry, presetPolicy, type CryptoSignals, type OneClickToken, type ShieldFeed } from "@norr/core";
-import { createMockRails } from "@norr/intents";
+import { createMockRails, MockProvisioner } from "@norr/intents";
+import { BetaControl, TERMS_URL, TERMS_VERSION } from "./beta";
+import { Onboarding } from "./onboarding";
+import { MemoryTenantStore } from "./tenants";
 import { createHash } from "node:crypto";
 import { createApp } from "./app";
 import { verifyNep413 } from "./owner/nep413";
@@ -49,7 +52,15 @@ export interface MockEnclave {
   rails: ReturnType<typeof createMockRails>;
   sealKeys: MemorySealKeys;
   sealing: SealingLedger;
+  /** Self-serve vaults on mock rails: the stand-in custody provider and contract, and the beta settings. */
+  provisioner: MockProvisioner;
+  tenants: MemoryTenantStore;
+  onboarding: Onboarding;
+  beta: BetaControl;
 }
+
+/** Each new mock vault starts with this much pretend USDC in its confidential balance, so it can be tried at once. */
+export const MOCK_VAULT_START_USD = 100;
 
 /**
  * The whole Norr service on mock rails (NORR_MOCK=1): no 1Click, no custody provider, no TEE, no funds.
@@ -106,9 +117,36 @@ export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed
   const adminToken = `norr_admin_mock_${Math.random().toString(36).slice(2)}`;
   // Mock mode accepts any key for an account (it holds no funds and listens on localhost); live mode checks the chain.
   const ownerAuth = new OwnerAuth({ keys: o.keys ?? { hasKey: async () => true }, now });
-  const app = createApp({ deps, tokens, mock: true, adminToken, owner: ownerAuth, allowedOrigins: o.allowedOrigins, attestor: o.attestor, seal: { keys: sealKeys, ledger: sealing }, history: new MemoryValueHistory() });
-  mountMockApprovals(app, rails);
-  return { app, deps, vaults, tokens, agentToken, adminToken, vaultId, ownerAuth, rails, sealKeys, sealing };
+
+  // Self-serve vaults: a mock custody provider and contract; each new vault gets its own rails once it is active.
+  const provisioner = new MockProvisioner();
+  const tenants = new MemoryTenantStore();
+  const beta = new BetaControl({ signupsOpen: true, depositCapUsd: 100, maxVaults: 50, maxVaultsPerOwner: 1, termsVersion: TERMS_VERSION, termsUrl: TERMS_URL });
+  const tenantRails = new Map<string, { rails: ReturnType<typeof createMockRails>; owner: string; walletPubkey: string }>();
+  const onboarding = new Onboarding({
+    tenants,
+    provisioner,
+    vaults,
+    registry,
+    cash: () => deps.quoteAsset,
+    beta,
+    now,
+    custodyFor: (rec) => {
+      const r = createMockRails(registry.entries(), rec.walletAccount, {
+        confidentialSeed: { [DEMO.USDC.assetId]: String(MOCK_VAULT_START_USD * 1e6) },
+        requireApproval: !(rec.custody?.autonomous ?? false),
+        approvalPrefix: rec.id.slice(2, 10),
+      });
+      tenantRails.set(rec.id, { rails: r, owner: rec.owner, walletPubkey: rec.custody?.walletPubkey ?? `ed25519:${rec.walletAccount}` });
+      return r.custody;
+    },
+  });
+
+  deps.vaultCapUsd = (id) => (tenants.ids().includes(id) ? beta.get().depositCapUsd : undefined);
+  const app = createApp({ deps, tokens, mock: true, adminToken, owner: ownerAuth, allowedOrigins: o.allowedOrigins, attestor: o.attestor, seal: { keys: sealKeys, ledger: sealing }, history: new MemoryValueHistory(), onboarding, beta });
+  mountMockApprovals(app, () => [{ rails, owner: MOCK_OWNER, walletPubkey: MOCK_WALLET_PUBKEY }, ...tenantRails.values()]);
+  mountMockChain(app, provisioner, ownerAuth);
+  return { app, deps, vaults, tokens, agentToken, adminToken, vaultId, ownerAuth, rails, sealKeys, sealing, provisioner, tenants, onboarding, beta };
 }
 
 /** The mock wallet's on-chain key, bound into vote messages the way OutLayer binds the real one. */
@@ -121,16 +159,24 @@ export const APPROVAL_RECIPIENT = "outlayer.near";
  * run with no funds. Same shapes and the same rule: a vote is a NEP-413 signature by the owner over
  * "approve|reject:{approval_id}:{wallet_pubkey}:{request_hash}", where request_hash = sha256(op_canonical).
  */
-function mountMockApprovals(app: ReturnType<typeof createApp>, rails: ReturnType<typeof createMockRails>) {
+function mountMockApprovals(app: ReturnType<typeof createApp>, allRails: () => { rails: ReturnType<typeof createMockRails>; owner: string; walletPubkey: string }[]) {
+  const find = (id: string) => {
+    for (const r of allRails()) {
+      const d = r.rails.approvalDetail(id);
+      if (d) return { d, ...r };
+    }
+    return null;
+  };
   const detail = (id: string) => {
-    const d = rails.approvalDetail(id);
-    if (!d) return null;
-    return { id, wallet_id: "demo-vault.mock.near", request_type: d.requestType, request_data: {}, status: d.status, required_approvals: 1, request_hash: createHash("sha256").update(d.opCanonical).digest("hex"), op_canonical: d.opCanonical, op: JSON.parse(d.opCanonical), wallet_pubkey: MOCK_WALLET_PUBKEY, expires_at: d.expiresAt, requestId: d.requestId };
+    const hit = find(id);
+    if (!hit) return null;
+    const { d, rails, owner, walletPubkey } = hit;
+    return { rails, owner, walletPubkey, id, wallet_id: "mock-wallet", request_type: d.requestType, request_data: {}, status: d.status, required_approvals: 1, request_hash: createHash("sha256").update(d.opCanonical).digest("hex"), op_canonical: d.opCanonical, op: JSON.parse(d.opCanonical), wallet_pubkey: walletPubkey, expires_at: d.expiresAt, requestId: d.requestId };
   };
   app.get("/mock-outlayer/wallet/v1/approval/:id", (c) => {
     const d = detail(c.req.param("id"));
     if (!d) return c.json({ error: "not_found" }, 404);
-    const { requestId: _r, ...pub } = d;
+    const { requestId: _r, rails: _x, owner: _o, walletPubkey: _w, ...pub } = d;
     return c.json(pub);
   });
   for (const kind of ["approve", "reject"] as const) {
@@ -141,12 +187,32 @@ function mountMockApprovals(app: ReturnType<typeof createApp>, rails: ReturnType
       if (d.status !== "pending") return c.json({ error: "conflict", message: "no longer pending" }, 409);
       const b = (await c.req.json().catch(() => null)) as { signature?: string; public_key?: string; account_id?: string; nonce?: string } | null;
       if (!b?.signature || !b.public_key || !b.account_id || !b.nonce) return c.json({ error: "bad_request" }, 400);
-      if (b.account_id !== MOCK_OWNER) return c.json({ error: "not_approver" }, 403);
+      if (b.account_id !== d.owner) return c.json({ error: "not_approver" }, 403);
       const ok = verifyNep413({ message: `${kind}:${id}:${d.wallet_pubkey}:${d.request_hash}`, nonce: Buffer.from(b.nonce, "base64"), recipient: APPROVAL_RECIPIENT }, b.public_key, b.signature);
       if (!ok) return c.json({ error: "invalid_signature" }, 401);
-      if (kind === "approve") rails.approve(d.requestId);
-      else rails.reject(d.requestId);
+      if (kind === "approve") d.rails.approve(d.requestId);
+      else d.rails.reject(d.requestId);
       return c.json(kind === "approve" ? { approval_id: id, status: "approved", approved: 1, required: 1, request_id: d.requestId } : { approval_id: id, status: "rejected" });
     });
   }
+}
+
+/**
+ * Mock mode only: the owner's wallet sending `store_wallet_policy` to the policy contract. In live mode the dashboard asks
+ * the owner's NEAR wallet to sign and send the transaction; here the signed-in owner session stands in for the wallet.
+ */
+function mountMockChain(app: ReturnType<typeof createApp>, provisioner: MockProvisioner, auth: OwnerAuth) {
+  app.post("/mock-outlayer/chain/store_wallet_policy", async (c) => {
+    const m = /^Bearer (norr_owner_.+)$/.exec(c.req.header("authorization") ?? "");
+    const session = m?.[1] ? auth.session(m[1]) : null;
+    if (!session) return c.json({ error: "unauthorized" }, 401);
+    const b = (await c.req.json().catch(() => null)) as { args?: { wallet_pubkey: string; encrypted_data: string; wallet_signature: string } } | null;
+    if (!b?.args?.wallet_pubkey || !b.args.encrypted_data || !b.args.wallet_signature) return c.json({ error: "bad_request" }, 400);
+    try {
+      provisioner.storeWalletPolicy(session.accountId, b.args);
+      return c.json({ ok: true, signerId: session.accountId });
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : "rejected" }, 400);
+    }
+  });
 }

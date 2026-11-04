@@ -26,6 +26,8 @@ export interface Vault {
 }
 
 export interface VaultStore {
+  /** Add a vault (a self-serve vault once activated). Saved state for its id, if any, wins over what is passed. */
+  add(v: Vault): void;
   get(id: string): Vault | undefined;
   list(): Vault[];
   /** Replace the vault's Norr policy (owner action). The vault id cannot change. */

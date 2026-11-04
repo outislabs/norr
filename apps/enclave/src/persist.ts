@@ -19,7 +19,7 @@ import { MemoryVaultStore, type Ledger, type LedgerEntry, type Vault } from "./s
 const sleepSync = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
 /** A directory lock (mkdir is atomic) so two processes do not interleave read-modify-write cycles. */
-function withLock<T>(dir: string, fn: () => T): T {
+export function withLock<T>(dir: string, fn: () => T): T {
   const lock = join(dir, ".lock");
   const deadline = Date.now() + 5_000;
   for (;;) {
@@ -126,6 +126,14 @@ export class FileVaultStore extends MemoryVaultStore {
     return super.get(id);
   }
 
+  override add(v: Vault): void {
+    super.add(v);
+    withLock(this.dir, () => {
+      this.load(v.id);
+      this.save(v.id);
+    });
+  }
+
   override list(): Vault[] {
     return super.list().map((v) => this.get(v.id)!);
   }
@@ -179,7 +187,8 @@ type LedgerOp = { op: "append"; entry: LedgerEntry } | { op: "update"; id: strin
 export class FileLedger implements Ledger {
   private readonly file: string;
 
-  constructor(private readonly dir: string, private readonly cipher: DataCipher) {
+  /** `aad` binds every line to this log: a per-vault ledger uses `ledger:<vault id>`, so its lines cannot be moved to another vault's file. */
+  constructor(private readonly dir: string, private readonly cipher: DataCipher, private readonly aad = "ledger") {
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     this.file = join(dir, "ledger.jsonl");
     if (!existsSync(this.file)) writeFileSync(this.file, "", { mode: 0o600 });
@@ -192,7 +201,7 @@ export class FileLedger implements Ledger {
   }
 
   private line(op: LedgerOp): string {
-    return `${JSON.stringify({ v: 1, ...this.cipher.encrypt(JSON.stringify(op), "ledger") })}\n`;
+    return `${JSON.stringify({ v: 1, ...this.cipher.encrypt(JSON.stringify(op), this.aad) })}\n`;
   }
 
   private write(op: LedgerOp): void {
@@ -206,7 +215,7 @@ export class FileLedger implements Ledger {
       if (!line.trim()) return;
       try {
         const raw = JSON.parse(line) as LedgerOp | { iv: string; ct: string };
-        out.push("ct" in raw ? { op: JSON.parse(this.cipher.decrypt(raw, "ledger")) as LedgerOp, legacy: false } : { op: raw, legacy: true });
+        out.push("ct" in raw ? { op: JSON.parse(this.cipher.decrypt(raw, this.aad)) as LedgerOp, legacy: false } : { op: raw, legacy: true });
       } catch {
         throw new Error(`Ledger ${this.file} is unreadable at line ${i + 1} (damaged, or the data key is wrong). Not continuing, because the log feeds the caps.`);
       }
@@ -251,3 +260,39 @@ export class FileLedger implements Ledger {
 
 /** Where the live service and runner keep their durable state. */
 export const dataDir = (env: NodeJS.ProcessEnv): string => env.NORR_DATA_DIR || join(process.cwd(), "data");
+
+/**
+ * One ledger per self-serve vault (`<dir>/ledgers/<vault id>/ledger.jsonl`, bound to the vault id), and the original
+ * shared log for the vaults configured at startup (the demo vault). Every read and write goes to the vault's own file.
+ */
+export class PerVaultLedger implements Ledger {
+  private readonly own = new Map<string, FileLedger>();
+  constructor(private readonly dir: string, private readonly cipher: DataCipher, private readonly shared: Ledger, private readonly selfServeIds: () => string[]) {}
+
+  private forVault(vaultId: string): Ledger {
+    if (!this.selfServeIds().includes(vaultId)) return this.shared;
+    let l = this.own.get(vaultId);
+    if (!l) {
+      l = new FileLedger(join(this.dir, "ledgers", encodeURIComponent(vaultId)), this.cipher, `ledger:${vaultId}`);
+      this.own.set(vaultId, l);
+    }
+    return l;
+  }
+
+  append(entry: Omit<LedgerEntry, "id">): LedgerEntry {
+    return this.forVault(entry.vaultId).append(entry);
+  }
+
+  update(id: string, patch: Partial<Omit<LedgerEntry, "id">>): void {
+    const row = this.get(id);
+    if (row) this.forVault(row.vaultId).update(id, patch);
+  }
+
+  get(id: string): LedgerEntry | undefined {
+    return this.shared.get(id) ?? this.selfServeIds().map((v) => this.forVault(v).get(id)).find(Boolean);
+  }
+
+  list(vaultId: string): LedgerEntry[] {
+    return this.forVault(vaultId).list(vaultId);
+  }
+}

@@ -12,6 +12,8 @@ import type { OwnerAuth } from "./owner/auth";
 import type { ValueHistory } from "./history";
 import { valueLayers } from "./portfolio";
 import { safeEqual, type AgentTokens } from "./tokens";
+import { RateLimiter, type BetaControl } from "./beta";
+import type { Onboarding } from "./onboarding";
 import { executeTrade, planTrade, reconcile, type TradeDeps } from "./trade";
 
 export interface AppOptions {
@@ -32,6 +34,9 @@ export interface AppOptions {
   attestor?: Attestor | null;
   /** Balance readings over time (owner dashboard chart). */
   history?: ValueHistory;
+  /** Self-serve vaults (public beta). Without it, only the vaults configured at startup exist. */
+  onboarding?: Onboarding;
+  beta?: BetaControl;
 }
 
 type Env = { Variables: { vaultId: string } };
@@ -40,8 +45,9 @@ type Env = { Variables: { vaultId: string } };
  * The agent-facing API. There is deliberately no route that moves funds out, changes policy, or
  * accepts a destination. The vault always comes from the agent token. Request bodies are never logged.
  */
-export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, allowedOrigins, attestor, history }: AppOptions): Hono<Env> {
+export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, allowedOrigins, attestor, history, onboarding, beta }: AppOptions): Hono<Env> {
   const app = new Hono<Env>();
+  const limiter = new RateLimiter(deps.now);
 
   // CORS for the separately hosted dashboard: the owner API answers browsers on exactly the configured origins and
   // nobody else. The agent API (/v1) is never opened to browsers. Sessions travel as a bearer header, not a cookie,
@@ -87,6 +93,12 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
     const m = /^Bearer (.+)$/.exec(c.req.header("authorization") ?? "");
     const vaultId = m?.[1] ? tokens.vaultFor(m[1]) : undefined;
     if (!vaultId || !deps.vaults.get(vaultId)) return c.json({ error: "unauthorized" }, 401);
+    // Per token: a looping agent slows down; it cannot crowd out other vaults or burn the custody provider's daily quota.
+    const key = m![1]!.slice(-16);
+    const trading = c.req.method === "POST" && c.req.path === "/v1/trade";
+    if (!limiter.allow(`agent:${key}`, 120, 60_000) || (trading && !limiter.allow(`trade:${key}`, 10, 60_000))) {
+      return c.json({ error: trading ? "Too many trades: at most 10 a minute per agent. Wait a minute." : "Too many requests: at most 120 a minute per agent. Wait a minute." }, 429);
+    }
     c.set("vaultId", vaultId);
     await next();
   });
@@ -226,7 +238,15 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
     });
   });
 
-  if (owner) mountOwnerRoutes(app, { deps, tokens, auth: owner, mock, build: build ?? resolveBuildInfo(), seal, allowedOrigins, attestor: attestor ?? null, audit: [] as OwnerAuditEntry[], history });
+  // Public beta status: whether new vaults can be created, and the limits that apply. Nothing here is secret.
+  app.use("/beta", cors({ origin: "*", allowMethods: ["GET"] }));
+  app.get("/beta", (c) => {
+    if (!beta) return c.json({ selfServe: false });
+    const b = beta.get();
+    return c.json({ selfServe: Boolean(onboarding), signupsOpen: b.signupsOpen, depositCapUsd: b.depositCapUsd, maxVaultsPerOwner: b.maxVaultsPerOwner, termsVersion: b.termsVersion, termsUrl: b.termsUrl });
+  });
+
+  if (owner) mountOwnerRoutes(app, { deps, tokens, auth: owner, mock, build: build ?? resolveBuildInfo(), seal, allowedOrigins, attestor: attestor ?? null, audit: [] as OwnerAuditEntry[], history, onboarding, beta, limiter });
 
   if (adminToken) {
     const admin = (c: { req: { header(n: string): string | undefined } }) => safeEqual(c.req.header("x-admin-token") ?? "", adminToken);
@@ -234,6 +254,15 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
       if (!admin(c)) return c.json({ error: "unauthorized" }, 401);
       deps.vaults.pause(c.req.param("id"), "paused by owner");
       return c.json({ ok: true });
+    });
+    // The operator switch for new vaults (public beta). Existing vaults keep working either way.
+    app.post("/admin/v1/signups", async (c) => {
+      if (!admin(c)) return c.json({ error: "unauthorized" }, 401);
+      if (!beta) return c.json({ error: "self-serve is not enabled" }, 404);
+      const body = (await c.req.json().catch(() => null)) as { open?: unknown } | null;
+      if (typeof body?.open !== "boolean") return c.json({ error: "send {\"open\": true|false}" }, 400);
+      beta.setSignups(body.open);
+      return c.json({ signupsOpen: beta.get().signupsOpen });
     });
     app.post("/owner/vaults/:id/resume", (c) => {
       if (!admin(c)) return c.json({ error: "unauthorized" }, 401);

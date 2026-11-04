@@ -9,6 +9,7 @@ import {
   noLiquidity,
   preTradeChecks,
   pricingUnavailable,
+  vaultCapReached,
   privacyUnavailable,
   probeSizes,
   requireSwapBounds,
@@ -63,6 +64,8 @@ export interface TradeDeps {
   /** How long to wait on a swap before reporting it as pending, and the poll interval. */
   settle?: { waitMs: number; intervalMs: number };
   maxPriceDeviationPct?: number;
+  /** Public beta: buys are refused while a self-serve vault holds more than its cap, in USD (docs/MULTI-USER.md). Undefined: no cap. */
+  vaultCapUsd?: (vaultId: string) => number | undefined;
 }
 
 /** Everything needed to finish verifying a swap that was not final when the agent called. */
@@ -152,6 +155,14 @@ export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeReq
   }
 
   const layers = await refreshState(deps, vault);
+  const cap = deps.vaultCapUsd?.(vault.id);
+  if (cap !== undefined && request.side === "buy") {
+    const value = deps.vaults.get(vault.id)?.state.portfolioValueUsd ?? 0;
+    if (value > cap) {
+      const b = vaultCapReached(value, cap);
+      return { decision: blocked(b.code, b.message), shieldBypassed: false };
+    }
+  }
   // No feed configured on this deployment: nothing to ask, and every answer says so (incidentFeedInfo).
   const feedActive = (deps.incidentFeed ?? "active") === "active";
   const feed = feedActive ? await deps.shield().catch(() => null) : null;

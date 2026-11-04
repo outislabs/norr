@@ -1,5 +1,5 @@
 import { HeuristicRiskProvider, type RegistryEntry } from "@norr/core";
-import { DexScreenerSignals, GoPlusClient, NearIntentsBalances, OneClick, OutLayerCustody, ShieldClient } from "@norr/intents";
+import { DexScreenerSignals, GoPlusClient, NearIntentsBalances, OneClick, OutLayerCustody, OutLayerProvisioner, ShieldClient } from "@norr/intents";
 import { FileValueHistory } from "./history";
 import { readPortfolio, sampleValue } from "./owner/routes";
 import { PricingFeed } from "./pricing";
@@ -9,11 +9,14 @@ import { createApp } from "./app";
 import { OwnerAuth, RpcAccessKeyChecker } from "./owner/auth";
 import { BYPASS_BANNER, bypassWarning, resolveShieldMode } from "./shield-mode";
 import { walletCredentials } from "./wallet-env";
-import { FileLedger, FileVaultStore, dataDir } from "./persist";
+import { FileLedger, FileVaultStore, PerVaultLedger, dataDir } from "./persist";
+import { FileTenantStore } from "./tenants";
+import { BetaControl } from "./beta";
+import { Onboarding } from "./onboarding";
+import { AgentTokens, FileTokenPersistence } from "./tokens";
 import { repairBook } from "./book-repair";
 import { DataCipher, FileSealKeys, SealingLedger } from "./seal";
 import { newVault } from "./state";
-import { AgentTokens } from "./tokens";
 import type { TradeDeps } from "./trade";
 
 const USDC_NEAR = "nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1";
@@ -76,7 +79,9 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env, opts: 
     ),
   ], cipher);
   // The agent's reasoning is never stored in the clear: sealed to the owner's key (or, until they enroll one, to the service key).
-  const ledger = new SealingLedger(new FileLedger(dir, cipher), sealKeys, cipher, (id) => vaults.get(id)?.owner);
+  // Self-serve vaults (public beta): their records and sealed custody keys, each with its own ledger file.
+  const tenants = new FileTenantStore(dir, cipher);
+  const ledger = new SealingLedger(new PerVaultLedger(dir, cipher, new FileLedger(dir, cipher), () => tenants.ids()), sealKeys, cipher, (id) => vaults.get(id)?.owner);
   ledger.sealExisting(policy.vaultId);
   // Not awaited, like the token list. Once it loads, the one-off cost-book repair runs (book-repair.ts; recorded, never twice).
   void pricing.start().then(() => {
@@ -114,21 +119,38 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env, opts: 
     now,
     sleep,
   };
-  return { deps, pricing, history, ledger, sealKeys, vaultId: policy.vaultId, walletAccount, shieldMode, shieldConfigured: Boolean(env.SHIELD_API_KEY) };
+  const beta = BetaControl.fromEnv(env, dir);
+  deps.vaultCapUsd = (id) => (tenants.ids().includes(id) ? beta.get().depositCapUsd : undefined);
+  const onboarding = new Onboarding({
+    tenants,
+    provisioner: new OutLayerProvisioner({ baseUrl: env.OUTLAYER_BASE_URL }),
+    vaults,
+    registry,
+    cash: () => quoteAsset,
+    beta,
+    now,
+    custodyFor: (rec, apiKey) => new OutLayerCustody({ apiKey, accountId: rec.walletAccount, baseUrl: env.OUTLAYER_BASE_URL }),
+  });
+  const restored = onboarding.restore();
+  if (restored > 0) console.log(`  self-serve vaults: ${restored} active vault(s) back in service.`);
+  return { deps, pricing, history, ledger, sealKeys, vaultId: policy.vaultId, walletAccount, shieldMode, shieldConfigured: Boolean(env.SHIELD_API_KEY), onboarding, beta, dir, cipher };
 }
 
 /** The live HTTP service: the same API as mock mode, on real rails. */
 export async function buildLive(env: NodeJS.ProcessEnv = process.env) {
   const l = await buildLiveDeps(env);
-  const tokens = new AgentTokens();
-  const agentToken = tokens.issue(l.vaultId);
+  // Token hashes are kept across restarts. A token is printed at startup only when the configured vault has none yet;
+  // owners issue and revoke tokens in the dashboard.
+  const tokens = new AgentTokens(new FileTokenPersistence(l.dir, l.cipher));
+  const agentToken = tokens.list(l.vaultId).length === 0 ? tokens.issue(l.vaultId, { label: "Issued at startup" }) : null;
   // A reading every 15 minutes (the store keeps at most one per 10), so the value chart has points when nobody has the dashboard open.
   const sample = async () => {
     for (const v of l.deps.vaults.list()) sampleValue(l.deps, l.history, v.id, await readPortfolio(l.deps, v));
   };
-  setInterval(() => void sample().catch(() => undefined), 15 * 60_000).unref();
+  // Hourly: each reading is a custody balance read per vault, and the custody provider's free tier counts operations per wallet per day.
+  setInterval(() => void sample().catch(() => undefined), 60 * 60_000).unref();
   return {
-    app: createApp({ deps: l.deps, tokens, mock: false, adminToken: env.NORR_ADMIN_TOKEN, owner: new OwnerAuth({ keys: new RpcAccessKeyChecker() }), allowedOrigins: parseOrigins(env.NORR_ALLOWED_ORIGINS), attestor: dstackAttestor(env), seal: { keys: l.sealKeys, ledger: l.ledger }, history: l.history }),
+    app: createApp({ deps: l.deps, tokens, mock: false, adminToken: env.NORR_ADMIN_TOKEN, owner: new OwnerAuth({ keys: new RpcAccessKeyChecker() }), allowedOrigins: parseOrigins(env.NORR_ALLOWED_ORIGINS), attestor: dstackAttestor(env), seal: { keys: l.sealKeys, ledger: l.ledger }, history: l.history, onboarding: l.onboarding, beta: l.beta }),
     agentToken,
     vaultId: l.vaultId,
     shieldConfigured: l.shieldConfigured,

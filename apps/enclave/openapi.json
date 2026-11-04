@@ -622,7 +622,8 @@
           "SHIELD_INCIDENT",
           "DAILY_SPEND_CAP",
           "PRIVACY_UNAVAILABLE",
-          "PRICING_UNAVAILABLE"
+          "PRICING_UNAVAILABLE",
+          "VAULT_CAP"
         ]
       },
       "Executed": {

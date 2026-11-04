@@ -44,5 +44,6 @@ Nine tools. Eight only read; `trade` can move money, inside the vault only. No t
 | `NO_LIQUIDITY` | No route quoted for that size. |
 | `PRIVACY_UNAVAILABLE` | The vault requires the confidential layer and the trade cannot run there. |
 | `PRICING_UNAVAILABLE` | The service has not loaded market data yet (it keeps retrying). |
+| `VAULT_CAP` | Public beta: the vault holds more than the beta limit ($100), so buys are paused. Sells still work. |
 
 Tokenized markets trade around the clock, so there is no market-closed code; stock minimums are higher outside US market hours.

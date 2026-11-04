@@ -25,7 +25,7 @@ describe("shared schemas", () => {
   });
 
   it("defines all fourteen block codes (no market-closed) and validates a blocked decision", () => {
-    expect(BlockCode.options).toHaveLength(15);
+    expect(BlockCode.options).toHaveLength(16);
     expect(BlockCode.options).toContain("NO_LIQUIDITY");
     expect(BlockCode.options).toContain("DAILY_SPEND_CAP");
     expect(BlockCode.options).toContain("PRIVACY_UNAVAILABLE");

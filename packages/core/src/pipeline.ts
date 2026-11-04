@@ -111,6 +111,10 @@ export const privacyUnavailable = (detail: string): Block =>
 export const pricingUnavailable = (): Block =>
   block("PRICING_UNAVAILABLE", "Pricing is unavailable right now: the market data service could not be reached at startup. Norr is retrying in the background. Try again in a minute.");
 
+/** Public beta: a self-serve vault holds more than its cap, so buys pause (sells still work). */
+export const vaultCapReached = (valueUsd: number, capUsd: number): Block =>
+  block("VAULT_CAP", `This vault holds about $${valueUsd.toFixed(2)}, above the beta limit of $${capUsd}. Buys are paused until it holds less; sells still work.`);
+
 /** No candidate returned a quote. */
 export const noLiquidity = (): Block =>
   block("NO_LIQUIDITY", "No liquidity is available for this trade right now. Smaller trades in tokenized stocks can fail; try a larger amount or another asset.");

@@ -14,6 +14,8 @@ import type { OwnerAuth } from "./auth";
 import type { ValueHistory } from "../history";
 import { vaultPnl } from "../vault-pnl";
 import { assetCheck } from "../asset-check";
+import { RateLimiter, type BetaControl } from "../beta";
+import { OnboardingError, type Onboarding } from "../onboarding";
 
 /** What an owner did through the dashboard, newest last. Kept in memory for now. */
 export interface OwnerAuditEntry {
@@ -37,6 +39,10 @@ export interface OwnerRouteContext {
   audit: OwnerAuditEntry[];
   /** Balance readings over time, for the dashboard's value chart. */
   history?: ValueHistory;
+  /** Self-serve vaults (public beta). */
+  onboarding?: Onboarding;
+  beta?: BetaControl;
+  limiter?: RateLimiter;
 }
 
 /** The vault's holdings across both layers, valued at registry prices. Null when balances cannot be read right now. */
@@ -72,6 +78,11 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
   const note = (owner: string, action: string, vaultId?: string) => ctx.audit.push({ at: new Date(deps.now()).toISOString(), owner, action, ...(vaultId ? { vaultId } : {}) });
 
   const funding = new FundingTracker();
+  const limiter = ctx.limiter ?? new RateLimiter(deps.now);
+  const onboarding = ctx.onboarding;
+  /** An onboarding failure as the plain answer the dashboard shows. */
+  const fail = (c: { json: (b: unknown, s: number) => Response }, e: unknown) =>
+    e instanceof OnboardingError ? c.json({ error: e.message }, e.status) : c.json({ error: "Something went wrong. Try again in a moment." }, 500);
 
   // With allowed origins configured, only those dashboards can sign in, and the challenge is bound to the one asking.
   const origins = ctx.allowedOrigins ?? [];
@@ -103,6 +114,7 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
     if (!session) return c.json({ error: "unauthorized" }, 401);
     c.set("owner", session.accountId);
     c.set("ownerToken", m![1]);
+    if (!limiter.allow(`owner:${session.accountId}`, 300, 60_000)) return c.json({ error: "Too many requests. Wait a minute." }, 429);
     await next();
   });
 
@@ -112,6 +124,7 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
   };
   const summary = (v: NonNullable<ReturnType<typeof mine>>) => ({
     id: v.id,
+    status: "active" as const,
     walletAccount: v.walletAccount,
     policy: v.policy,
     paused: v.policy.paused,
@@ -121,7 +134,8 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
 
   app.get("/owner/v1/me", (c) => {
     const owner = c.get("owner") as string;
-    return c.json({ accountId: owner, vaults: deps.vaults.list().filter((v) => v.owner === owner).length, mock: ctx.mock });
+    const setup = onboarding ? onboarding.mine(owner).filter((r) => r.status === "setup").length : 0;
+    return c.json({ accountId: owner, vaults: deps.vaults.list().filter((v) => v.owner === owner).length + setup, mock: ctx.mock, selfServe: Boolean(onboarding), beta: ctx.beta?.get() ?? null });
   });
 
   app.post("/owner/v1/logout", (c) => {
@@ -131,7 +145,60 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
 
   app.get("/owner/v1/vaults", (c) => {
     const owner = c.get("owner") as string;
-    return c.json({ vaults: deps.vaults.list().filter((v) => v.owner === owner).map(summary) });
+    const setup = onboarding ? onboarding.mine(owner).filter((r) => r.status === "setup").map((r) => onboarding.view(r)) : [];
+    return c.json({ vaults: [...deps.vaults.list().filter((v) => v.owner === owner).map(summary), ...setup] });
+  });
+
+  // Self-serve vaults (docs/MULTI-USER.md). Create: a custody wallet for this owner, after the terms are accepted.
+  app.post("/owner/v1/vaults", async (c) => {
+    const owner = c.get("owner") as string;
+    if (!onboarding) return c.json({ error: "Creating vaults is not available on this service." }, 404);
+    const body = z.object({ acceptTerms: z.string().max(40), nonUsConfirmed: z.boolean().optional() }).safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "Accept the terms and risk disclosure first." }, 400);
+    if (!limiter.allow(`create:${owner}`, 5, 3_600_000) || !limiter.allow("create:all", 20, 60_000)) return c.json({ error: "Too many new vaults right now. Try again later." }, 429);
+    try {
+      const rec = await onboarding.create(owner, body.data);
+      note(owner, "created a vault (setup)", rec.id);
+      return c.json(onboarding.view(rec), 201);
+    } catch (e) {
+      return fail(c, e);
+    }
+  });
+
+  app.get("/owner/v1/vaults/:id/setup", (c) => {
+    const owner = c.get("owner") as string;
+    const r = onboarding?.mine(owner).find((x) => x.id === c.req.param("id"));
+    if (!r || !onboarding) return c.json({ error: "not found" }, 404);
+    return c.json(onboarding.view(r));
+  });
+
+  // The safe default custody policy, and the call the owner's own wallet sends to store it (making the owner controller).
+  app.post("/owner/v1/vaults/:id/custody-policy", async (c) => {
+    const owner = c.get("owner") as string;
+    if (!onboarding) return c.json({ error: "not found" }, 404);
+    const body = z.object({ autonomous: z.boolean().default(false) }).safeParse((await c.req.json().catch(() => ({}))) ?? {});
+    if (!body.success) return c.json({ error: "autonomous must be true or false" }, 400);
+    if (!limiter.allow(`prepare:${owner}`, 20, 3_600_000)) return c.json({ error: "Too many attempts. Try again later." }, 429);
+    try {
+      const out = await onboarding.prepare(owner, c.req.param("id"), { autonomous: body.data.autonomous });
+      note(owner, `prepared the custody policy${body.data.autonomous ? " (autonomous)" : ""}`, c.req.param("id"));
+      return c.json(out);
+    } catch (e) {
+      return fail(c, e);
+    }
+  });
+
+  app.post("/owner/v1/vaults/:id/activate", async (c) => {
+    const owner = c.get("owner") as string;
+    if (!onboarding) return c.json({ error: "not found" }, 404);
+    if (!limiter.allow(`activate:${owner}`, 30, 3_600_000)) return c.json({ error: "Too many attempts. Try again later." }, 429);
+    try {
+      const r = await onboarding.activate(owner, c.req.param("id"));
+      if (r.status === "active") note(owner, "activated the vault", c.req.param("id"));
+      return c.json(r);
+    } catch (e) {
+      return fail(c, e);
+    }
   });
 
   app.get("/owner/v1/vaults/:id", async (c) => {
@@ -182,6 +249,12 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
     if (!validRefundAddress(src.family, refundTo)) return c.json({ error: `Enter your ${src.chainName} address, where a refund would go if the deposit cannot complete.` }, 400);
     const now = deps.now();
     if (funding.open(v.id, now).length >= MAX_OPEN_FUNDING) return c.json({ error: "Too many open deposit requests. Use one of them, or wait for them to expire." }, 429);
+    const cap = deps.vaultCapUsd?.(v.id);
+    if (cap !== undefined) {
+      const held = (await readPortfolio(deps, v))?.totalUsd;
+      if (held === undefined) return c.json({ error: "Could not read the vault's value, so no address is offered (the beta has a deposit limit). Try again in a moment." }, 503);
+      if (held + usd > cap) return c.json({ error: `The beta allows up to $${cap} per vault. This vault holds about $${held.toFixed(2)}, so you can add up to $${Math.max(0, Math.floor(cap - held))}.` }, 400);
+    }
     try {
       const baseline = (await v.custody.confidentialHoldings())[cash().id] ?? "0";
       const usdcOut = usdToUnits(usd, CASH_USD, cash().decimals);
@@ -400,11 +473,28 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
     return c.json({ pending, unknown, approvalsListed, approvalsApi, voteRecipient: "outlayer.near" });
   });
 
-  app.post("/owner/v1/vaults/:id/tokens", (c) => {
+  app.get("/owner/v1/vaults/:id/tokens", (c) => {
+    const v = mine(c.get("owner") as string, c.req.param("id"));
+    if (!v) return c.json({ error: "not found" }, 404);
+    return c.json({ tokens: tokens.list(v.id) });
+  });
+
+  app.delete("/owner/v1/vaults/:id/tokens/:tid", (c) => {
     const owner = c.get("owner") as string;
     const v = mine(owner, c.req.param("id"));
     if (!v) return c.json({ error: "not found" }, 404);
-    const token = tokens.issue(v.id);
+    if (!tokens.revokeOne(v.id, c.req.param("tid"))) return c.json({ error: "not found" }, 404);
+    note(owner, "revoked an agent token", v.id);
+    return c.json({ revoked: true });
+  });
+
+  app.post("/owner/v1/vaults/:id/tokens", async (c) => {
+    const owner = c.get("owner") as string;
+    const v = mine(owner, c.req.param("id"));
+    if (!v) return c.json({ error: "not found" }, 404);
+    const body = (await c.req.json().catch(() => ({}))) as { label?: unknown } | null;
+    const label = typeof body?.label === "string" && body.label.trim() ? body.label.trim().slice(0, 60) : "Agent token";
+    const token = tokens.issue(v.id, { label, kind: "token" });
     note(owner, "issued an agent token", v.id);
     return c.json({ token, note: "Shown once. Give it only to the agent for this vault." });
   });
