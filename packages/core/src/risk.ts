@@ -1,5 +1,6 @@
 import type { RegistryEntry } from "./registry";
 import { block, type Block } from "./types";
+import { contractFindings, contractSummary, type ContractCheck, type ContractSummary } from "./contract-risk";
 
 export type RiskLevel = "low" | "medium" | "high";
 
@@ -7,6 +8,8 @@ export interface RiskResult {
   score: number; // 0-100
   level: RiskLevel;
   reasons: string[];
+  /** Contract-level checks (GoPlus), when they were attempted: what was found, or why nothing was checked. */
+  contract?: ContractSummary;
 }
 
 /** Pluggable so richer data can replace the v1 heuristics later. */
@@ -20,6 +23,8 @@ export interface CryptoSignals {
   liquidityUsd: number | null;
   marketCapUsd: number | null;
   ageDays: number | null;
+  /** Contract-level checks (GoPlus). Absent when no contract source is wired (mock mode, tests). */
+  contract?: ContractCheck;
 }
 
 /**
@@ -39,8 +44,9 @@ export function scoreCryptoRisk(asset: RegistryEntry, s: CryptoSignals): RiskRes
   if (!s.routable) {
     return { score: 100, level: "high", reasons: ["Not routable via NEAR Intents (1Click)."] };
   }
+  const contract = s.contract ? contractSummary(s.contract) : undefined;
   if (asset.coingeckoId && TRUSTED_COINGECKO_IDS.has(asset.coingeckoId)) {
-    return { score: 0, level: "low", reasons: ["Known stablecoin or major asset."] };
+    return { score: 0, level: "low", reasons: ["Known stablecoin or major asset."], ...(contract ? { contract } : {}) };
   }
 
   let score = 0;
@@ -62,9 +68,11 @@ export function scoreCryptoRisk(asset: RegistryEntry, s: CryptoSignals): RiskRes
   else if (s.ageDays < 7) add(40, `Very new token (${s.ageDays} days old).`);
   else if (s.ageDays < 30) add(20, `New token (${s.ageDays} days old).`);
 
+  if (s.contract) for (const f of contractFindings(s.contract).findings) add(f.points, f.text);
+
   score = Math.min(100, score);
   if (reasons.length === 0) reasons.push("No risk signals found.");
-  return { score, level: levelOf(score), reasons };
+  return { score, level: levelOf(score), reasons, ...(contract ? { contract } : {}) };
 }
 
 /** v1 provider. `signals` is a read-only data source injected by the enclave. */

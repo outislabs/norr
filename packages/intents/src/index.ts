@@ -6,3 +6,4 @@ export * from "./mock";
 export * from "./dexscreener";
 export * from "./shield";
 export * from "./balances";
+export * from "./goplus";

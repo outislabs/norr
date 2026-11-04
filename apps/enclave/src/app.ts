@@ -1,9 +1,10 @@
-import { checkShield, EQUITY_DISCLAIMER, equityMinimum, incidentFeedInfo, MINIMUMS_NOTE, sumToday, unitsToNumber, type IncidentFeedStatus, type RiskResult } from "@norr/core";
+import { EQUITY_DISCLAIMER, equityMinimum, incidentFeedInfo, MINIMUMS_NOTE, sumToday, unitsToNumber, type IncidentFeedStatus } from "@norr/core";
 import { TradeInput, type Decision, type TradeRequest } from "@norr/shared";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { resolveBuildInfo, type BuildInfo } from "./build-info";
 import { vaultPnl } from "./vault-pnl";
+import { assetCheck } from "./asset-check";
 import { rateLimiter, type Attestor } from "./attestation";
 import type { SealKeyStore, SealingLedger } from "./seal";
 import { mountOwnerRoutes, type OwnerAuditEntry } from "./owner/routes";
@@ -114,25 +115,7 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
     const vault = deps.vaults.get(c.get("vaultId"))!;
     const q = c.req.query("asset");
     if (!q) return c.json({ error: "asset is required" }, 400);
-    const res = deps.registry.resolve(q);
-    if (!res) return c.json({ found: false, message: `"${q}" is not a tradable asset.` });
-    const active = feedStatus() === "active";
-    const feed = active ? await deps.shield().catch(() => null) : null;
-    const versions = await Promise.all(
-      res.candidates.map(async (e) => {
-        const shield = active ? checkShield(feed, e) : null;
-        const risk: RiskResult | null = res.class === "crypto" ? await deps.risk.assess(e) : null;
-        return { symbol: e.symbol, issuer: e.issuer, chain: e.chain, shieldBlocked: shield?.message ?? null, risk };
-      }),
-    );
-    return c.json({
-      found: true,
-      class: res.class,
-      ticker: res.ticker,
-      versions,
-      ...(res.class === "equity" ? { eligible: vault.policy.nonUsConfirmed, notice: EQUITY_DISCLAIMER } : {}),
-      incidentFeed: feedInfo(),
-    });
+    return c.json(await assetCheck(deps, q, vault.policy.nonUsConfirmed));
   });
 
   const parseTrade = async (c: { req: { json(): Promise<unknown> } }, vaultId: string): Promise<TradeRequest | null> => {
@@ -222,10 +205,10 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
         if (res.class === "equity") return { ...base, minimumUsd: equityMinimum(res.ticker).usd };
         const signals = await deps.marketSignals?.(e).catch(() => null);
         const risk = await deps.risk.assess(e).catch(() => null);
-        return { ...base, liquidityUsd: signals?.liquidityUsd ?? null, marketCapUsd: signals?.marketCapUsd ?? null, ageDays: signals?.ageDays ?? null, routable: signals?.routable ?? null, risk: risk ? { level: risk.level, score: risk.score } : null };
+        return { ...base, liquidityUsd: signals?.liquidityUsd ?? null, marketCapUsd: signals?.marketCapUsd ?? null, ageDays: signals?.ageDays ?? null, routable: signals?.routable ?? null, risk: risk ? { level: risk.level, score: risk.score } : null, contract: risk?.contract ?? null };
       }),
     );
-    return c.json({ found: true, class: res.class, ticker: res.ticker, versions, incidentFeed: feedInfo(), source: res.class === "crypto" ? "Price: NEAR Intents token list. Liquidity, market cap and age: DexScreener (read-only), as scored by Scam Shield." : "Price: NEAR Intents token list." });
+    return c.json({ found: true, class: res.class, ticker: res.ticker, versions, incidentFeed: feedInfo(), source: res.class === "crypto" ? "Price: NEAR Intents token list. Liquidity, market cap and age: DexScreener (read-only). Contract checks: GoPlus Security (read-only). Both as scored by Scam Shield." : "Price: NEAR Intents token list." });
   });
 
   app.get("/v1/activity", async (c) => {

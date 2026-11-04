@@ -389,6 +389,16 @@ describe("owner routes", () => {
     expect((await (await req(`/owner/v1/vaults/demo/funding/${offer.id}`, { token })).json()).independentlyConfirmed).toBe(false);
   });
 
+  it("check a token: the owner gets the same verdict the agent gets, for their own vault only", async () => {
+    const { req, token, loginAs } = await boot();
+    const r = await (await req("/owner/v1/vaults/demo/assets/check?asset=RUGPULL", { token })).json();
+    expect(r.versions[0].risk.level).toBe("high");
+    expect(r.versions[0].risk.contract.status).toBe("ok");
+    expect((await req("/owner/v1/vaults/demo/assets/check", { token })).status).toBe(400);
+    const other = await loginAs("mallory.near");
+    expect((await req("/owner/v1/vaults/demo/assets/check?asset=SOL", { token: other.token })).status).toBe(404);
+  });
+
   it("P&L: the owner sees the vault's P&L; another owner cannot", async () => {
     const { m, req, token, loginAs } = await boot();
     await m.app.request("/v1/trade", { method: "POST", headers: { authorization: `Bearer ${m.agentToken}`, "content-type": "application/json" }, body: JSON.stringify({ side: "buy", asset: "SOL", amountUsd: 5 }) });

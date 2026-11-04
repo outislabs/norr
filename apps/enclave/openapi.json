@@ -934,6 +934,9 @@
             "items": {
               "type": "string"
             }
+          },
+          "contract": {
+            "$ref": "#/components/schemas/ContractSummary"
           }
         }
       },
@@ -1106,6 +1109,16 @@
                 },
                 "minimumUsd": {
                   "type": "number"
+                },
+                "contract": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ContractSummary"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 }
               }
             }
@@ -1451,6 +1464,40 @@
           "note": {
             "type": "string",
             "description": "\"Incident feed: not configured (partner key pending)\""
+          }
+        }
+      },
+      "ContractSummary": {
+        "type": "object",
+        "required": [
+          "source",
+          "status",
+          "trusted",
+          "findings"
+        ],
+        "description": "Contract-level checks from GoPlus Security. status says whether the contract was checked (ok) or why not (not_covered, no_data, unreachable); findings are plain sentences.",
+        "properties": {
+          "source": {
+            "const": "goplus"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "not_covered",
+              "no_data",
+              "unreachable"
+            ]
+          },
+          "trusted": {
+            "type": "boolean",
+            "description": "On GoPlus's trusted list."
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       }

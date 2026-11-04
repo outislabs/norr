@@ -55,6 +55,17 @@ export interface ServiceStatus { mock: boolean; pricing: "ready" | "retrying"; s
 export interface ValuePoint { t: number; totalUsd: number; cryptoUsd: number; equityUsd: number }
 export interface AssetPnl { asset: string; trades: number; boughtUsd: number; soldUsd: number; realizedUsd: number; qtyHeld: number; costBasisUsd: number; avgCostUsd: number | null; priceUsd: number | null; marketValueUsd: number | null; unrealizedUsd: number | null }
 export interface VaultPnl { since: string | null; scope: string; assets: AssetPnl[]; totals: { boughtUsd: number; soldUsd: number; realizedUsd: number; unrealizedUsd: number; totalUsd: number; costBasisUsd: number }; unpriced: string[] }
+export interface ContractSummary { source: "goplus"; status: "ok" | "not_covered" | "no_data" | "unreachable"; trusted: boolean; findings: string[] }
+export interface AssetCheck {
+  found: boolean;
+  message?: string;
+  class?: "crypto" | "equity";
+  ticker?: string;
+  versions?: { symbol: string; issuer: string | null; chain: string; shieldBlocked: string | null; risk: { score: number; level: "low" | "medium" | "high"; reasons: string[]; contract?: ContractSummary } | null }[];
+  eligible?: boolean;
+  notice?: string;
+  incidentFeed?: { status: "active" | "not_configured"; note?: string };
+}
 export interface AuditItem { at: string; owner: string; action: string; vaultId?: string }
 
 export interface ApiOptions {
@@ -121,6 +132,7 @@ export function createApi(o: ApiOptions) {
     attestation: (nonceHex: string) => call<AttestationEvidence & { attested: true; commit: string | null }>(`/attestation?nonce=${nonceHex}`),
     appInfo: () => call<AppInfo & { attested: true }>("/info"),
     status: () => call<ServiceStatus>("/owner/v1/status"),
+    checkAsset: (id: string, asset: string) => call<AssetCheck>(`/owner/v1/vaults/${encodeURIComponent(id)}/assets/check?asset=${encodeURIComponent(asset)}`),
     pnl: (id: string) => call<VaultPnl>(`/owner/v1/vaults/${encodeURIComponent(id)}/pnl`),
     history: (id: string) => call<{ points: ValuePoint[] }>(`/owner/v1/vaults/${encodeURIComponent(id)}/history`),
     audit: () => call<{ audit: AuditItem[] }>("/owner/v1/audit"),

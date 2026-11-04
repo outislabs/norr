@@ -76,6 +76,10 @@ After a shield, 1Click's status endpoint returned 404 for the deposit address. T
 
 - **The NEAR Intents incident feed (Shield)** is not configured on the hosted service: the partner key has not been granted. It is a deployment setting, not a hidden bypass: `/health`, `get_policy`, every quote and trade result, and the dashboard (status bar and Verify) say "Incident feed: not configured (partner key pending)". All other checks run. When a key is set, the feed is checked for every trade that passes the rules and fails closed.
 
+## Lookups to third parties
+
+To score a token, the Norr service asks DexScreener and GoPlus Security about it (read-only, no key, cached 10 minutes for GoPlus and 1 minute for DexScreener). Those services learn which token addresses are being checked, from the service's address, not which vault or agent asked or whether a trade followed.
+
 ## What cannot honestly be claimed
 - That a trade is hidden from OutLayer, Defuse or the private-chain operator.
 - That confidential trades are independently verified: the audit trail for them rests on the custody provider's reports, because the independent check needs a user session that only the wallet's key can create.

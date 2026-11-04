@@ -27,8 +27,9 @@ export const DEMO = {
   ETH: tok("ETH", "eth", 2300, 18, "ethereum"),
 };
 
-const RUG_SIGNALS: CryptoSignals = { routable: true, liquidityUsd: 3_200, marketCapUsd: 41_000, ageDays: 2 };
-const HEALTHY: CryptoSignals = { routable: true, liquidityUsd: 5_000_000, marketCapUsd: 900_000_000, ageDays: 800 };
+// Fixed, GoPlus-shaped contract checks so mock mode shows them too: the rug keeps live mint and freeze authority.
+const RUG_SIGNALS: CryptoSignals = { routable: true, liquidityUsd: 3_200, marketCapUsd: 41_000, ageDays: 2, contract: { status: "ok", source: "goplus", family: "solana", address: "RUGmock1111111111111111111111111111111111111", data: { mintable: { status: "1" }, freezable: { status: "1" } } } };
+const HEALTHY: CryptoSignals = { routable: true, liquidityUsd: 5_000_000, marketCapUsd: 900_000_000, ageDays: 800, contract: { status: "ok", source: "goplus", family: "solana", address: "mock", data: { trusted_token: 1 } } };
 
 /** The mock vault's owner account. Mock mode accepts any key for it: no funds, localhost only. */
 export const MOCK_OWNER = "demo-owner.mock.near";

@@ -1,5 +1,5 @@
 import { HeuristicRiskProvider, type RegistryEntry } from "@norr/core";
-import { DexScreenerSignals, NearIntentsBalances, OneClick, OutLayerCustody, ShieldClient } from "@norr/intents";
+import { DexScreenerSignals, GoPlusClient, NearIntentsBalances, OneClick, OutLayerCustody, ShieldClient } from "@norr/intents";
 import { FileValueHistory } from "./history";
 import { readPortfolio, sampleValue } from "./owner/routes";
 import { PricingFeed } from "./pricing";
@@ -80,12 +80,18 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env, opts: 
   ledger.sealExisting(policy.vaultId);
 
   const shield = env.SHIELD_API_KEY ? new ShieldClient({ apiKey: env.SHIELD_API_KEY }).feed : async () => null;
-  // One market-data client: Scam Shield scores it, and get_market_data shows the same numbers to the agent.
+  // Scam Shield's inputs: market data (DexScreener) and contract checks (GoPlus), fetched together. Scam Shield scores
+  // them, and get_market_data shows the agent the same numbers. Both are read-only and keyless.
   const market = new DexScreenerSignals();
+  const goplus = new GoPlusClient();
+  const signals = async (asset: Parameters<typeof market.signals>[0]) => {
+    const [m, contract] = await Promise.all([market.signals(asset), goplus.check(asset)]);
+    return { ...m, contract };
+  };
   const deps: TradeDeps = {
     registry,
-    risk: new HeuristicRiskProvider(market.signals),
-    marketSignals: market.signals,
+    risk: new HeuristicRiskProvider(signals),
+    marketSignals: signals,
     shield,
     // A deployment setting, reported to owners and agents: with no partner key there is no feed to check.
     incidentFeed: env.SHIELD_API_KEY ? "active" : "not_configured",

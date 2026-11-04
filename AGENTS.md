@@ -57,8 +57,9 @@ Last line on success: `PASS: 21/21 checks passed`. `pnpm judge --no-tests` skips
 | Claim | Code | Tests | Live evidence (mainnet or deployed) |
 |---|---|---|---|
 | The agent can never withdraw, change rules or choose a destination | `apps/mcp/src/tools.ts`, `apps/enclave/src/app.ts` | `apps/mcp/src/tools.test.ts`, `apps/enclave/src/app.test.ts` | Custody policy: `docs/FINDINGS.md` (OutLayer policy sections) |
+| The incident feed is a labelled deployment setting: not configured means skipped and said on every answer; configured means fail-closed | `packages/core/src/shield.ts`, `apps/enclave/src/app.ts` | `pipeline.test.ts`, `app.test.ts`, `live.test.ts` | `curl https://api.norr.finance/health` (`incidentFeed`) |
 | Rules are enforced before every trade (size, daily spend and loss caps, cooldown, allowlists, equity %, pause) | `packages/core/src/policy.ts`, `packages/core/src/pipeline.ts` | `packages/core/src/policy.test.ts`, `pipeline.test.ts` (every block code is reachable) | `pnpm judge` step 3 |
-| Scam Shield blocks risky tokens | `packages/core/src/risk.ts` | `risk.test.ts` | `docs/FINDINGS.md`, "Real \"rug\" token for the live demo" |
+| Scam Shield blocks risky tokens (market data and GoPlus contract checks; nothing passes silently) | `packages/core/src/risk.ts`, `contract-risk.ts`, `packages/intents/src/goplus.ts` | `risk.test.ts`, `contract-risk.test.ts`, `goplus.test.ts` | `docs/FINDINGS.md`, "Real \"rug\" token for the live demo" |
 | Every swap has a positive `min_amount_out` and is checked after execution | `packages/core/src/swap-guard.ts`, `verify.ts` | `swap-guard.test.ts`, `verify.test.ts` | `docs/FINDINGS.md`, first live swaps (OutLayer ignores the bound, which is why the post-trade check exists) |
 | Trades run in the Confidential Intents layer | `packages/core/src/confidential.ts`, `apps/enclave/src/trade.ts` | `confidential.test.ts` | `docs/FINDINGS.md` and `docs/PRIVACY.md`: confidential swaps and a $6 NVDAon round trip on 2026-10-30 |
 | Tokenized stocks across issuers | `packages/core/src/registry.ts` | `registry.test.ts` | `docs/FINDINGS.md` section 1 and the NVDAon round trip |

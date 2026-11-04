@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Api, ServiceStatus } from "../lib/api";
+import { AssetCheckPanel } from "./AssetCheckPanel";
 import { ConnectAgent } from "./ConnectAgent";
 import { VerifyPage } from "../pages/VerifyPage";
 import { Onboarding } from "./Onboarding";
@@ -164,5 +165,26 @@ describe("VerifyPage", () => {
     render(<VerifyPage api={api} signedIn={false} />);
     const row = await screen.findByTestId("deployment-settings");
     expect(row.textContent).toContain("Not configured (partner key pending)");
+  });
+});
+
+describe("AssetCheckPanel", () => {
+  it("shows Scam Shield's verdict with the GoPlus contract findings, or why the contract was not checked", async () => {
+    const api = {
+      checkAsset: vi.fn(async () => ({
+        found: true, class: "crypto", ticker: "RUGPULL",
+        versions: [{ symbol: "RUGPULL", issuer: null, chain: "sol", shieldBlocked: null, risk: { score: 100, level: "high", reasons: ["Very low liquidity ($3,200).", "Mint authority is active: more tokens can be minted."], contract: { source: "goplus", status: "ok", trusted: false, findings: ["Mint authority is active: more tokens can be minted.", "Freeze authority is active: holders' accounts can be frozen."] } } }],
+        incidentFeed: { status: "not_configured", note: "Incident feed: not configured (partner key pending)" },
+      })),
+    } as unknown as Api;
+    render(<AssetCheckPanel api={api} vaultId="demo" />);
+    fireEvent.change(screen.getByLabelText("Token to check"), { target: { value: "RUGPULL" } });
+    fireEvent.click(screen.getByRole("button", { name: "Check" }));
+    const box = await screen.findByTestId("asset-check");
+    expect(box.textContent).toContain("high risk · 100/100");
+    expect(box.textContent).toContain("Checked by GoPlus");
+    expect(box.textContent).toContain("Freeze authority is active");
+    expect(box.textContent).toContain("Incident feed: not configured (partner key pending)");
+    expect(api.checkAsset).toHaveBeenCalledWith("demo", "RUGPULL");
   });
 });

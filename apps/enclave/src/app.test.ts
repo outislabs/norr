@@ -124,6 +124,16 @@ describe("P&L and market data", () => {
     expect((await call("/v1/pnl", { token: null })).status).toBe(401);
   });
 
+  it("check_asset and market data carry the GoPlus contract findings", async () => {
+    const { call } = boot();
+    const check = await (await call("/v1/assets/check?asset=RUGPULL")).json();
+    expect(check.versions[0].risk.contract).toMatchObject({ source: "goplus", status: "ok", findings: expect.arrayContaining(["Freeze authority is active: holders' accounts can be frozen."]) });
+    expect(check.versions[0].risk.reasons).toEqual(expect.arrayContaining(["Mint authority is active: more tokens can be minted."]));
+    const market = await (await call("/v1/market?asset=RUGPULL")).json();
+    expect(market.versions[0].contract.findings).toEqual(expect.arrayContaining(["Mint authority is active: more tokens can be minted."]));
+    expect(market.source).toContain("GoPlus");
+  });
+
   it("market data: price and the signals Scam Shield scores for crypto; price and minimum for stocks", async () => {
     const { call } = boot();
     const rug = await (await call("/v1/market?asset=RUGPULL")).json();

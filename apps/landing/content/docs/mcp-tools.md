@@ -5,8 +5,8 @@ Nine tools. Eight only read; `trade` can move money, inside the vault only. No t
 | Tool | Inputs | What it does |
 |---|---|---|
 | `list_assets` | `class` (optional: `crypto` or `equity`) | What can be traded. Crypto by symbol and chain; stocks and ETFs by ticker with every issuer that offers it, and the smallest order that has been quoting (`minimumUsd`). |
-| `get_market_data` | `asset` | Numbers, not advice: the listed price and, for crypto, the market signals Scam Shield scores (liquidity, market cap, token age) with the risk level. For stocks, price per issuer and the quoting minimum. |
-| `check_asset` | `asset` | A verdict before trading. Crypto: Scam Shield's risk level (low, medium, high) with reasons. Stocks: whether this vault may trade them, and the notice to respect. Also any active NEAR Intents security incident touching the asset. |
+| `get_market_data` | `asset` | Numbers, not advice: the listed price and, for crypto, the market signals Scam Shield scores (liquidity, market cap, token age), the GoPlus contract findings and the risk level. For stocks, price per issuer and the quoting minimum. |
+| `check_asset` | `asset` | A verdict before trading. Crypto: Scam Shield's risk level (low, medium, high) with reasons, including the GoPlus contract checks (`risk.contract`: findings, or why the contract was not checked). Stocks: whether this vault may trade them, and the notice to respect. Also any active NEAR Intents security incident touching the asset. |
 | `get_quote` | `side`, `asset`, `amountUsd` | A dry run: the price and the minimum you would accept. No funds move. If a rule would stop the trade, you get the same blocked answer `trade` would give. |
 | `trade` | `side` (`buy` or `sell`), `asset`, `amountUsd`, `reason` (optional, private to the owner) | Requests a trade. Runs every check, quotes, executes through NEAR Intents (confidential layer when the funds are there) and verifies the result. |
 | `get_portfolio` | none | Holdings in USD, split into crypto and tokenized stocks. |

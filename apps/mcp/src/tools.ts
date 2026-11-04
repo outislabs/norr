@@ -45,7 +45,7 @@ export function createNorrServer(client: EnclaveClient): McpServer {
     {
       title: "Check an asset before trading",
       description:
-        "Check one asset before you trade it. For crypto: a risk verdict (low, medium or high, with reasons) from Scam Shield. For stocks and ETFs: whether this vault may trade them, plus the notice you must respect. " +
+        "Check one asset before you trade it. For crypto: a risk verdict (low, medium or high, with reasons) from Scam Shield, which scores market data (liquidity, market cap, age) and contract checks from GoPlus Security (honeypot, mint and freeze authority, owner privileges, blacklist, taxes); risk.contract lists the contract findings, or says why the contract could not be checked. For stocks and ETFs: whether this vault may trade them, plus the notice you must respect. " +
         "It also reports any active security incident on the NEAR Intents network that touches the asset. A high risk or an active incident means trade will be blocked, so do not try to work around it.",
       inputSchema: { asset },
       annotations: read,
@@ -107,7 +107,7 @@ export function createNorrServer(client: EnclaveClient): McpServer {
     {
       title: "Market data for an asset",
       description:
-        "Numbers for one asset: its listed price and, for crypto, the market signals Norr's Scam Shield scores (liquidity in USD, market cap, token age in days) with the resulting risk level. For stocks and ETFs: the price per issuer and the smallest order that quotes. " +
+        "Numbers for one asset: its listed price and, for crypto, the market signals Norr's Scam Shield scores (liquidity in USD, market cap, token age in days), the GoPlus contract findings, and the resulting risk level. For stocks and ETFs: the price per issuer and the smallest order that quotes. " +
         "Read-only facts, not advice. Use it to size and compare trades; check_asset gives the full risk reasons.",
       inputSchema: { asset },
       annotations: read,

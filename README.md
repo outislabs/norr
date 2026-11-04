@@ -105,7 +105,7 @@ Every `trade` runs these steps in order; any failing step returns `blocked` with
 
 1. **Auth:** the agent token maps to exactly one vault.
 2. **Resolve:** the asset registry maps a ticker (say `NVDA`) to every routable version (Ondo `NVDAon`, others if 1Click lists them).
-3. **Risk:** Scam Shield for crypto (liquidity, market cap, token age, allowlisted majors), or eligibility for stocks (a price sanity check follows the quote).
+3. **Risk:** Scam Shield for crypto, or eligibility for stocks (a price sanity check follows the quote). Scam Shield scores market data from DexScreener (liquidity, market cap, token age) and contract checks from GoPlus Security (honeypot, mint and freeze authority, owner privileges such as blacklisting or pausing unless ownership is renounced, buy and sell taxes, closed source); known majors are allowlisted. A token GoPlus cannot check (NEAR-native tokens, no data, GoPlus unreachable) gets a stated reason and a little extra risk, never a silent pass.
 4. **Policy:** paused, per-trade size, daily spend cap, daily loss cap, cooldown, allowlists, equity share. Trades for one vault run one at a time, so parallel requests cannot slip past a cap.
 5. **Incident feed (when configured):** last, for trades that pass every rule: an active NEAR Intents incident touching the asset blocks it, and so does a feed that cannot be read (fails closed). A trade that breaks a rule is refused with that rule's reason. Without a partner key the step is skipped and every answer says "Incident feed: not configured (partner key pending)".
 6. **Quote:** Norr requests its own 1Click quote per venue: confidential first when the vault holds funds there, public only as a fallback (never under `privacy: require`).
@@ -181,7 +181,7 @@ scripts/           live trade runner, verify-attestation, research probes (live 
 - **Limit orders are out of v1**: two test limit orders never filled.
 - **Small orders**: the stock minimum is a quote-time floor that moves (about $5 on liquid tickers at US market open, higher at other times and for other tickers).
 - **Stock eligibility**: per third-party sources (NEAR Intents' docs are silent), Ondo's tokens are for non-US persons only. The owner confirms non-US status before equities are enabled, and the dashboard shows a disclaimer. This is not legal advice and has not been reviewed by counsel.
-- **Scam Shield is a set of heuristics**, not a guarantee. It fails closed on tokens it cannot score (some legitimate tokens are blocked).
+- **Scam Shield is a set of heuristics**, not a guarantee. It fails closed on tokens it cannot score (some legitimate tokens are blocked). GoPlus does not cover NEAR-native tokens, so for those only market data is scored, and the reasons say so. GoPlus is used without a key; it documents no free-tier rate limits or terms we could find, so lookups are cached for 10 minutes.
 - **Not audited**, tiny balances, and the live deployment runs only when needed.
 
 ## Roadmap (after the hackathon)
@@ -220,7 +220,7 @@ Organizers confirmed pre-window work is permitted. The hackathon rules count cod
 
 - **AI:** Claude Code (Anthropic) wrote most of the code, tests and docs, directed and reviewed by the repository owner. The reference agent runs its model on NEAR AI Cloud.
 - **Libraries:** TypeScript, Node.js, pnpm, vitest, zod, Hono (`@hono/node-server`), the MCP TypeScript SDK (`@modelcontextprotocol/sdk`), `@phala/dstack-sdk`, `@phala/dcap-qvl-web`, `near-api-js`, NEAR Wallet Selector (core, modal UI, HOT, Meteor, MyNearWallet), React, Vite, Tailwind CSS, `@noble/curves` and `@noble/hashes`, `marked`, `qrcode-generator`, Geist fonts (`@fontsource`), and Phala's `dstack-ingress` container.
-- **Services:** NEAR Intents (1Click API, Confidential Intents, Shield feed), OutLayer Agent Custody, Phala Cloud (dstack, TDX), NEAR AI Cloud, DexScreener (read-only market data), Cloudflare Pages, GitHub Actions and GHCR.
+- **Services:** NEAR Intents (1Click API, Confidential Intents, Shield feed), OutLayer Agent Custody, Phala Cloud (dstack, TDX), NEAR AI Cloud, DexScreener (read-only market data), GoPlus Security (read-only token contract checks), Cloudflare Pages, GitHub Actions and GHCR.
 - **Own earlier code:** none; everything is in this repository's history.
 
 ## Image provenance

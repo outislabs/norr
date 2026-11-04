@@ -10,6 +10,7 @@ import { PendingChecks } from "../components/PendingChecks";
 import { PolicyForm } from "../components/PolicyForm";
 import { Portfolio } from "../components/Portfolio";
 import { PnlPanel } from "../components/PnlPanel";
+import { AssetCheckPanel } from "../components/AssetCheckPanel";
 import type { Api } from "../lib/api";
 import { ago, shortId, usd } from "../lib/format";
 import { getFlag, setFlag } from "../lib/flags";
@@ -132,7 +133,12 @@ export function VaultPage({ api, account, id, tab, mcpUrl, apiUrl, onChanged }: 
         )}
         {tab === "connect" && <div className="max-w-2xl"><ConnectAgent api={api} vaultId={id} mcpUrl={mcpUrl} apiUrl={apiUrl} onIssued={() => tick((n) => n + 1)} /></div>}
         {tab === "fund" && <div className="max-w-2xl"><FundingPanel api={api} vaultId={id} account={account} onArrived={() => vault.reload()} /></div>}
-        {tab === "rules" && <div className="max-w-2xl"><PolicyForm key={JSON.stringify(v.policy)} policy={v.policy} onSave={save} /></div>}
+        {tab === "rules" && (
+          <div className="flex max-w-2xl flex-col gap-12">
+            <PolicyForm key={JSON.stringify(v.policy)} policy={v.policy} onSave={save} />
+            <AssetCheckPanel api={api} vaultId={id} />
+          </div>
+        )}
         {tab === "activity" && (activity.error ? <p role="alert" className="text-alert">{activity.error}</p> : activity.data ? <ActivityTab api={api} account={account} vaultId={id} items={activity.data.activity} reload={activity.reload} /> : <p className="text-mute">Loading…</p>)}
         {tab === "approvals" && (
           <div className="max-w-2xl">

@@ -13,6 +13,7 @@ import type { TradeDeps } from "../trade";
 import type { OwnerAuth } from "./auth";
 import type { ValueHistory } from "../history";
 import { vaultPnl } from "../vault-pnl";
+import { assetCheck } from "../asset-check";
 
 /** What an owner did through the dashboard, newest last. Kept in memory for now. */
 export interface OwnerAuditEntry {
@@ -297,6 +298,15 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
     for (const id of ids) deps.vaults.pause(id, "paused by owner (kill switch)");
     note(owner, "kill switch: paused all vaults");
     return c.json({ paused: ids });
+  });
+
+  // The same verdict the agent gets from check_asset, for the dashboard's Check a token.
+  app.get("/owner/v1/vaults/:id/assets/check", async (c) => {
+    const v = mine(c.get("owner") as string, c.req.param("id"));
+    if (!v) return c.json({ error: "not found" }, 404);
+    const q = c.req.query("asset")?.trim();
+    if (!q) return c.json({ error: "asset is required" }, 400);
+    return c.json(await assetCheck(deps, q, v.policy.nonUsConfirmed));
   });
 
   app.get("/owner/v1/vaults/:id/pnl", (c) => {
