@@ -16,6 +16,7 @@ import { vaultPnl } from "../vault-pnl";
 import { assetCheck } from "../asset-check";
 import { RateLimiter, type BetaControl } from "../beta";
 import { OnboardingError, type Onboarding } from "../onboarding";
+import type { OAuthServer } from "../oauth";
 
 /** What an owner did through the dashboard, newest last. Kept in memory for now. */
 export interface OwnerAuditEntry {
@@ -43,6 +44,7 @@ export interface OwnerRouteContext {
   onboarding?: Onboarding;
   beta?: BetaControl;
   limiter?: RateLimiter;
+  oauth?: OAuthServer;
 }
 
 /** The vault's holdings across both layers, valued at registry prices. Null when balances cannot be read right now. */
@@ -135,7 +137,7 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
   app.get("/owner/v1/me", (c) => {
     const owner = c.get("owner") as string;
     const setup = onboarding ? onboarding.mine(owner).filter((r) => r.status === "setup").length : 0;
-    return c.json({ accountId: owner, vaults: deps.vaults.list().filter((v) => v.owner === owner).length + setup, mock: ctx.mock, selfServe: Boolean(onboarding), beta: ctx.beta?.get() ?? null });
+    return c.json({ accountId: owner, vaults: deps.vaults.list().filter((v) => v.owner === owner).length + setup, mock: ctx.mock, selfServe: Boolean(onboarding) });
   });
 
   app.post("/owner/v1/logout", (c) => {
@@ -147,6 +149,32 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
     const owner = c.get("owner") as string;
     const setup = onboarding ? onboarding.mine(owner).filter((r) => r.status === "setup").map((r) => onboarding.view(r)) : [];
     return c.json({ vaults: [...deps.vaults.list().filter((v) => v.owner === owner).map(summary), ...setup] });
+  });
+
+  // OAuth consent (MCP connectors): the owner sees which app asks, picks one of their active vaults, and says yes or no.
+  app.get("/owner/v1/oauth/requests/:rid", (c) => {
+    const r = ctx.oauth?.request(c.req.param("rid"));
+    if (!r) return c.json({ error: "This sign-in request has expired or was already used. Start again from your app." }, 404);
+    const owner = c.get("owner") as string;
+    return c.json({ ...r, vaults: deps.vaults.list().filter((v) => v.owner === owner).map((v) => ({ id: v.id, paused: v.policy.paused })) });
+  });
+
+  app.post("/owner/v1/oauth/requests/:rid/approve", async (c) => {
+    const owner = c.get("owner") as string;
+    const body = z.object({ vaultId: z.string().max(80) }).safeParse(await c.req.json().catch(() => null));
+    if (!body.success || !ctx.oauth) return c.json({ error: "Pick a vault." }, 400);
+    const v = mine(owner, body.data.vaultId);
+    if (!v) return c.json({ error: "not found" }, 404);
+    const r = ctx.oauth.approve(c.req.param("rid"), owner, v.id);
+    if (!r) return c.json({ error: "This sign-in request has expired or was already used. Start again from your app." }, 404);
+    note(owner, "connected an app through OAuth", v.id);
+    return c.json(r);
+  });
+
+  app.post("/owner/v1/oauth/requests/:rid/deny", (c) => {
+    const r = ctx.oauth?.deny(c.req.param("rid"));
+    if (!r) return c.json({ error: "This sign-in request has expired or was already used." }, 404);
+    return c.json(r);
   });
 
   // Self-serve vaults (docs/MULTI-USER.md). Create: a custody wallet for this owner, after the terms are accepted.
@@ -484,6 +512,7 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
     const v = mine(owner, c.req.param("id"));
     if (!v) return c.json({ error: "not found" }, 404);
     if (!tokens.revokeOne(v.id, c.req.param("tid"))) return c.json({ error: "not found" }, 404);
+    ctx.oauth?.revokeForAccessToken(v.id, c.req.param("tid"));
     note(owner, "revoked an agent token", v.id);
     return c.json({ revoked: true });
   });
@@ -504,6 +533,7 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
     const v = mine(owner, c.req.param("id"));
     if (!v) return c.json({ error: "not found" }, 404);
     tokens.revoke(v.id);
+    ctx.oauth?.revokeVault(v.id);
     note(owner, "revoked all agent tokens", v.id);
     return c.json({ revoked: true });
   });

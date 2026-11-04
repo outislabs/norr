@@ -125,3 +125,34 @@ describe("public deployments", () => {
     }
   });
 });
+
+describe("OAuth resource server (MCP authorization)", () => {
+  let http: ReturnType<typeof createHttpServer>;
+  let base: string;
+  beforeAll(async () => {
+    http = createHttpServer({ apiUrl: enclave.url, publicUrl: "https://mcp.norr.test", authServer: enclave.url });
+    await new Promise<void>((r) => http.listen(0, "127.0.0.1", r));
+    base = `http://127.0.0.1:${(http.address() as { port: number }).port}`;
+  });
+  afterAll(() => new Promise<void>((r) => http.close(() => r())));
+
+  it("serves its protected-resource metadata, pointing at the Norr service", async () => {
+    const meta = await (await fetch(`${base}/.well-known/oauth-protected-resource`)).json();
+    expect(meta).toMatchObject({ resource: "https://mcp.norr.test/mcp", authorization_servers: [enclave.url], bearer_methods_supported: ["header"] });
+    expect((await (await fetch(`${base}/.well-known/oauth-protected-resource/mcp`)).json()).resource).toBe("https://mcp.norr.test/mcp");
+    // Clients on the earlier spec look for the authorization server here: passed through.
+    expect((await (await fetch(`${base}/.well-known/oauth-authorization-server`)).json()).token_endpoint).toMatch(/\/oauth\/token$/);
+  });
+
+  it("answers 401 with the sign-in pointer without a token or with an invalid one, and serves a valid one", async () => {
+    const init = { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "t", version: "1" } } }) };
+    const none = await fetch(`${base}/mcp`, init);
+    expect(none.status).toBe(401);
+    expect(none.headers.get("www-authenticate")).toBe('Bearer resource_metadata="https://mcp.norr.test/.well-known/oauth-protected-resource"');
+    const bad = await fetch(`${base}/mcp`, { ...init, headers: { ...init.headers, authorization: "Bearer norr_agent_notarealtoken12345" } });
+    expect(bad.status).toBe(401);
+    expect(bad.headers.get("www-authenticate")).toMatch(/error="invalid_token"/);
+    const ok = await fetch(`${base}/mcp`, { ...init, headers: { ...init.headers, authorization: `Bearer ${mock.agentToken}` } });
+    expect(ok.status).toBe(200);
+  });
+});

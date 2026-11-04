@@ -13,6 +13,7 @@ import { FileLedger, FileVaultStore, PerVaultLedger, dataDir } from "./persist";
 import { FileTenantStore } from "./tenants";
 import { BetaControl } from "./beta";
 import { Onboarding } from "./onboarding";
+import { FileOAuthPersistence, OAuthServer } from "./oauth";
 import { AgentTokens, FileTokenPersistence } from "./tokens";
 import { repairBook } from "./book-repair";
 import { DataCipher, FileSealKeys, SealingLedger } from "./seal";
@@ -143,6 +144,10 @@ export async function buildLive(env: NodeJS.ProcessEnv = process.env) {
   // owners issue and revoke tokens in the dashboard.
   const tokens = new AgentTokens(new FileTokenPersistence(l.dir, l.cipher));
   const agentToken = tokens.list(l.vaultId).length === 0 ? tokens.issue(l.vaultId, { label: "Issued at startup" }) : null;
+  // OAuth for MCP connectors, when this service knows its public URL. The consent screen is the dashboard.
+  const origins = parseOrigins(env.NORR_ALLOWED_ORIGINS);
+  const dashboardUrl = env.NORR_DASHBOARD_URL || origins[0];
+  const oauth = env.NORR_PUBLIC_URL && dashboardUrl ? new OAuthServer({ issuer: env.NORR_PUBLIC_URL.replace(/\/+$/, ""), dashboardUrl: dashboardUrl.replace(/\/+$/, "") }, tokens, new FileOAuthPersistence(l.dir, l.cipher)) : undefined;
   // A reading every 15 minutes (the store keeps at most one per 10), so the value chart has points when nobody has the dashboard open.
   const sample = async () => {
     for (const v of l.deps.vaults.list()) sampleValue(l.deps, l.history, v.id, await readPortfolio(l.deps, v));
@@ -150,7 +155,7 @@ export async function buildLive(env: NodeJS.ProcessEnv = process.env) {
   // Hourly: each reading is a custody balance read per vault, and the custody provider's free tier counts operations per wallet per day.
   setInterval(() => void sample().catch(() => undefined), 60 * 60_000).unref();
   return {
-    app: createApp({ deps: l.deps, tokens, mock: false, adminToken: env.NORR_ADMIN_TOKEN, owner: new OwnerAuth({ keys: new RpcAccessKeyChecker() }), allowedOrigins: parseOrigins(env.NORR_ALLOWED_ORIGINS), attestor: dstackAttestor(env), seal: { keys: l.sealKeys, ledger: l.ledger }, history: l.history, onboarding: l.onboarding, beta: l.beta }),
+    app: createApp({ deps: l.deps, tokens, mock: false, adminToken: env.NORR_ADMIN_TOKEN, owner: new OwnerAuth({ keys: new RpcAccessKeyChecker() }), allowedOrigins: parseOrigins(env.NORR_ALLOWED_ORIGINS), attestor: dstackAttestor(env), seal: { keys: l.sealKeys, ledger: l.ledger }, history: l.history, onboarding: l.onboarding, beta: l.beta, oauth }),
     agentToken,
     vaultId: l.vaultId,
     shieldConfigured: l.shieldConfigured,

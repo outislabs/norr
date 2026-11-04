@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Api, ServiceStatus } from "../lib/api";
 import { AssetCheckPanel } from "./AssetCheckPanel";
-import { ConnectAgent } from "./ConnectAgent";
+import { ConnectAgent, TokenList } from "./ConnectAgent";
 import { VerifyPage } from "../pages/VerifyPage";
 import { Onboarding } from "./Onboarding";
 import { PnlPanel, signedUsd } from "./PnlPanel";
@@ -137,7 +137,7 @@ describe("PnlPanel", () => {
 
 describe("ConnectAgent", () => {
   it("leads with any MCP client, shows the token alone with a Copy button, and labels every tab tested or not", async () => {
-    const api = { issueToken: vi.fn(async () => ({ token: "norr_agent_abc123" })), revokeTokens: vi.fn() } as unknown as Api;
+    const api = { issueToken: vi.fn(async () => ({ token: "norr_agent_abc123" })), revokeTokens: vi.fn(), tokens: vi.fn(async () => ({ tokens: [] })) } as unknown as Api;
     render(<ConnectAgent api={api} vaultId="demo" mcpUrl="https://mcp.example/mcp" apiUrl="https://api.example" />);
     expect(document.body.textContent).toContain("Works with any MCP-compatible agent, or any code that can call the REST API.");
     const tabs = screen.getAllByRole("tab").map((t) => t.textContent);
@@ -186,5 +186,17 @@ describe("AssetCheckPanel", () => {
     expect(box.textContent).toContain("Freeze authority is active");
     expect(box.textContent).toContain("Incident feed: not configured (partner key pending)");
     expect(api.checkAsset).toHaveBeenCalledWith("demo", "RUGPULL");
+  });
+});
+
+describe("TokenList", () => {
+  it("lists each agent by name and revokes just that one", async () => {
+    const revokeToken = vi.fn(async () => ({ revoked: true }));
+    const api = { tokens: vi.fn(async () => ({ tokens: [{ id: "abc123def456", vaultId: "v", label: "Claude on my laptop", kind: "token", createdAt: "2026-11-04T10:00:00Z" }, { id: "999888777666", vaultId: "v", label: "Claude (claude.ai)", kind: "oauth", createdAt: "2026-11-04T11:00:00Z" }] })), revokeToken } as unknown as Api;
+    render(<TokenList api={api} vaultId="v" version={0} />);
+    expect(await screen.findByText("Claude on my laptop")).toBeTruthy();
+    expect(screen.getByText(/Connected app/)).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button", { name: "Revoke" })[1]!);
+    await waitFor(() => expect(revokeToken).toHaveBeenCalledWith("v", "999888777666"));
   });
 });

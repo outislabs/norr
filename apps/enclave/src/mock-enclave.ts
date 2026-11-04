@@ -2,6 +2,7 @@ import { HeuristicRiskProvider, ONDO, Registry, presetPolicy, type CryptoSignals
 import { createMockRails, MockProvisioner } from "@norr/intents";
 import { BetaControl, TERMS_URL, TERMS_VERSION } from "./beta";
 import { Onboarding } from "./onboarding";
+import { OAuthServer } from "./oauth";
 import { MemoryTenantStore } from "./tenants";
 import { createHash } from "node:crypto";
 import { createApp } from "./app";
@@ -54,6 +55,7 @@ export interface MockEnclave {
   sealing: SealingLedger;
   /** Self-serve vaults on mock rails: the stand-in custody provider and contract, and the beta settings. */
   provisioner: MockProvisioner;
+  oauth: OAuthServer;
   tenants: MemoryTenantStore;
   onboarding: Onboarding;
   beta: BetaControl;
@@ -67,7 +69,7 @@ export const MOCK_VAULT_START_USD = 100;
  * It starts with a demo vault holding its cash in the confidential layer, on the Balanced preset,
  * owner-confirmed for equities, so trades run confidentially by default.
  */
-export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed | null; now?: () => number; agentToken?: string; keys?: AccessKeyChecker; allowedOrigins?: string[]; attestor?: Attestor | null; requireApproval?: boolean } = {}): MockEnclave {
+export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed | null; now?: () => number; agentToken?: string; keys?: AccessKeyChecker; allowedOrigins?: string[]; attestor?: Attestor | null; requireApproval?: boolean; publicUrl?: string; dashboardUrl?: string } = {}): MockEnclave {
   const registry = new Registry({ crypto: [DEMO.USDC, DEMO.SOL, DEMO.wNEAR, DEMO.RUG, DEMO.USDC_BASE, DEMO.ETH], equities: [{ issuer: ONDO, tokens: [DEMO.NVDAon, DEMO.TSLAon, DEMO.SPYon] }] });
   const now = o.now ?? Date.now;
   const vaultId = "demo";
@@ -108,7 +110,7 @@ export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed
     settle: { waitMs: 5_000, intervalMs: 250 },
   };
 
-  const tokens = new AgentTokens();
+  const tokens = new AgentTokens(undefined, now);
   let agentToken: string;
   if (o.agentToken) {
     tokens.register(vaultId, o.agentToken);
@@ -142,11 +144,12 @@ export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed
     },
   });
 
+  const oauth = new OAuthServer({ issuer: o.publicUrl ?? "http://localhost:8787", dashboardUrl: o.dashboardUrl ?? "http://localhost:5173" }, tokens, null, now);
   deps.vaultCapUsd = (id) => (tenants.ids().includes(id) ? beta.get().depositCapUsd : undefined);
-  const app = createApp({ deps, tokens, mock: true, adminToken, owner: ownerAuth, allowedOrigins: o.allowedOrigins, attestor: o.attestor, seal: { keys: sealKeys, ledger: sealing }, history: new MemoryValueHistory(), onboarding, beta });
+  const app = createApp({ deps, tokens, mock: true, adminToken, owner: ownerAuth, allowedOrigins: o.allowedOrigins, attestor: o.attestor, seal: { keys: sealKeys, ledger: sealing }, history: new MemoryValueHistory(), onboarding, beta, oauth });
   mountMockApprovals(app, () => [{ rails, owner: MOCK_OWNER, walletPubkey: MOCK_WALLET_PUBKEY }, ...tenantRails.values()]);
   mountMockChain(app, provisioner, ownerAuth);
-  return { app, deps, vaults, tokens, agentToken, adminToken, vaultId, ownerAuth, rails, sealKeys, sealing, provisioner, tenants, onboarding, beta };
+  return { app, deps, vaults, tokens, agentToken, adminToken, vaultId, ownerAuth, rails, sealKeys, sealing, provisioner, tenants, onboarding, beta, oauth };
 }
 
 /** The mock wallet's on-chain key, bound into vote messages the way OutLayer binds the real one. */

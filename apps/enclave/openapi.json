@@ -507,6 +507,40 @@
           }
         }
       }
+    },
+    "/v1/token": {
+      "get": {
+        "tags": [
+          "Vault"
+        ],
+        "operationId": "checkToken",
+        "summary": "Check a token",
+        "description": "Answers 200 while the bearer token is valid and 401 when it is not (unknown, revoked or expired). The MCP endpoint uses it so an expired OAuth access token gets a 401 the client can refresh on.",
+        "responses": {
+          "200": {
+            "description": "The token is valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
     }
   },
   "components": {

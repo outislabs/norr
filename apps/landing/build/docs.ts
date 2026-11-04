@@ -27,6 +27,7 @@ export const PAGES: DocPage[] = [
   { slug: "verify", nav: "Verify the enclave", description: "Check the running code yourself: seven attestation checks in the browser or a terminal." },
   { slug: "faq", nav: "FAQ", description: "Keys, safety, chains, wallets, costs and eligibility." },
   { slug: "limitations", nav: "Limitations and roadmap", description: "What Norr does not do yet, stated plainly, and what comes next." },
+  { slug: "terms", nav: "Beta terms and risks", description: "What you accept when you create a vault: the beta limits, who controls what, and the risks." },
 ];
 
 const href = (slug: string) => (slug ? `/docs/${slug}/` : "/docs/");

@@ -14,6 +14,10 @@ services:
       NORR_OWNER_ACCOUNT: ${NORR_OWNER_ACCOUNT}
       NORR_ALLOWED_ORIGINS: ${NORR_ALLOWED_ORIGINS}
       NORR_POLICY_JSON: ${NORR_POLICY_JSON}
+      # Public beta (docs/MULTI-USER.md): OAuth issuer, signups (open|closed), accounts allowed while closed.
+      NORR_PUBLIC_URL: https://api.norr.finance
+      NORR_SIGNUPS: ${NORR_SIGNUPS}
+      NORR_BETA_ALLOWLIST: ${NORR_BETA_ALLOWLIST}
       # Secret (encrypted environment variables):
       NORR_DATA_KEY: ${NORR_DATA_KEY}
       OUTLAYER_DEMO_API_KEY: ${OUTLAYER_DEMO_API_KEY}
@@ -21,6 +25,8 @@ services:
       OUTLAYER_DEMO_WALLET_ID: ${OUTLAYER_DEMO_WALLET_ID}
       ONECLICK_API_KEY: ${ONECLICK_API_KEY}
       SHIELD_API_KEY: ${SHIELD_API_KEY}
+      # The operator switch for new vaults (POST /admin/v1/signups). Unset: no admin endpoint at all.
+      NORR_ADMIN_TOKEN: ${NORR_ADMIN_TOKEN}
       # NORR_ENV and SHIELD_MODE=dev-bypass are deliberately not passed: the bypass can never run here.
     volumes:
       - norr-data:/data
@@ -42,6 +48,9 @@ services:
       MCP_PORT: "8788"
       # Behind Phala's gateway every request must carry the agent's bearer token; the Host allow-list is for localhost servers.
       MCP_ALLOWED_HOSTS: "*"
+      # OAuth (MCP authorization): this endpoint's public URL and its authorization server.
+      MCP_PUBLIC_URL: https://mcp.norr.finance
+      MCP_AUTH_SERVER: https://api.norr.finance
     depends_on:
       - norr
 

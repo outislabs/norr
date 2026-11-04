@@ -14,6 +14,7 @@ export interface Challenge { nonce: string; message: string; recipient: string; 
 export interface SessionInfo { token: string; accountId: string; expiresAt: number }
 export interface VaultSummary {
   id: string;
+  status?: "active";
   walletAccount: string;
   policy: Policy;
   paused: boolean;
@@ -79,6 +80,23 @@ export interface AssetCheck {
   notice?: string;
   incidentFeed?: { status: "active" | "not_configured"; note?: string };
 }
+/** A self-serve vault that is not active yet (its custody policy is not on chain, or not checked). */
+export interface SetupVault {
+  id: string;
+  status: "setup";
+  walletAccount: string;
+  createdAt: string;
+  terms: { version: string; acceptedAt: string };
+  nonUsConfirmed: boolean;
+  custody: { prepared: boolean; autonomous?: boolean; walletPubkey?: string; preparedAt?: string };
+}
+export type VaultListItem = VaultSummary | SetupVault;
+export const isSetup = (v: VaultListItem): v is SetupVault => v.status === "setup";
+export interface BetaInfo { selfServe: boolean; signupsOpen?: boolean; depositCapUsd?: number; maxVaultsPerOwner?: number; termsVersion?: string; termsUrl?: string }
+/** The contract call the owner's own wallet sends to store the custody policy (and become its controller). */
+export interface PolicyStoreCall { contractId: string; methodName: "store_wallet_policy"; args: { wallet_pubkey: string; encrypted_data: string; wallet_signature: string }; gas: string; deposit: string }
+export interface PreparedPolicy { policy: unknown; summary: string[]; call: PolicyStoreCall; controller: string }
+export interface TokenInfo { id: string; vaultId: string; label: string; kind: "token" | "oauth"; createdAt: string; clientId?: string; expiresAt?: string }
 export interface AuditItem { at: string; owner: string; action: string; vaultId?: string }
 
 export interface ApiOptions {
@@ -127,8 +145,20 @@ export function createApi(o: ApiOptions) {
     challenge: () => call<Challenge>("/owner/v1/challenge"),
     login: (b: { accountId: string; publicKey: string; signature: string; nonce: string }) => call<SessionInfo>("/owner/v1/login", { body: b }),
     logout: () => call<{ ok: boolean }>("/owner/v1/logout", { body: {} }),
-    me: () => call<{ accountId: string; vaults: number; mock: boolean }>("/owner/v1/me"),
-    vaults: () => call<{ vaults: VaultSummary[] }>("/owner/v1/vaults"),
+    me: () => call<{ accountId: string; vaults: number; mock: boolean; selfServe?: boolean }>("/owner/v1/me"),
+    vaults: () => call<{ vaults: VaultListItem[] }>("/owner/v1/vaults"),
+    beta: () => call<BetaInfo>("/beta"),
+    createVault: (b: { acceptTerms: string; nonUsConfirmed?: boolean }) => call<SetupVault>("/owner/v1/vaults", { body: b }),
+    setupVault: (id: string) => call<SetupVault>(`/owner/v1/vaults/${encodeURIComponent(id)}/setup`),
+    prepareCustody: (id: string, autonomous: boolean) => call<PreparedPolicy>(`/owner/v1/vaults/${encodeURIComponent(id)}/custody-policy`, { body: { autonomous } }),
+    activateVault: (id: string) => call<{ status: "active" } | { status: "setup"; problems: string[] }>(`/owner/v1/vaults/${encodeURIComponent(id)}/activate`, { body: {} }),
+    /** Mock mode only: the signed-in owner stands in for their wallet sending the contract call. */
+    mockStorePolicy: (args: PolicyStoreCall["args"]) => call<{ ok: boolean }>("/mock-outlayer/chain/store_wallet_policy", { body: { args } }),
+    oauthRequest: (rid: string) => call<{ clientName: string; redirectHost: string; expiresAt: string; vaults: { id: string; paused: boolean }[] }>(`/owner/v1/oauth/requests/${encodeURIComponent(rid)}`),
+    oauthApprove: (rid: string, vaultId: string) => call<{ redirect: string }>(`/owner/v1/oauth/requests/${encodeURIComponent(rid)}/approve`, { body: { vaultId } }),
+    oauthDeny: (rid: string) => call<{ redirect: string }>(`/owner/v1/oauth/requests/${encodeURIComponent(rid)}/deny`, { body: {} }),
+    tokens: (id: string) => call<{ tokens: TokenInfo[] }>(`/owner/v1/vaults/${encodeURIComponent(id)}/tokens`),
+    revokeToken: (id: string, tid: string) => call<{ revoked: boolean }>(`/owner/v1/vaults/${encodeURIComponent(id)}/tokens/${encodeURIComponent(tid)}`, { method: "DELETE" }),
     vault: (id: string) => call<VaultSummary & { portfolio: Portfolio | null }>(`/owner/v1/vaults/${encodeURIComponent(id)}`),
     setPolicy: (id: string, p: Policy) => call<{ policy: Policy }>(`/owner/v1/vaults/${encodeURIComponent(id)}/policy`, { method: "PUT", body: p }),
     pause: (id: string) => call<{ paused: boolean }>(`/owner/v1/vaults/${encodeURIComponent(id)}/pause`, { body: {} }),
@@ -136,7 +166,7 @@ export function createApi(o: ApiOptions) {
     pauseAll: () => call<{ paused: string[] }>("/owner/v1/pause-all", { body: {} }),
     activity: (id: string) => call<{ activity: ActivityItem[] }>(`/owner/v1/vaults/${encodeURIComponent(id)}/activity`),
     pending: (id: string) => call<PendingList>(`/owner/v1/vaults/${encodeURIComponent(id)}/pending`),
-    issueToken: (id: string) => call<{ token: string; note: string }>(`/owner/v1/vaults/${encodeURIComponent(id)}/tokens`, { body: {} }),
+    issueToken: (id: string, label?: string) => call<{ token: string; note: string }>(`/owner/v1/vaults/${encodeURIComponent(id)}/tokens`, { body: label ? { label } : {} }),
     revokeTokens: (id: string) => call<{ revoked: boolean }>(`/owner/v1/vaults/${encodeURIComponent(id)}/tokens`, { method: "DELETE" }),
     fundingSources: () => call<{ sources: FundingSource[] }>("/owner/v1/funding/sources"),
     requestFunding: (id: string, r: { amountUsd: number; source?: string; refundTo?: string }) => call<FundingOffer>(`/owner/v1/vaults/${encodeURIComponent(id)}/funding`, { body: { amountUsd: r.amountUsd, amountUsdc: r.amountUsd /* services before 2026-11-03 read this name */, ...(r.source ? { source: r.source } : {}), ...(r.refundTo ? { refundTo: r.refundTo } : {}) } }),

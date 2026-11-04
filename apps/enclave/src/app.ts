@@ -14,6 +14,7 @@ import { valueLayers } from "./portfolio";
 import { safeEqual, type AgentTokens } from "./tokens";
 import { RateLimiter, type BetaControl } from "./beta";
 import type { Onboarding } from "./onboarding";
+import { mountOAuth, type OAuthServer } from "./oauth";
 import { executeTrade, planTrade, reconcile, type TradeDeps } from "./trade";
 
 export interface AppOptions {
@@ -37,6 +38,8 @@ export interface AppOptions {
   /** Self-serve vaults (public beta). Without it, only the vaults configured at startup exist. */
   onboarding?: Onboarding;
   beta?: BetaControl;
+  /** OAuth for MCP clients (the Claude app's connectors). */
+  oauth?: OAuthServer;
 }
 
 type Env = { Variables: { vaultId: string } };
@@ -45,7 +48,7 @@ type Env = { Variables: { vaultId: string } };
  * The agent-facing API. There is deliberately no route that moves funds out, changes policy, or
  * accepts a destination. The vault always comes from the agent token. Request bodies are never logged.
  */
-export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, allowedOrigins, attestor, history, onboarding, beta }: AppOptions): Hono<Env> {
+export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, allowedOrigins, attestor, history, onboarding, beta, oauth }: AppOptions): Hono<Env> {
   const app = new Hono<Env>();
   const limiter = new RateLimiter(deps.now);
 
@@ -102,6 +105,9 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
     c.set("vaultId", vaultId);
     await next();
   });
+
+  // For the MCP endpoint: is this bearer token valid right now? (Answers 401 through the middleware when it is not.)
+  app.get("/v1/token", (c) => c.json({ ok: true }));
 
   app.get("/v1/assets", (c) => {
     const cls = c.req.query("class");
@@ -246,7 +252,8 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
     return c.json({ selfServe: Boolean(onboarding), signupsOpen: b.signupsOpen, depositCapUsd: b.depositCapUsd, maxVaultsPerOwner: b.maxVaultsPerOwner, termsVersion: b.termsVersion, termsUrl: b.termsUrl });
   });
 
-  if (owner) mountOwnerRoutes(app, { deps, tokens, auth: owner, mock, build: build ?? resolveBuildInfo(), seal, allowedOrigins, attestor: attestor ?? null, audit: [] as OwnerAuditEntry[], history, onboarding, beta, limiter });
+  if (oauth) mountOAuth(app, oauth, (k, n, w) => limiter.allow(k, n, w));
+  if (owner) mountOwnerRoutes(app, { deps, tokens, auth: owner, mock, build: build ?? resolveBuildInfo(), seal, allowedOrigins, attestor: attestor ?? null, audit: [] as OwnerAuditEntry[], history, onboarding, beta, limiter, oauth });
 
   if (adminToken) {
     const admin = (c: { req: { header(n: string): string | undefined } }) => safeEqual(c.req.header("x-admin-token") ?? "", adminToken);

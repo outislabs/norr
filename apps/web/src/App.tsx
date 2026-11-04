@@ -6,6 +6,8 @@ import { clearSession, loadSession, saveSession } from "./lib/session";
 import { SignInPage } from "./pages/SignInPage";
 import { VaultPage } from "./pages/VaultPage";
 import { VaultsPage } from "./pages/VaultsPage";
+import { SetupPage } from "./pages/SetupPage";
+import { AuthorizePage } from "./pages/AuthorizePage";
 import { VerifyPage } from "./pages/VerifyPage";
 
 export function App({ base = "/api", mcpUrl = "http://127.0.0.1:8788/mcp" }: { base?: string; mcpUrl?: string }) {
@@ -61,7 +63,9 @@ export function App({ base = "/api", mcpUrl = "http://127.0.0.1:8788/mcp" }: { b
         setVersion((v) => v + 1);
       }}
     >
-      {route.name === "vaults" && <VaultsPage api={api} account={session.accountId} version={version} />}
+      {route.name === "vaults" && <VaultsPage api={api} account={session.accountId} version={version} onChanged={() => setVersion((v) => v + 1)} />}
+      {route.name === "authorize" && <AuthorizePage key={route.rid} api={api} account={session.accountId} rid={route.rid} />}
+      {route.name === "setup" && <SetupPage key={route.id} api={api} account={session.accountId} id={route.id} onChanged={() => setVersion((v) => v + 1)} />}
       {route.name === "vault" && <VaultPage key={`${route.id}-${version}`} api={api} account={session.accountId} id={route.id} tab={route.tab} mcpUrl={mcpUrl} apiUrl={base.startsWith("http") ? base : "http://localhost:8787"} onChanged={() => setVersion((v) => v + 1)} />}
       {route.name === "verify" && <VerifyPage api={api} signedIn />}
     </Shell>

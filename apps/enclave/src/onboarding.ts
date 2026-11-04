@@ -85,7 +85,7 @@ export class Onboarding {
 
   async create(owner: string, input: CreateInput): Promise<TenantRecord> {
     const beta = this.d.beta.get();
-    if (!beta.signupsOpen) throw new OnboardingError(403, "New vaults are paused for now. Existing vaults keep working.");
+    if (!beta.signupsOpen && !(beta.allowlist ?? []).includes(owner)) throw new OnboardingError(403, "New vaults are paused for now. Existing vaults keep working.");
     if (input.acceptTerms !== beta.termsVersion) throw new OnboardingError(400, `Read and accept the terms and risk disclosure (version ${beta.termsVersion}) first.`);
     const all = this.d.tenants.list();
     if (all.filter((r) => r.owner === owner).length >= beta.maxVaultsPerOwner) throw new OnboardingError(409, `The beta allows ${beta.maxVaultsPerOwner} vault per account.`);

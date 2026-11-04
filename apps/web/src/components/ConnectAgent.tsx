@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAsync } from "../lib/useAsync";
 import type { Api } from "../lib/api";
 import { setFlag } from "../lib/flags";
 import { mcpSnippets, type Client } from "../lib/mcp";
@@ -12,6 +13,8 @@ export function ConnectAgent({ api, vaultId, mcpUrl, apiUrl, onIssued }: { api: 
   const [error, setError] = useState<string | null>(null);
   const [revoked, setRevoked] = useState(false);
   const [client, setClient] = useState<Client>("any");
+  const [label, setLabel] = useState("");
+  const [listVersion, setListVersion] = useState(0);
   const snippets = mcpSnippets(mcpUrl, token, apiUrl);
   const shown = snippets.find((s) => s.client === client) ?? snippets[0]!;
   return (
@@ -23,6 +26,8 @@ export function ConnectAgent({ api, vaultId, mcpUrl, apiUrl, onIssued }: { api: 
 
       <div>
         <h2 className="font-display text-xl">1. Create a token</h2>
+        <label className="label mt-3" htmlFor="token-label">Name it after the agent that will hold it</label>
+        <input id="token-label" className="field max-w-sm" value={label} maxLength={60} onChange={(e) => setLabel(e.target.value)} placeholder="Claude on my laptop" autoComplete="off" />
         <div className="mt-3 flex flex-wrap gap-3">
           <button
             type="button"
@@ -31,8 +36,9 @@ export function ConnectAgent({ api, vaultId, mcpUrl, apiUrl, onIssued }: { api: 
               setError(null);
               setRevoked(false);
               try {
-                setToken((await api.issueToken(vaultId)).token);
+                setToken((await api.issueToken(vaultId, label.trim() || undefined)).token);
                 setFlag(`token-${vaultId}`);
+                setListVersion((n) => n + 1);
                 onIssued?.();
               } catch (e) {
                 setError(e instanceof Error ? e.message : "Could not create a token.");
@@ -50,6 +56,7 @@ export function ConnectAgent({ api, vaultId, mcpUrl, apiUrl, onIssued }: { api: 
                 await api.revokeTokens(vaultId);
                 setToken(null);
                 setRevoked(true);
+                setListVersion((n) => n + 1);
               } catch (e) {
                 setError(e instanceof Error ? e.message : "Could not revoke.");
               }
@@ -66,7 +73,7 @@ export function ConnectAgent({ api, vaultId, mcpUrl, apiUrl, onIssued }: { api: 
         )}
         {revoked && <p role="status" className="mt-3 text-sm text-fg">Every token for this vault has been revoked. Agents holding one are refused from now on.</p>}
         {error && <p role="alert" className="mt-3 text-sm text-fg">{error}</p>}
-        <p className="mt-3 text-sm text-mute">To rotate a token, revoke all first, then create a new one: revoking removes every token on the vault, including one you just made. Restarting the service also revokes them, so create a fresh one after a restart.</p>
+        <TokenList api={api} vaultId={vaultId} version={listVersion} onRevoked={() => setListVersion((n) => n + 1)} />
       </div>
 
       <div>
@@ -104,6 +111,47 @@ export function ConnectAgent({ api, vaultId, mcpUrl, apiUrl, onIssued }: { api: 
           <dd>{TOOLS.join(", ")}</dd>
         </dl>
       </div>
+    </div>
+  );
+}
+
+/** The vault's tokens and connected apps, by name, each revocable on its own. Token values are never shown again. */
+export function TokenList({ api, vaultId, version, onRevoked }: { api: Api; vaultId: string; version: number; onRevoked?: () => void }) {
+  const list = useAsync(() => api.tokens(vaultId), `tokens-${vaultId}-${version}`);
+  const [error, setError] = useState<string | null>(null);
+  const rows = list.data?.tokens ?? [];
+  if (list.loading || rows.length === 0) return null;
+  return (
+    <div className="mt-6">
+      <p className="eyebrow mb-2">Agents with access</p>
+      <ul className="flex flex-col border-t border-line">
+        {rows.map((t) => (
+          <li key={t.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-line py-3">
+            <span className="min-w-0">
+              <span className="block text-fg">{t.label}</span>
+              <span className="block text-sm text-mute">
+                {t.kind === "oauth" ? "Connected app" : "Token"} · since {new Date(t.createdAt).toLocaleDateString()} · <span className="mono">{t.id}</span>
+              </span>
+            </span>
+            <button
+              type="button"
+              className="btn btn-quiet"
+              onClick={async () => {
+                setError(null);
+                try {
+                  await api.revokeToken(vaultId, t.id);
+                  onRevoked?.();
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "Could not revoke.");
+                }
+              }}
+            >
+              Revoke
+            </button>
+          </li>
+        ))}
+      </ul>
+      {error && <p role="alert" className="mt-2 text-sm text-fg">{error}</p>}
     </div>
   );
 }

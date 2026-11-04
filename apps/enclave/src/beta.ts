@@ -17,6 +17,8 @@ export interface BetaSettings {
   /** The terms and risk disclosure an owner must accept to create a vault. */
   termsVersion: string;
   termsUrl: string;
+  /** Accounts that may create a vault while signups are closed (a staged launch). Never published. */
+  allowlist?: string[];
 }
 
 /** The current terms. Changing the text means a new version; vaults keep the version their owner accepted. */
@@ -45,12 +47,13 @@ export class BetaControl {
     }
     return new BetaControl(
       {
-        signupsOpen: (env.NORR_SIGNUPS ?? "open") !== "closed",
+        signupsOpen: (env.NORR_SIGNUPS || "open") !== "closed",
         depositCapUsd: num(env.NORR_BETA_DEPOSIT_CAP_USD, 100),
         maxVaults: num(env.NORR_BETA_MAX_VAULTS, 50),
         maxVaultsPerOwner: num(env.NORR_BETA_MAX_VAULTS_PER_OWNER, 1),
         termsVersion: TERMS_VERSION,
         termsUrl: TERMS_URL,
+        allowlist: (env.NORR_BETA_ALLOWLIST ?? "").split(",").map((s) => s.trim()).filter(Boolean),
       },
       file,
     );

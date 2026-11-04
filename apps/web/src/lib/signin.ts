@@ -1,5 +1,5 @@
 import { Buffer } from "buffer";
-import type { Api, SessionInfo } from "./api";
+import type { Api, PolicyStoreCall, SessionInfo } from "./api";
 import { base64ToBytes, generateDemoKey, type DemoKey } from "./nep413";
 import { UNLOCK_MESSAGE, UNLOCK_NONCE, UNLOCK_RECIPIENT } from "./seal";
 
@@ -89,4 +89,27 @@ export async function signVote(message: string, recipient: string, nonce: Uint8A
   const signed = await wallet.signMessage({ message, recipient, nonce: Buffer.from(nonce) });
   if (!signed) throw new Error("The wallet did not return a signature.");
   return { signature: signed.signature, publicKey: signed.publicKey, accountId: signed.accountId };
+}
+
+/**
+ * Store the vault's custody policy on chain from the owner's own wallet: one transaction to the policy contract
+ * (`store_wallet_policy`), with the storage deposit shown before signing. Sent by the owner, so the owner becomes the
+ * wallet's controller and Norr can never change the policy. In mock mode the signed-in session stands in for the wallet.
+ */
+export async function sendPolicyStore(api: Api, call: PolicyStoreCall, owner: string): Promise<void> {
+  if (demoKey) {
+    await api.mockStorePolicy(call.args);
+    return;
+  }
+  const { selector } = await loadSelector();
+  if (selector.store.getState().accounts.length === 0) throw new Error("Your wallet is not connected. Sign in again.");
+  const wallet = await selector.wallet();
+  const signer = selector.store.getState().accounts.find((a) => a.active)?.accountId ?? selector.store.getState().accounts[0]?.accountId;
+  if (signer !== owner) throw new Error(`Your wallet is connected as ${signer ?? "nobody"}, but this vault belongs to ${owner}. Switch accounts in your wallet and try again.`);
+  const { actionCreators } = await import("@near-js/transactions");
+  await wallet.signAndSendTransaction({
+    signerId: owner,
+    receiverId: call.contractId,
+    actions: [actionCreators.functionCall(call.methodName, call.args, BigInt(call.gas), BigInt(call.deposit))],
+  });
 }
