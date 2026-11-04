@@ -9,7 +9,7 @@ import type { Hono } from "hono";
 import { z } from "zod";
 import { valueLayers } from "../portfolio";
 import type { AgentTokens } from "../tokens";
-import type { TradeDeps } from "../trade";
+import { reconcile, type TradeDeps } from "../trade";
 import type { OwnerAuth } from "./auth";
 import type { ValueHistory } from "../history";
 import { vaultPnl } from "../vault-pnl";
@@ -316,9 +316,10 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
   });
 
   // The owner sees the agent's stated reasoning; nobody else does.
-  app.get("/owner/v1/vaults/:id/activity", (c) => {
+  app.get("/owner/v1/vaults/:id/activity", async (c) => {
     const v = mine(c.get("owner") as string, c.req.param("id"));
     if (!v) return c.json({ error: "not found" }, 404);
+    for (const row of deps.ledger.list(v.id).filter((r) => r.pending).slice(0, 5)) await reconcile(deps, row.id).catch(() => null);
     const all = deps.ledger.list(v.id);
     // What each executed trade actually moved, and the realized P&L of each sell, replayed in order with the
     // same average-cost rule the loss cap uses (a sell only realizes the part Norr bought).
@@ -351,9 +352,11 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
   });
 
   // What Norr asked the custody provider for, so the owner can check it against the approval screen before signing.
-  app.get("/owner/v1/vaults/:id/pending", (c) => {
+  app.get("/owner/v1/vaults/:id/pending", async (c) => {
     const v = mine(c.get("owner") as string, c.req.param("id"));
     if (!v) return c.json({ error: "not found" }, 404);
+    // Settle swaps the owner has approved (or rejected) since, so they leave this list.
+    for (const row of deps.ledger.list(v.id).filter((r) => r.pending).slice(0, 5)) await reconcile(deps, row.id).catch(() => null);
     const human = (id: string, units: string) => {
       const e = deps.registry.byId(id);
       return e ? { amount: unitsToNumber(units, e.decimals), symbol: e.symbol } : { amount: null, symbol: id };
@@ -368,10 +371,33 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
         sends: { token: p.intended.tokenIn, ...human(p.intended.tokenIn, p.intended.amountIn) },
         receivesAtLeast: { token: p.intended.tokenOut, ...human(p.intended.tokenOut, p.intended.minAmountOut) },
         recipient: p.intended.recipient,
+        // Norr's own record, in the custody provider's units, for the browser's side-by-side check.
+        intended: { tokenIn: p.intended.tokenIn, amountIn: p.intended.amountIn, tokenOut: p.intended.tokenOut, minAmountOut: p.intended.minAmountOut },
+        approvalId: null as string | null,
         check: "Approve only if the approval screen shows the same tokens and amount, and the request hash above if it shows one.",
       };
     });
-    return c.json({ pending });
+    // The provider's approval ids, matched to Norr's records by request id. An approval Norr did not ask for is listed
+    // separately: the dashboard offers only Reject for it. Listing needs the wallet key; voting never goes through Norr.
+    let unknown: { approvalId: string; requestId: string | null; type: string; expiresAt: string }[] = [];
+    let approvalsListed = false;
+    if (v.custody.pendingApprovals) {
+      try {
+        const approvals = await v.custody.pendingApprovals();
+        approvalsListed = true;
+        for (const a of approvals) {
+          const mine = pending.find((p) => p.requestId === a.requestId);
+          if (mine) mine.approvalId = a.approvalId;
+          else unknown.push(a);
+        }
+      } catch {
+        unknown = [];
+      }
+    }
+    // Where the browser fetches each approval and sends the owner's signed vote: the provider itself, so Norr can
+    // neither change what is shown nor what is signed. In mock mode, the service's stand-in for it.
+    const approvalsApi = ctx.mock ? "service:/mock-outlayer" : "https://api.outlayer.ai";
+    return c.json({ pending, unknown, approvalsListed, approvalsApi, voteRecipient: "outlayer.near" });
   });
 
   app.post("/owner/v1/vaults/:id/tokens", (c) => {

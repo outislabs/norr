@@ -1,6 +1,6 @@
 import { requireSwapBounds, type SwapBounds } from "@norr/core";
 import { obj, requestJson, str, type FetchLike } from "./http";
-import type { Custody, DepositRequest, SwapState, SwapStatus, Venue, WithdrawParams } from "./types";
+import type { Custody, CustodyApproval, DepositRequest, SwapState, SwapStatus, Venue, WithdrawParams } from "./types";
 
 export interface OutLayerOptions {
   baseUrl?: string;
@@ -58,6 +58,17 @@ export class OutLayerCustody implements Custody {
     const path = venue === "confidential" ? "/wallet/v1/confidential/swap" : "/wallet/v1/intents/swap";
     const res = obj(await this.post(path, { token_in: b.tokenIn, token_out: b.tokenOut, amount_in: b.amountIn, min_amount_out: b.minAmountOut }, `OutLayer ${venue} swap`));
     return this.started(res);
+  }
+
+  /** GET /wallet/v1/pending_approvals: the approvals waiting on this wallet, listed to the wallet's own key. */
+  async pendingApprovals(): Promise<CustodyApproval[]> {
+    const res = obj(await requestJson(this.f, `${this.baseUrl}/wallet/v1/pending_approvals`, { headers: this.headers }, "OutLayer pending approvals"));
+    const rows = Array.isArray(res.approvals) ? res.approvals : [];
+    return rows.flatMap((r) => {
+      const a = obj(r);
+      const approvalId = str(a.approval_id);
+      return approvalId ? [{ approvalId, requestId: str(a.request_id) ?? null, type: str(a.type) ?? "unknown", expiresAt: str(a.expires_at) ?? "" }] : [];
+    });
   }
 
   async status(requestId: string): Promise<SwapStatus> {

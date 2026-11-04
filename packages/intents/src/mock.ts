@@ -38,8 +38,11 @@ type Layer = Record<string, bigint>;
 interface Record_ {
   venue: Venue;
   done: ExecutedSwap;
-  state: "pending_approval" | "success";
+  state: "pending_approval" | "success" | "failed";
   depositAddress?: string;
+  /** Mock stand-in for the custody provider's approval record (see approvalDetail). */
+  approvalId?: string;
+  createdAt?: number;
 }
 
 const toLayer = (m: Record<string, string> | undefined): Layer => Object.fromEntries(Object.entries(m ?? {}).map(([k, v]) => [k, BigInt(v)]));
@@ -101,7 +104,7 @@ export function createMockRails(entries: RegistryEntry[], vaultAccount: string, 
       // Only the public layer has an independent record to audit.
       const depositAddress = venue === "public" ? `mock-deposit-${n}` : undefined;
       if (depositAddress) executed.set(depositAddress, done);
-      const rec: Record_ = { venue, done, state: o.requireApproval ? "pending_approval" : "success", depositAddress };
+      const rec: Record_ = { venue, done, state: o.requireApproval ? "pending_approval" : "success", depositAddress, ...(o.requireApproval ? { approvalId: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`, createdAt: Date.now() } : {}) };
       records.set(id, rec);
       if (rec.state === "success") apply(venue, done);
       return view(id, rec);
@@ -110,6 +113,10 @@ export function createMockRails(entries: RegistryEntry[], vaultAccount: string, 
     async status(requestId: string): Promise<SwapStatus> {
       const r = records.get(requestId);
       return r ? view(requestId, r) : { state: "failed", requestId, detail: "unknown request" };
+    },
+
+    async pendingApprovals() {
+      return [...records].filter(([, r]) => r.state === "pending_approval" && r.approvalId).map(([id, r]) => ({ approvalId: r.approvalId!, requestId: id, type: r.venue === "confidential" ? "confidential" : "swap", expiresAt: new Date((r.createdAt ?? Date.now()) + 24 * 3600_000).toISOString() }));
     },
 
     async confidentialHoldings() {
@@ -168,6 +175,22 @@ export function createMockRails(entries: RegistryEntry[], vaultAccount: string, 
       if (!r || r.state !== "pending_approval") return;
       r.state = "success";
       apply(r.venue, r.done);
+    },
+    /** Test helper: the owner rejects a pending request; nothing moves. */
+    reject(requestId: string) {
+      const r = records.get(requestId);
+      if (r && r.state === "pending_approval") r.state = "failed";
+    },
+    /**
+     * The mock's version of the custody provider's public approval record: the canonical operation (what the owner
+     * signs the hash of) and the request it releases. Shaped like OutLayer's GET /wallet/v1/approval/{id}.
+     */
+    approvalDetail(approvalId: string) {
+      const hit = [...records].find(([, r]) => r.approvalId === approvalId);
+      if (!hit) return null;
+      const [requestId, r] = hit;
+      const op = { type: r.venue === "confidential" ? "confidential_swap" : "swap", token_in: r.done.tokenIn, amount_in: r.done.amountIn, token_out: r.done.tokenOut, recipient: r.done.recipient };
+      return { requestId, status: r.state === "pending_approval" ? "pending" : r.state === "success" ? "approved" : "rejected", opCanonical: JSON.stringify(op), requestType: r.venue === "confidential" ? "confidential" : "swap", expiresAt: new Date((r.createdAt ?? Date.now()) + 24 * 3600_000).toISOString() };
     },
     /** Test helper: the owner's deposit "arrives" in the confidential layer. */
     creditConfidential(token: string, amount: string) {

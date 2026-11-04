@@ -7,13 +7,15 @@
  * - NEAR RPC used by the wallet selector and Meteor: free.rpc.fastnear.com, mw.rpc.fastnear.com, rpc.mainnet.near.org.
  * - Verify's signature check: dcap-qvl runs as WebAssembly ('wasm-unsafe-eval' allows compiling WebAssembly only,
  *   not JavaScript eval) and fetches Intel-signed collateral from Phala's PCCS, the one cache that allows browsers.
+ * - In-dashboard approvals: the browser reads each approval from OutLayer's public API and sends the owner's signed vote
+ *   there directly (api.outlayer.ai allows any origin), so Norr can change neither what is shown nor what is signed.
  * Meteor and MyNearWallet open their own windows (not restricted by CSP) and talk back with postMessage.
  *
  * Deliberately blocked: the wallet modal's Google Fonts @import (the modal falls back to the page's own fonts),
  * inline scripts and styles, plugins, framing of this page, and form posts.
  */
 export const THIRD_PARTY = {
-  connect: ["https://h4n.app", "https://free.rpc.fastnear.com", "https://mw.rpc.fastnear.com", "https://rpc.mainnet.near.org", "https://pccs.phala.network"],
+  connect: ["https://h4n.app", "https://free.rpc.fastnear.com", "https://mw.rpc.fastnear.com", "https://rpc.mainnet.near.org", "https://pccs.phala.network", "https://api.outlayer.ai"],
   frame: ["https://hot-labs.org"],
   img: ["https://storage.herewallet.app"],
 } as const;

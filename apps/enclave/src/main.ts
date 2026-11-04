@@ -8,7 +8,8 @@ const port = Number(process.env.PORT ?? 8787);
 if (process.env.NORR_MOCK === "1") {
   assertNoBypassInMock(process.env);
   // Mock only: NORR_MOCK_AGENT_TOKEN pins the demo token so a Claude Desktop config survives restarts.
-  const m = createMockEnclave({ agentToken: process.env.NORR_MOCK_AGENT_TOKEN || undefined });
+  // NORR_MOCK_APPROVALS=1 makes mock swaps wait for the owner's approval, to try the dashboard's Approve flow.
+  const m = createMockEnclave({ agentToken: process.env.NORR_MOCK_AGENT_TOKEN || undefined, requireApproval: process.env.NORR_MOCK_APPROVALS === "1" });
   serve({ fetch: m.app.fetch, port });
   console.log(`Norr (MOCK mode, no funds, no network) listening on http://localhost:${port}`);
   console.log(`  agent token : ${m.agentToken}`);
@@ -20,6 +21,6 @@ if (process.env.NORR_MOCK === "1") {
   console.log(`Norr (LIVE rails) listening on http://localhost:${port}`);
   console.log(`  vault: ${live.vaultId}`);
   console.log(`  agent token (shown once): ${live.agentToken}`);
-  if (!live.shieldConfigured && !live.shieldBypass) console.warn("  warning: SHIELD_API_KEY not set, so the Shield check fails closed and every trade is blocked");
+  if (!live.shieldConfigured) console.warn("  incident feed: not configured (no SHIELD_API_KEY). Trades that pass the rules run; every answer says the feed is not configured.");
   if (live.shieldBypass) console.warn("  SHIELD BYPASS is ON (dev only). Every trade will log a warning.");
 }

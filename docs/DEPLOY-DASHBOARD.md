@@ -35,6 +35,7 @@ Then:
    | `https://hot-labs.org` | frame-src | HOT Wallet's connect widget (an iframe) |
    | `https://h4n.app` | connect-src | HOT Wallet's relay |
    | `https://storage.herewallet.app` | img-src | HOT Wallet's logo in the picker |
+   | `https://api.outlayer.ai` | connect-src | In-dashboard approvals: the browser reads each approval from OutLayer's public API and sends the owner's signed vote there directly |
    | `https://pccs.phala.network` | connect-src | Intel-signed certificate data (TCB info, QE identity, CRLs) for Verify's in-browser signature check; the only PCCS that allows browsers |
    | `https://free.rpc.fastnear.com`, `https://mw.rpc.fastnear.com`, `https://rpc.mainnet.near.org` | connect-src | NEAR RPC used by the wallet selector and Meteor |
 

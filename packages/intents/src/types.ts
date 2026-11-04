@@ -103,6 +103,20 @@ export interface Custody {
    * vault's confidential balance. Moves no funds by itself. Owner-level action: never exposed to agents.
    */
   requestConfidentialDeposit(token: string, amount: string): Promise<DepositRequest>;
+  /**
+   * The approvals waiting on this wallet (the provider's multisig). Lists only: approving needs the owner's own
+   * signature, which the owner's browser sends to the provider directly; Norr never holds it.
+   */
+  pendingApprovals?(): Promise<CustodyApproval[]>;
+}
+
+/** One operation waiting for the owner's approval at the custody provider. */
+export interface CustodyApproval {
+  approvalId: string;
+  /** The custody request it would release; Norr matches it to its own record by this id. */
+  requestId: string | null;
+  type: string;
+  expiresAt: string;
 }
 
 /** A one-time confidential deposit address. The address always comes from the custody provider, never from a caller. */

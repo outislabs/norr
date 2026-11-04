@@ -74,3 +74,19 @@ export async function signUnlock(): Promise<Uint8Array> {
   if (!signed) throw new Error("The wallet did not return a signature.");
   return base64ToBytes(signed.signature);
 }
+
+/**
+ * Sign an approval vote for the custody provider: NEP-413 over the exact message it asks for
+ * ("approve|reject:{approval_id}:{wallet_pubkey}:{request_hash}"), for its recipient. In mock mode the demo key signs;
+ * otherwise the connected wallet does (one prompt, no transaction). The vote is sent by the caller, not by Norr.
+ */
+export async function signVote(message: string, recipient: string, nonce: Uint8Array, owner: string): Promise<{ signature: string; publicKey: string; accountId: string }> {
+  if (demoKey) return { signature: await demoKey.sign({ message, nonce, recipient }), publicKey: demoKey.publicKey, accountId: owner };
+  const { selector } = await loadSelector();
+  if (selector.store.getState().accounts.length === 0) throw new Error("Your wallet is not connected. Sign in again.");
+  const wallet = await selector.wallet();
+  if (!wallet.signMessage) throw new Error("This wallet cannot sign messages. Try another wallet.");
+  const signed = await wallet.signMessage({ message, recipient, nonce: Buffer.from(nonce) });
+  if (!signed) throw new Error("The wallet did not return a signature.");
+  return { signature: signed.signature, publicKey: signed.publicKey, accountId: signed.accountId };
+}

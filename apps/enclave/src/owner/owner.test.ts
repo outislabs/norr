@@ -572,3 +572,55 @@ describe("a separately hosted dashboard", () => {
     expect(c.message).not.toContain(" at ");
   });
 });
+
+describe("in-dashboard approvals (mock stand-in for the custody provider)", () => {
+  async function bootWithApprovals() {
+    const m = createMockEnclave({ requireApproval: true });
+    m.deps.settle = { waitMs: 0, intervalMs: 1 };
+    const req = (path: string, init: { token?: string; body?: unknown } = {}) =>
+      m.app.request(path, { method: init.body !== undefined ? "POST" : "GET", headers: { ...(init.token ? { authorization: `Bearer ${init.token}` } : {}), "content-type": "application/json" }, body: init.body !== undefined ? JSON.stringify(init.body) : undefined });
+    const k = newKey();
+    const ch = await (await req("/owner/v1/challenge")).json();
+    const login = await (await req("/owner/v1/login", { body: { accountId: MOCK_OWNER, publicKey: k.publicKey, signature: signNep413(k.privateKey, { message: ch.message, nonce: Buffer.from(ch.nonce, "base64"), recipient: ch.recipient }), nonce: ch.nonce } })).json();
+    const trade = async (asset: string, amountUsd: number) => (await m.app.request("/v1/trade", { method: "POST", headers: { authorization: `Bearer ${m.agentToken}`, "content-type": "application/json" }, body: JSON.stringify({ side: "buy", asset, amountUsd }) })).json();
+    const vote = (kind: "approve" | "reject", id: string, d: { wallet_pubkey: string; request_hash: string }, key = k, account = MOCK_OWNER) => {
+      const nonce = Buffer.alloc(32, 7);
+      const signature = signNep413(key.privateKey, { message: `${kind}:${id}:${d.wallet_pubkey}:${d.request_hash}`, nonce, recipient: "outlayer.near" });
+      return req(`/mock-outlayer/wallet/v1/${kind}/${id}`, { body: { signature, public_key: key.publicKey, account_id: account, nonce: nonce.toString("base64") } });
+    };
+    return { m, req, token: login.token as string, trade, vote };
+  }
+
+  it("lists the approval with Norr's record, lets the owner's signed vote release it, and settles the trade", async () => {
+    const { req, token, trade, vote } = await bootWithApprovals();
+    expect(await trade("SOL", 5)).toMatchObject({ status: "pending_approval" });
+    const list = await (await req("/owner/v1/vaults/demo/pending", { token })).json();
+    expect(list).toMatchObject({ approvalsListed: true, approvalsApi: "service:/mock-outlayer", voteRecipient: "outlayer.near", unknown: [] });
+    const item = list.pending[0];
+    expect(item.approvalId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(item.intended).toMatchObject({ amountIn: "5000000" });
+    // What the browser reads from the provider: the canonical operation and the hash it signs.
+    const d = await (await req(`/mock-outlayer/wallet/v1/approval/${item.approvalId}`)).json();
+    expect(createHash("sha256").update(d.op_canonical).digest("hex")).toBe(d.request_hash);
+    expect(JSON.parse(d.op_canonical)).toMatchObject({ token_in: item.intended.tokenIn, amount_in: "5000000", token_out: item.intended.tokenOut });
+    expect((await vote("approve", item.approvalId, d)).status).toBe(200);
+    // The next read of the list settles it: executed, gone from pending.
+    expect((await (await req("/owner/v1/vaults/demo/pending", { token })).json()).pending).toHaveLength(0);
+    const act = await (await req("/owner/v1/vaults/demo/activity", { token })).json();
+    expect(act.activity[0].decision.status).toBe("executed");
+  });
+
+  it("a rejected approval moves nothing; a forged signature or another account's vote is refused", async () => {
+    const { req, token, trade, vote, m } = await bootWithApprovals();
+    await trade("SOL", 5);
+    const item = (await (await req("/owner/v1/vaults/demo/pending", { token })).json()).pending[0];
+    const d = await (await req(`/mock-outlayer/wallet/v1/approval/${item.approvalId}`)).json();
+    expect((await vote("approve", item.approvalId, { ...d, request_hash: "0".repeat(64) })).status).toBe(401); // signed the wrong hash
+    expect((await vote("approve", item.approvalId, d, newKey(), "mallory.near")).status).toBe(403);
+    const before = await m.rails.custody.confidentialHoldings();
+    expect((await vote("reject", item.approvalId, d)).status).toBe(200);
+    expect((await vote("approve", item.approvalId, d)).status).toBe(409); // no longer pending
+    await req("/owner/v1/vaults/demo/pending", { token });
+    expect(await m.rails.custody.confidentialHoldings()).toEqual(before);
+  });
+});

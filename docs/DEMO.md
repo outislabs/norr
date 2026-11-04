@@ -16,7 +16,7 @@ Setup for the live run: Rules tab set to max trade **$10**, daily spend cap $30,
 | 6 | Owner taps the **kill switch**; "Use Norr's trade tool to buy $5 of SOL." | `blocked: PAUSED` |
 | 7 | Open **Verify** again | The attestation and code hash of the service that enforced all of the above |
 
-Approvals: until the OutLayer policy lets swaps skip approval (decided 2026-10-31: **kept**, see FINDINGS.md "Autonomy"), steps 2 and 5 pause at `pending_approval` and run once the owner signs in OutLayer's dashboard. Show that on camera: it is the point that money moves only with the owner's signature. Budget about a minute per approval and cut it in the edit.
+Approvals: until the OutLayer policy lets swaps skip approval (decided 2026-10-31: **kept**, see FINDINGS.md "Autonomy"), steps 2 and 5 pause at `pending_approval` and run once the owner approves: in Norr's **Approvals** tab (the browser fetches the approval from OutLayer, recomputes its hash and compares it with Norr's request before Approve is enabled; the owner's wallet signs and the browser sends the vote to OutLayer) or in OutLayer's dashboard. Show that on camera: it is the point that money moves only with the owner's signature. Budget about a minute per approval and cut it in the edit.
 
 Between rehearsal runs: sell the NVDA position back (sell all, not a dollar figure; a remainder under about $5 cannot be sold), which returns the vault to about $8.8. Each round trip costs a few cents. The daily spend cap counts buys only, so three rehearsals fit under $30.
 

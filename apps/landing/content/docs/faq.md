@@ -18,11 +18,11 @@ USDC on NEAR, Ethereum, Base, Arbitrum, Optimism, Polygon, BNB Chain or Solana, 
 
 ## Do I need a NEAR wallet?
 
-To own a vault, yes: sign-in is a NEAR signed message, and swap approvals happen on your NEAR account in OutLayer. [HOT Wallet](https://hot-labs.org/wallet/) gives you a NEAR account next to your EVM and Solana ones. Funding can come from any listed chain.
+To own a vault, yes: sign-in is a NEAR signed message, and swap approvals are signed by your NEAR account, in Norr's Approvals tab. [HOT Wallet](https://hot-labs.org/wallet/) gives you a NEAR account next to your EVM and Solana ones. Funding can come from any listed chain.
 
 ## Why do I approve every swap?
 
-On OutLayer, swaps and withdrawals share one transaction type, so approvals cannot be turned off for swaps without also turning them off for withdrawals. Keeping them is what guarantees the agent can never move money out. The Approvals tab shows what Norr asked for, so you can compare before you sign.
+On OutLayer, swaps and withdrawals share one transaction type, so approvals cannot be turned off for swaps without also turning them off for withdrawals. Keeping them is what guarantees the agent can never move money out. The Approvals tab shows what OutLayer will run next to what Norr asked for, checks the hash in your browser, and lets you approve or reject without leaving Norr.
 
 ## Which agents work?
 

@@ -144,7 +144,7 @@ export function VaultPage({ api, account, id, tab, mcpUrl, apiUrl, onChanged }: 
           <div className="max-w-2xl">
             <h2 className="font-display text-xl">Check before you sign</h2>
             <p className="mb-5 mt-1 text-sm text-mute">Your custody provider asks you to approve each swap. Compare what is on its screen with what Norr actually asked for.</p>
-            {pending.error ? <p role="alert" className="text-alert">{pending.error}</p> : <PendingChecks items={pending.data?.pending ?? []} />}
+            {pending.error ? <p role="alert" className="text-alert">{pending.error}</p> : <PendingChecks items={pending.data?.pending ?? []} list={pending.data ?? null} apiBase={api.base} owner={account} onChanged={() => setTimeout(() => (pending.reload(), vault.reload()), 1500)} />}
           </div>
         )}
       </div>

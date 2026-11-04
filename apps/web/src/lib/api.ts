@@ -31,6 +31,19 @@ export interface PendingItem {
   receivesAtLeast: { symbol: string; amount: number | null };
   recipient: string;
   check: string;
+  /** Norr's own record, in smallest units, for the browser's comparison with the provider's operation. */
+  intended?: { tokenIn: string; amountIn: string; tokenOut: string; minAmountOut: string };
+  /** The custody provider's approval id for this request, when it lists one. */
+  approvalId?: string | null;
+}
+export interface PendingList {
+  pending: PendingItem[];
+  /** Approvals waiting at the provider that Norr did not ask for: the dashboard offers only Reject. */
+  unknown?: { approvalId: string; requestId: string | null; type: string; expiresAt: string }[];
+  approvalsListed?: boolean;
+  /** Where the browser fetches approvals and sends votes ("service:/..." means the Norr service, mock mode only). */
+  approvalsApi?: string;
+  voteRecipient?: string;
 }
 import type { AppInfo, AttestationEvidence } from "@norr/shared";
 import type { SealedReason } from "./seal";
@@ -108,6 +121,8 @@ export function createApi(o: ApiOptions) {
     return body as T;
   }
   return {
+    /** The service's base URL, for resolving links the service hands out (the mock approvals stand-in). */
+    base: o.base,
     health: () => call<{ ok: boolean; mock: boolean; mockOwner?: string; incidentFeed?: "active" | "not_configured" }>("/health"),
     challenge: () => call<Challenge>("/owner/v1/challenge"),
     login: (b: { accountId: string; publicKey: string; signature: string; nonce: string }) => call<SessionInfo>("/owner/v1/login", { body: b }),
@@ -120,7 +135,7 @@ export function createApi(o: ApiOptions) {
     resume: (id: string) => call<{ paused: boolean }>(`/owner/v1/vaults/${encodeURIComponent(id)}/resume`, { body: {} }),
     pauseAll: () => call<{ paused: string[] }>("/owner/v1/pause-all", { body: {} }),
     activity: (id: string) => call<{ activity: ActivityItem[] }>(`/owner/v1/vaults/${encodeURIComponent(id)}/activity`),
-    pending: (id: string) => call<{ pending: PendingItem[] }>(`/owner/v1/vaults/${encodeURIComponent(id)}/pending`),
+    pending: (id: string) => call<PendingList>(`/owner/v1/vaults/${encodeURIComponent(id)}/pending`),
     issueToken: (id: string) => call<{ token: string; note: string }>(`/owner/v1/vaults/${encodeURIComponent(id)}/tokens`, { body: {} }),
     revokeTokens: (id: string) => call<{ revoked: boolean }>(`/owner/v1/vaults/${encodeURIComponent(id)}/tokens`, { method: "DELETE" }),
     fundingSources: () => call<{ sources: FundingSource[] }>("/owner/v1/funding/sources"),

@@ -1,6 +1,8 @@
 import { HeuristicRiskProvider, ONDO, Registry, presetPolicy, type CryptoSignals, type OneClickToken, type ShieldFeed } from "@norr/core";
 import { createMockRails } from "@norr/intents";
+import { createHash } from "node:crypto";
 import { createApp } from "./app";
+import { verifyNep413 } from "./owner/nep413";
 import type { Attestor } from "./attestation";
 import { OwnerAuth, type AccessKeyChecker } from "./owner/auth";
 import { MemoryValueHistory } from "./history";
@@ -54,12 +56,12 @@ export interface MockEnclave {
  * It starts with a demo vault holding its cash in the confidential layer, on the Balanced preset,
  * owner-confirmed for equities, so trades run confidentially by default.
  */
-export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed | null; now?: () => number; agentToken?: string; keys?: AccessKeyChecker; allowedOrigins?: string[]; attestor?: Attestor | null } = {}): MockEnclave {
+export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed | null; now?: () => number; agentToken?: string; keys?: AccessKeyChecker; allowedOrigins?: string[]; attestor?: Attestor | null; requireApproval?: boolean } = {}): MockEnclave {
   const registry = new Registry({ crypto: [DEMO.USDC, DEMO.SOL, DEMO.wNEAR, DEMO.RUG, DEMO.USDC_BASE, DEMO.ETH], equities: [{ issuer: ONDO, tokens: [DEMO.NVDAon, DEMO.TSLAon, DEMO.SPYon] }] });
   const now = o.now ?? Date.now;
   const vaultId = "demo";
   const walletAccount = "demo-vault.mock.near";
-  const rails = createMockRails(registry.entries(), walletAccount, { confidentialSeed: { [DEMO.USDC.assetId]: String(Math.round((o.startingUsd ?? 1000) * 1e6)) } });
+  const rails = createMockRails(registry.entries(), walletAccount, { confidentialSeed: { [DEMO.USDC.assetId]: String(Math.round((o.startingUsd ?? 1000) * 1e6)) }, requireApproval: o.requireApproval });
 
   const vaults = new MemoryVaultStore([
     newVault(
@@ -104,5 +106,47 @@ export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed
   const adminToken = `norr_admin_mock_${Math.random().toString(36).slice(2)}`;
   // Mock mode accepts any key for an account (it holds no funds and listens on localhost); live mode checks the chain.
   const ownerAuth = new OwnerAuth({ keys: o.keys ?? { hasKey: async () => true }, now });
-  return { app: createApp({ deps, tokens, mock: true, adminToken, owner: ownerAuth, allowedOrigins: o.allowedOrigins, attestor: o.attestor, seal: { keys: sealKeys, ledger: sealing }, history: new MemoryValueHistory() }), deps, vaults, tokens, agentToken, adminToken, vaultId, ownerAuth, rails, sealKeys, sealing };
+  const app = createApp({ deps, tokens, mock: true, adminToken, owner: ownerAuth, allowedOrigins: o.allowedOrigins, attestor: o.attestor, seal: { keys: sealKeys, ledger: sealing }, history: new MemoryValueHistory() });
+  mountMockApprovals(app, rails);
+  return { app, deps, vaults, tokens, agentToken, adminToken, vaultId, ownerAuth, rails, sealKeys, sealing };
+}
+
+/** The mock wallet's on-chain key, bound into vote messages the way OutLayer binds the real one. */
+export const MOCK_WALLET_PUBKEY = "ed25519:MockWa11etPubkey1111111111111111111111111111";
+/** The NEP-413 recipient OutLayer's approval votes use on mainnet (its policy contract), mirrored here. */
+export const APPROVAL_RECIPIENT = "outlayer.near";
+
+/**
+ * Mock mode only: a stand-in for OutLayer's public approval endpoints, so the dashboard's in-app approval flow can
+ * run with no funds. Same shapes and the same rule: a vote is a NEP-413 signature by the owner over
+ * "approve|reject:{approval_id}:{wallet_pubkey}:{request_hash}", where request_hash = sha256(op_canonical).
+ */
+function mountMockApprovals(app: ReturnType<typeof createApp>, rails: ReturnType<typeof createMockRails>) {
+  const detail = (id: string) => {
+    const d = rails.approvalDetail(id);
+    if (!d) return null;
+    return { id, wallet_id: "demo-vault.mock.near", request_type: d.requestType, request_data: {}, status: d.status, required_approvals: 1, request_hash: createHash("sha256").update(d.opCanonical).digest("hex"), op_canonical: d.opCanonical, op: JSON.parse(d.opCanonical), wallet_pubkey: MOCK_WALLET_PUBKEY, expires_at: d.expiresAt, requestId: d.requestId };
+  };
+  app.get("/mock-outlayer/wallet/v1/approval/:id", (c) => {
+    const d = detail(c.req.param("id"));
+    if (!d) return c.json({ error: "not_found" }, 404);
+    const { requestId: _r, ...pub } = d;
+    return c.json(pub);
+  });
+  for (const kind of ["approve", "reject"] as const) {
+    app.post(`/mock-outlayer/wallet/v1/${kind}/:id`, async (c) => {
+      const id = c.req.param("id");
+      const d = detail(id);
+      if (!d) return c.json({ error: "not_found" }, 404);
+      if (d.status !== "pending") return c.json({ error: "conflict", message: "no longer pending" }, 409);
+      const b = (await c.req.json().catch(() => null)) as { signature?: string; public_key?: string; account_id?: string; nonce?: string } | null;
+      if (!b?.signature || !b.public_key || !b.account_id || !b.nonce) return c.json({ error: "bad_request" }, 400);
+      if (b.account_id !== MOCK_OWNER) return c.json({ error: "not_approver" }, 403);
+      const ok = verifyNep413({ message: `${kind}:${id}:${d.wallet_pubkey}:${d.request_hash}`, nonce: Buffer.from(b.nonce, "base64"), recipient: APPROVAL_RECIPIENT }, b.public_key, b.signature);
+      if (!ok) return c.json({ error: "invalid_signature" }, 401);
+      if (kind === "approve") rails.approve(d.requestId);
+      else rails.reject(d.requestId);
+      return c.json(kind === "approve" ? { approval_id: id, status: "approved", approved: 1, required: 1, request_id: d.requestId } : { approval_id: id, status: "rejected" });
+    });
+  }
 }

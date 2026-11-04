@@ -30,7 +30,7 @@ Then ask the agent something like "What are my Norr rules?" and "Buy $40 of NVDA
 ## 5. Watch, approve, stop
 
 - **Activity** lists every request: done, refused (with the rule that refused it), or waiting for you. The agent's stated reasoning is sealed to your wallet; **Unlock reasoning** reads it with one signature.
-- **Approvals.** Your custody provider (OutLayer) asks you to approve each swap in its own dashboard. **Approvals** shows what Norr actually requested, so you can compare it with what you are about to sign.
+- **Approvals.** Your custody provider (OutLayer) holds each swap until you approve it. **Approvals** shows the operation as OutLayer describes it next to what Norr asked for; your browser recomputes the hash you would sign, and **Approve** stays disabled unless both match. Your wallet signs the vote and your browser sends it straight to OutLayer. **Reject** is always available. You can still approve in OutLayer's own dashboard.
 - **Pause everything** (top right) stops every vault at once. The agent's next request is refused with `PAUSED` until you resume.
 - **Verify** checks, in your browser, that the service runs the published code in a genuine enclave. See [Verify the enclave](/docs/verify/).
 

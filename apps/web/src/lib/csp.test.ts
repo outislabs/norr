@@ -26,6 +26,7 @@ describe("dashboard CSP", () => {
     expect(directive(csp, "connect-src")).toEqual(expect.arrayContaining(["https://h4n.app", "https://free.rpc.fastnear.com"]));
     expect(csp).not.toContain("cloud-api.phala.network");
     expect(directive(csp, "connect-src")).toContain("https://pccs.phala.network"); // Intel-signed collateral for the in-browser check
+    expect(directive(csp, "connect-src")).toContain("https://api.outlayer.ai"); // approvals read and voted on directly
   });
 
   it("writes a Pages _headers file that keeps the existing headers", () => {

@@ -50,4 +50,4 @@ Stocks and ETFs are Ondo's (and other issuers') tokens: structured notes that tr
 
 ## The custody provider's limits (set in OutLayer)
 
-Your vault is an OutLayer custody wallet. In OutLayer's own dashboard you set per-token limits, an address whitelist for withdrawals, an approval threshold, and a freeze. Withdrawals go only to your whitelisted address and need your approval, so the agent can never choose a destination. On OutLayer, swaps and withdrawals share one transaction type, so each swap also needs your approval there.
+Your vault is an OutLayer custody wallet. In OutLayer's own dashboard you set per-token limits, an address whitelist for withdrawals, an approval threshold, and a freeze. Withdrawals go only to your whitelisted address and need your approval, so the agent can never choose a destination. On OutLayer, swaps and withdrawals share one transaction type, so each swap also needs your approval, which you give in Norr's Approvals tab.

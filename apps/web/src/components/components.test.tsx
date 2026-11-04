@@ -137,14 +137,65 @@ describe("ActivityList", () => {
 });
 
 describe("PendingChecks", () => {
-  const p: PendingItem = { ledgerId: "l1", requestId: "r1", requestHash: "abc123", venue: "confidential", sends: { symbol: "USDC", amount: 40 }, receivesAtLeast: { symbol: "NVDAon", amount: 0.19 }, recipient: "882c084a64e1648a150867ef4b62c82a555b34cfb8a075caeeec3e51eb56aca0", check: "Approve only if the approval screen matches." };
+  const p: PendingItem = { ledgerId: "l1", requestId: "r1", requestHash: "abc123", venue: "confidential", sends: { symbol: "USDC", amount: 5 }, receivesAtLeast: { symbol: "SOL", amount: 0.03 }, recipient: "882c084a64e1648a150867ef4b62c82a555b34cfb8a075caeeec3e51eb56aca0", check: "", approvalId: "ap-1", intended: { tokenIn: "nep141:usdc", amountIn: "5000000", tokenOut: "nep141:sol", minAmountOut: "1" } };
+  const list = { pending: [p], unknown: [], approvalsListed: true, approvalsApi: "https://provider.test", voteRecipient: "outlayer.near" };
+  const sha = async (t: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t))), (b) => b.toString(16).padStart(2, "0")).join("");
+  async function provider(op: object, tamper = false) {
+    const op_canonical = JSON.stringify(op);
+    const detail = { id: "ap-1", status: "pending", request_type: "confidential", request_hash: tamper ? "f".repeat(64) : await sha(op_canonical), op_canonical, wallet_pubkey: "ed25519:W", expires_at: new Date(Date.now() + 3600_000).toISOString() };
+    const posts: { url: string; body: unknown }[] = [];
+    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        posts.push({ url, body: JSON.parse(String(init.body)) });
+        return new Response(JSON.stringify({ status: "approved", approved: 1, required: 1 }), { status: 200 });
+      }
+      return new Response(JSON.stringify(detail), { status: 200 });
+    }) as unknown as typeof fetch;
+    const sign = vi.fn(async () => ({ signature: "ed25519:SIG", publicKey: "ed25519:PK", accountId: "owner.near" }));
+    return { detail, posts, fetchImpl, sign };
+  }
+  const good = { type: "swap", token_in: "nep141:usdc", amount_in: "5000000", token_out: "nep141:sol" };
 
-  it("spells out what Norr asked for, with the hash and a link to the approval screen", () => {
-    render(<PendingChecks items={[p]} />);
-    expect(screen.getByText(/Norr asked to send/)).toBeTruthy();
-    expect(screen.getByText("abc123")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Open the approval screen" }).getAttribute("href")).toBe("https://app.outlayer.ai/wallet/approvals");
-    expect(screen.getByText(/Approve only if/)).toBeTruthy();
+  it("checks the hash in the browser, signs the exact message and sends the vote straight to the provider", async () => {
+    const { detail, posts, fetchImpl, sign } = await provider(good);
+    render(<PendingChecks items={[p]} list={list} owner="owner.near" fetchImpl={fetchImpl} sign={sign} />);
+    const approve = await screen.findByRole("button", { name: "Approve" });
+    expect(screen.getByText(/Hash checked in this browser/).textContent).toMatch(/equals/);
+    expect((approve as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(approve);
+    await screen.findByText(/^Approved\./);
+    expect(sign).toHaveBeenCalledWith(`approve:ap-1:ed25519:W:${detail.request_hash}`, "outlayer.near", expect.any(Uint8Array), "owner.near");
+    expect(posts[0]?.url).toBe("https://provider.test/wallet/v1/approve/ap-1");
+    expect(posts[0]?.body).toMatchObject({ signature: "ed25519:SIG", public_key: "ed25519:PK", account_id: "owner.near" });
+  });
+
+  it("disables Approve when the hash does not match, but still allows Reject", async () => {
+    const { fetchImpl, sign } = await provider(good, true);
+    render(<PendingChecks items={[p]} list={list} owner="owner.near" fetchImpl={fetchImpl} sign={sign} />);
+    const approve = (await screen.findByRole("button", { name: "Approve" })) as HTMLButtonElement;
+    expect(approve.disabled).toBe(true);
+    expect(screen.getByText(/does NOT equal/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Reject" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("disables Approve when the operation is not what Norr asked for", async () => {
+    const { fetchImpl, sign } = await provider({ ...good, amount_in: "3400000" });
+    render(<PendingChecks items={[p]} list={list} owner="owner.near" fetchImpl={fetchImpl} sign={sign} />);
+    expect(((await screen.findByRole("button", { name: "Approve" })) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/does not match what Norr asked for \(the amount differs\)/)).toBeTruthy();
+  });
+
+  it("an approval Norr never asked for offers only Reject", async () => {
+    const { fetchImpl, sign } = await provider(good);
+    render(<PendingChecks items={[]} list={{ ...list, pending: [], unknown: [{ approvalId: "ap-1", requestId: null, type: "confidential", expiresAt: "" }] }} owner="owner.near" fetchImpl={fetchImpl} sign={sign} />);
+    await screen.findByRole("button", { name: "Reject" });
+    expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
+    expect(screen.getByText(/Norr did not ask for this confidential operation/)).toBeTruthy();
+  });
+
+  it("falls back to the provider's approval screen when no approval is listed", () => {
+    render(<PendingChecks items={[{ ...p, approvalId: undefined }]} list={{ ...list, approvalsListed: false }} />);
+    expect(screen.getByRole("link", { name: "its approval screen" }).getAttribute("href")).toBe("https://app.outlayer.ai/wallet/approvals");
   });
 
   it("says when nothing is waiting", () => {

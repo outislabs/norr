@@ -17,7 +17,7 @@ Built for the NEAR hackathon (Nov 1 to Nov 14, 2026). Tracks: Privacy & Private 
 | **Verified enclave** | Norr runs in a TDX confidential VM on Phala Cloud (production `dstack-0.5.12` OS image, images pinned by digest). Seven attestation checks pass against our own CVM. | [Verify it yourself](#verify-it-yourself); `docs/FINDINGS.md` |
 | **Confidential trades** | Confidential swaps and a tokenized-stock round trip have run on mainnet through OutLayer custody, with tiny amounts. | $6 NVDAon buy and sell back, 2026-10-30, round trip cost 0.0719 USDC (about 1.2%); a 1.5 USDC to SOL and back swap; `docs/FINDINGS.md`, `docs/PRIVACY.md` |
 | **Stocks and crypto from about $5** | Ondo tokenized stocks and crypto, 24/7. On liquid tickers (NVDAon, TSLAon, AAPLon, QQQon, AMZNon, GOOGLon) the confidential route quoted from $5.05; other tickers needed $26. The floor moves with the market. | `docs/EQUITY-MINIMUMS.md` (measured 2026-10-30) |
-| **Owner dashboard** | Sign in with a NEAR wallet; fund the vault; edit the rules; read the agent's private reasoning; approve with a request-versus-approval check; kill switch; status bar; Verify screen that works without signing in. | https://app.norr.finance |
+| **Owner dashboard** | Sign in with a NEAR wallet; fund the vault; edit the rules; read the agent's private reasoning; approve or reject custody requests in place (the browser fetches each approval from OutLayer, recomputes its hash and compares it with what Norr asked for before Approve is enabled; the signed vote goes straight to OutLayer); kill switch; status bar; Verify screen that works without signing in. | https://app.norr.finance |
 | **MCP server** | Nine tools over stdio and streamable HTTP at `https://mcp.norr.finance/mcp` (TLS terminates inside the attested VM). Claude Code tested against it. | `docs/MCP.md`; `apps/mcp`; [norr.finance/docs/connect-agent](https://norr.finance/docs/connect-agent/) |
 | **Private model for the agent** | The reference agent runs its model on NEAR AI Cloud and verifies the hardware-backed signature of every response it uses. | `apps/agent`; `docs/AGENT-MODELS.md` |
 | **Mock mode** | The whole flow runs locally with no funds and no network. | [Run it in 5 minutes](#run-it-in-5-minutes-mock-mode-no-funds) |
@@ -133,7 +133,7 @@ Private from the public is not private from everyone. This is the honest table (
 
 - **NEAR Intents (1Click API):** asset registry (`/v0/tokens`, including Ondo tokens), quotes, deposit addresses for funding from any chain, execution status, and the Shield incident feed.
 - **Confidential Intents:** quotes with `CONFIDENTIAL_INTENTS` deposit, recipient and refund types; confidential swap, balance and withdraw through the custody wallet; funding straight into the confidential layer.
-- **NEAR accounts:** each vault is a custody wallet owned by a NEAR account. Owner sign-in is a signed NEP-413 message checked against the account's access keys over NEAR RPC, bound to the dashboard's origin. Swap approvals use the owner's NEAR account in OutLayer.
+- **NEAR accounts:** each vault is a custody wallet owned by a NEAR account. Owner sign-in is a signed NEP-413 message checked against the account's access keys over NEAR RPC, bound to the dashboard's origin. Swap approvals are NEP-413 votes by the owner's NEAR account, signed in Norr's dashboard (or OutLayer's) and sent to OutLayer.
 - **NEAR AI Cloud:** the reference agent's private model, with per-response attestation and signature checks.
 - **OutLayer Agent Custody:** keys, signing and the hard backstop policy (below).
 
@@ -171,7 +171,7 @@ scripts/           live trade runner, verify-attestation, research probes (live 
 ## Known limitations
 
 - **Custody trust** and **Phala key service trust**, as above.
-- **Every swap needs the owner's approval.** On OutLayer, swaps and withdrawals share one transaction type (`confidential`), so approvals cannot be turned off for swaps alone (`docs/FINDINGS.md`, "Autonomy").
+- **Every swap needs the owner's approval.** On OutLayer, swaps and withdrawals share one transaction type (`confidential`), so approvals cannot be turned off for swaps alone (`docs/FINDINGS.md`, "Autonomy"). The owner approves in Norr's dashboard; the in-dashboard vote is tested against a mock of OutLayer's approval API and has not yet been used on a live trade.
 - **Confidential swaps have no independent audit trail.** They are checked from balances and the provider's own report, and labelled `custody-reported`.
 - **Funding and withdrawals are public**, and the custody provider and NEAR Intents operator can see confidential trades. A funding transfer and the next hop can be correlated by timing and amount.
 - **Incident feed not configured**: the NEAR Intents partner key for the incident feed (Shield) has not been granted, so the hosted service does not check it. It says so on every answer; with a key it would be checked and fail closed. No keyless substitute exists.
