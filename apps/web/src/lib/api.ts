@@ -4,6 +4,8 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** The service's whole answer, for fields beyond the message (e.g. a direct-deposit instruction). */
+    readonly body: unknown = null,
   ) {
     super(message);
     this.name = "ApiError";
@@ -27,6 +29,8 @@ export interface Portfolio { holdings: Holding[]; totalUsd: number; byClass: { c
 export interface ActivityItem { id: string; executed: { usd: number; realizedUsd: number | null } | null; at: string; side: "buy" | "sell"; asset: string; amountUsd: number; sealedReason: SealedReason | null; decision: Decision; note: string | null; pending: boolean }
 export interface PendingItem {
   ledgerId: string;
+  /** A trade, or a move of public USDC into the confidential layer. */
+  kind?: "trade" | "shield";
   requestId: string;
   requestHash: string | null;
   venue: "public" | "confidential";
@@ -100,6 +104,17 @@ export interface BetaInfo { selfServe: boolean; signupsOpen?: boolean; depositCa
 export interface PolicyStoreCall { contractId: string; methodName: "store_wallet_policy"; args: { wallet_pubkey: string; encrypted_data: string; wallet_signature: string }; gas: string; deposit: string }
 export interface PreparedPolicy { policy: unknown; summary: string[]; call: PolicyStoreCall; controller: string }
 export interface TokenInfo { id: string; vaultId: string; label: string; kind: "token" | "oauth"; createdAt: string; clientId?: string; expiresAt?: string }
+/** Paying the vault directly on NEAR (when 1Click cannot quote): the call the owner's wallet makes on the token contract. */
+export interface DirectDeposit {
+  contractId: string;
+  methodName: "ft_transfer_call";
+  args: { receiver_id: string; amount: string; msg: string };
+  gas: string;
+  deposit: string;
+  amountUsdc: number;
+  recipient: string;
+  note: string;
+}
 export interface AuditItem { at: string; owner: string; action: string; vaultId?: string }
 
 export interface ApiOptions {
@@ -137,7 +152,7 @@ export function createApi(o: ApiOptions) {
     if (!res.ok) {
       const b = body as { error?: string; issues?: string[] } | null;
       const detail = b?.issues?.length ? `: ${b.issues.join("; ")}` : "";
-      throw new ApiError(res.status, `${b?.error ?? `Request failed (${res.status})`}${detail}`);
+      throw new ApiError(res.status, `${b?.error ?? `Request failed (${res.status})`}${detail}`, body);
     }
     return body as T;
   }
@@ -152,11 +167,14 @@ export function createApi(o: ApiOptions) {
     vaults: () => call<{ vaults: VaultListItem[] }>("/owner/v1/vaults"),
     beta: () => call<BetaInfo>("/beta"),
     createVault: (b: { name?: string; acceptTerms: string; nonUsConfirmed?: boolean }) => call<SetupVault>("/owner/v1/vaults", { body: b }),
+    shield: (id: string) => call<{ status: "done" | "pending_approval"; amountUsdc: number; requestId?: string; message?: string }>(`/owner/v1/vaults/${encodeURIComponent(id)}/shield`, { body: {} }),
     renameVault: (id: string, name: string) => call<{ id: string; name: string }>(`/owner/v1/vaults/${encodeURIComponent(id)}/name`, { method: "PUT", body: { name } }),
     setupVault: (id: string) => call<SetupVault>(`/owner/v1/vaults/${encodeURIComponent(id)}/setup`),
     prepareCustody: (id: string, autonomous: boolean) => call<PreparedPolicy>(`/owner/v1/vaults/${encodeURIComponent(id)}/custody-policy`, { body: { autonomous } }),
     activateVault: (id: string) => call<{ status: "active" } | { status: "setup"; problems: string[] }>(`/owner/v1/vaults/${encodeURIComponent(id)}/activate`, { body: {} }),
     /** Mock mode only: the signed-in owner stands in for their wallet sending the contract call. */
+    /** Mock mode only: a direct deposit "lands" in the vault's public balance. */
+    mockDirectDeposit: (args: DirectDeposit["args"]) => call<{ ok: boolean }>("/mock-outlayer/chain/direct_deposit", { body: { args } }),
     mockStorePolicy: (args: PolicyStoreCall["args"]) => call<{ ok: boolean }>("/mock-outlayer/chain/store_wallet_policy", { body: { args } }),
     oauthRequest: (rid: string) => call<{ clientName: string; redirectHost: string; expiresAt: string; vaults: { id: string; name?: string | null; paused: boolean }[] }>(`/owner/v1/oauth/requests/${encodeURIComponent(rid)}`),
     oauthApprove: (rid: string, vaultId: string) => call<{ redirect: string }>(`/owner/v1/oauth/requests/${encodeURIComponent(rid)}/approve`, { body: { vaultId } }),

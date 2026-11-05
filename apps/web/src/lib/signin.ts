@@ -1,5 +1,5 @@
 import { Buffer } from "buffer";
-import type { Api, PolicyStoreCall, SessionInfo } from "./api";
+import type { Api, DirectDeposit, PolicyStoreCall, SessionInfo } from "./api";
 import { base64ToBytes, generateDemoKey, type DemoKey } from "./nep413";
 import { UNLOCK_MESSAGE, UNLOCK_NONCE, UNLOCK_RECIPIENT } from "./seal";
 
@@ -112,4 +112,27 @@ export async function sendPolicyStore(api: Api, call: PolicyStoreCall, owner: st
     receiverId: call.contractId,
     actions: [actionCreators.functionCall(call.methodName, call.args, BigInt(call.gas), BigInt(call.deposit))],
   });
+}
+
+/**
+ * Pay the vault directly on NEAR (when 1Click cannot quote): `ft_transfer_call` on the token contract to `intents.near`,
+ * crediting the vault's own account (msg). Any connected NEAR account may send it. Returns the account that sent.
+ * In mock mode the session stands in for the wallet.
+ */
+export async function sendDirectDeposit(api: Api, d: DirectDeposit): Promise<string> {
+  if (demoKey) {
+    await api.mockDirectDeposit(d.args);
+    return "demo wallet";
+  }
+  const { selector } = await loadSelector();
+  if (selector.store.getState().accounts.length === 0) throw new Error("Your wallet is not connected. Sign in again.");
+  const wallet = await selector.wallet();
+  const signer = selector.store.getState().accounts.find((a) => a.active)?.accountId ?? selector.store.getState().accounts[0]!.accountId;
+  const { actionCreators } = await import("@near-js/transactions");
+  await wallet.signAndSendTransaction({
+    signerId: signer,
+    receiverId: d.contractId,
+    actions: [actionCreators.functionCall(d.methodName, d.args, BigInt(d.gas), BigInt(d.deposit))],
+  });
+  return signer;
 }

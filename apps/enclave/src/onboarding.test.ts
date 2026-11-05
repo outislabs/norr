@@ -321,3 +321,48 @@ describe("vault names", () => {
     expect((await call(`/owner/v1/vaults/${v.id}/name`, { token: s.token, method: "PUT", body: { name: "x".repeat(41) } })).status).toBe(400);
   });
 });
+
+describe("direct NEAR deposit when 1Click cannot quote", () => {
+  it("offers the direct deposit only then, and the owner-approved shield moves it into the confidential layer", async () => {
+    const { m, call } = boot();
+    const a = await activeVault(m, call, "alice.near"); // not autonomous: the shield waits for Alice
+    m.deps.vaultCapUsd = () => undefined;
+    const usdc = m.deps.quoteAsset.id;
+    const vault = m.vaults.get(a.id)!;
+    m.deps.funder!.requestDeposit = async () => { throw new IntentsApiError(400, "1Click deposit quote: Quoting for this pair is not available"); };
+    const r = await (await call(`/owner/v1/vaults/${a.id}/funding`, { token: a.token, body: { amountUsd: 5, refundTo: "legalalienx.near" } })).json();
+    expect(r.error).toMatch(/deposit directly on NEAR instead \(public until you move it into the confidential layer\)/);
+    expect(r.directDeposit).toMatchObject({
+      contractId: usdc.replace(/^nep141:/, ""),
+      methodName: "ft_transfer_call",
+      args: { receiver_id: "intents.near", amount: "5000000", msg: vault.walletAccount },
+      gas: "100000000000000",
+      deposit: "1",
+      recipient: vault.walletAccount,
+    });
+    expect(r.directDeposit.note).toMatch(/visible on chain until you move it into the confidential layer/);
+    // From another chain the direct path is not offered (it only works for a NEAR token).
+    const base = (await (await call("/owner/v1/funding/sources", { token: a.token })).json()).sources.find((s: { chain: string }) => s.chain === "base");
+    expect((await (await call(`/owner/v1/vaults/${a.id}/funding`, { token: a.token, body: { amountUsd: 5, source: base.assetId, refundTo: "0x0000000000000000000000000000000000000001" } })).json()).directDeposit).toBeUndefined();
+
+    expect((await call(`/owner/v1/vaults/${a.id}/shield`, { token: a.token, body: {} })).status).toBe(400); // nothing public yet
+    const rails = m.tenantRails.get(a.id)!.rails;
+    rails.creditPublic(usdc, "5000000"); // the direct deposit lands in the vault's public balance
+    const before = BigInt((await vault.custody.confidentialHoldings())[usdc] ?? "0");
+    const sh = await (await call(`/owner/v1/vaults/${a.id}/shield`, { token: a.token, body: {} })).json();
+    expect(sh).toMatchObject({ status: "pending_approval", amountUsdc: 5 });
+    expect((await call(`/owner/v1/vaults/${a.id}/shield`, { token: a.token, body: {} })).status).toBe(409);
+
+    const list = await (await call(`/owner/v1/vaults/${a.id}/pending`, { token: a.token })).json();
+    const item = list.pending.find((p: { kind: string }) => p.kind === "shield");
+    expect(item).toMatchObject({ kind: "shield", sends: { amount: 5, symbol: "USDC" }, intended: { tokenIn: usdc, amountIn: "5000000", tokenOut: usdc } });
+    expect(list.unknown).toEqual([]); // Norr asked for it, so it is not "unknown"
+    const d = await (await call(`/mock-outlayer/wallet/v1/approval/${item.approvalId}`)).json();
+    expect(JSON.parse(d.op_canonical)).toMatchObject({ flow: "shield", token: usdc, amount: "5000000" });
+    const nonce = Buffer.alloc(32, 3);
+    expect((await call(`/mock-outlayer/wallet/v1/approve/${item.approvalId}`, { body: { signature: signNep413(a.key.privateKey, { message: `approve:${item.approvalId}:${d.wallet_pubkey}:${d.request_hash}`, nonce, recipient: "outlayer.near" }), public_key: a.key.publicKey, account_id: "alice.near", nonce: nonce.toString("base64") } })).status).toBe(200);
+    expect((await (await call(`/owner/v1/vaults/${a.id}/pending`, { token: a.token })).json()).pending).toHaveLength(0);
+    expect(BigInt((await vault.custody.confidentialHoldings())[usdc]!) - before).toBe(5_000_000n);
+    expect((await rails.balances.holdings(vault.walletAccount))[usdc]).toBeUndefined();
+  });
+});

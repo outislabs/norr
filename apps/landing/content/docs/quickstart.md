@@ -28,6 +28,8 @@ Open **Fund**. Pick what you hold and where: USDC on NEAR, Ethereum, Base, Arbit
 
 The money arrives as USDC in the vault's **confidential** balance, usually within a minute. Funding with USDC on NEAR is proven on mainnet (1 USDC arrived exactly, 2026-10-31); the routes from other chains were quoted live on 2026-11-03 and have not yet been run with real funds. The destination is always your vault: the Norr service sets it, not the page. Your transfer itself is a normal public transaction on the chain you send from.
 
+**If 1Click cannot quote** (it refused every deposit starting on NEAR on 2026-11-05), the Fund tab says so and, for USDC on NEAR, offers **Deposit directly on NEAR**: your wallet sends the USDC straight to the vault's account on NEAR Intents (`ft_transfer_call` to `intents.near`). That deposit is **public**: the sender, the vault's account and the amount are visible on chain. It shows under **Public balance**; tap **Move into the confidential layer** and approve the move in **Approvals**. The move stays inside the vault. Not yet run live.
+
 ## 4. Connect your agent
 
 Open **Connect** and **Create an agent token**. The token is shown once. Paste the snippet for your client (Claude Code, Claude Desktop, or any MCP client) into its configuration. See [Connect your agent](/docs/connect-agent/).

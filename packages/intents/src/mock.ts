@@ -45,6 +45,8 @@ interface Record_ {
   /** Mock stand-in for the custody provider's approval record (see approvalDetail). */
   approvalId?: string;
   createdAt?: number;
+  /** A shield (public into confidential, same token) rather than a swap. */
+  shield?: boolean;
 }
 
 const toLayer = (m: Record<string, string> | undefined): Layer => Object.fromEntries(Object.entries(m ?? {}).map(([k, v]) => [k, BigInt(v)]));
@@ -129,6 +131,10 @@ export function createMockRails(entries: RegistryEntry[], vaultAccount: string, 
     async shield(token: string, amount: string): Promise<SwapStatus> {
       const id = `mock-req-${++n}`;
       if ((held.public[token] ?? 0n) < BigInt(amount)) return { state: "failed", requestId: id, detail: "insufficient balance" };
+      if (o.requireApproval) {
+        records.set(id, { venue: "confidential", shield: true, done: { tokenIn: token, tokenOut: token, amountIn: amount, amountOut: amount, recipient: vaultAccount }, state: "pending_approval", approvalId: `${o.approvalPrefix ?? "00000000"}-0000-4000-8000-${String(n).padStart(12, "0")}`, createdAt: Date.now() });
+        return { state: "pending_approval", requestId: id };
+      }
       held.public[token] = (held.public[token] ?? 0n) - BigInt(amount);
       held.confidential[token] = (held.confidential[token] ?? 0n) + BigInt(amount);
       return { state: "success", requestId: id };
@@ -176,7 +182,10 @@ export function createMockRails(entries: RegistryEntry[], vaultAccount: string, 
       const r = records.get(requestId);
       if (!r || r.state !== "pending_approval") return;
       r.state = "success";
-      apply(r.venue, r.done);
+      if (r.shield) {
+        held.public[r.done.tokenIn] = (held.public[r.done.tokenIn] ?? 0n) - BigInt(r.done.amountIn);
+        held.confidential[r.done.tokenIn] = (held.confidential[r.done.tokenIn] ?? 0n) + BigInt(r.done.amountIn);
+      } else apply(r.venue, r.done);
     },
     /** Test helper: the owner rejects a pending request; nothing moves. */
     reject(requestId: string) {
@@ -191,8 +200,14 @@ export function createMockRails(entries: RegistryEntry[], vaultAccount: string, 
       const hit = [...records].find(([, r]) => r.approvalId === approvalId);
       if (!hit) return null;
       const [requestId, r] = hit;
-      const op = { type: r.venue === "confidential" ? "confidential_swap" : "swap", token_in: r.done.tokenIn, amount_in: r.done.amountIn, token_out: r.done.tokenOut, recipient: r.done.recipient };
+      const op = r.shield
+        ? { kind: "confidential", flow: "shield", token: r.done.tokenIn, amount: r.done.amountIn }
+        : { type: r.venue === "confidential" ? "confidential_swap" : "swap", token_in: r.done.tokenIn, amount_in: r.done.amountIn, token_out: r.done.tokenOut, recipient: r.done.recipient };
       return { requestId, status: r.state === "pending_approval" ? "pending" : r.state === "success" ? "approved" : "rejected", opCanonical: JSON.stringify(op), requestType: r.venue === "confidential" ? "confidential" : "swap", expiresAt: new Date((r.createdAt ?? Date.now()) + 24 * 3600_000).toISOString() };
+    },
+    /** Test helper: a direct deposit on NEAR "arrives" in the vault's public layer. */
+    creditPublic(token: string, amount: string) {
+      held.public[token] = (held.public[token] ?? 0n) + BigInt(amount);
     },
     /** Test helper: the owner's deposit "arrives" in the confidential layer. */
     creditConfidential(token: string, amount: string) {

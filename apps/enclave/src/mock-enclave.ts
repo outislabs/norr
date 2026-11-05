@@ -57,6 +57,8 @@ export interface MockEnclave {
   provisioner: MockProvisioner;
   oauth: OAuthServer;
   tenants: MemoryTenantStore;
+  /** Each self-serve mock vault's rails, by vault id (tests credit deposits through them). */
+  tenantRails: Map<string, { rails: ReturnType<typeof createMockRails>; owner: string; walletPubkey: string }>;
   onboarding: Onboarding;
   beta: BetaControl;
 }
@@ -124,6 +126,9 @@ export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed
   const provisioner = new MockProvisioner();
   const tenants = new MemoryTenantStore();
   const beta = new BetaControl({ signupsOpen: true, depositCapUsd: 100, maxVaults: 50, maxVaultsPerOwner: 1, termsVersion: TERMS_VERSION, termsUrl: TERMS_URL });
+  // Public balances live per vault's rails, so the reader routes by account (the demo vault's rails otherwise).
+  const railsByAccount = new Map<string, ReturnType<typeof createMockRails>>();
+  deps.balances = { holdings: (account: string) => (railsByAccount.get(account) ?? rails).balances.holdings(account) };
   const tenantRails = new Map<string, { rails: ReturnType<typeof createMockRails>; owner: string; walletPubkey: string }>();
   const onboarding = new Onboarding({
     tenants,
@@ -140,6 +145,7 @@ export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed
         approvalPrefix: rec.id.slice(2, 10),
       });
       tenantRails.set(rec.id, { rails: r, owner: rec.owner, walletPubkey: rec.custody?.walletPubkey ?? `ed25519:${rec.walletAccount}` });
+      railsByAccount.set(rec.walletAccount, r);
       return r.custody;
     },
   });
@@ -148,8 +154,8 @@ export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed
   deps.vaultCapUsd = (id) => (tenants.ids().includes(id) ? beta.get().depositCapUsd : undefined);
   const app = createApp({ deps, tokens, mock: true, adminToken, owner: ownerAuth, allowedOrigins: o.allowedOrigins, attestor: o.attestor, seal: { keys: sealKeys, ledger: sealing }, history: new MemoryValueHistory(), onboarding, beta, oauth });
   mountMockApprovals(app, () => [{ rails, owner: MOCK_OWNER, walletPubkey: MOCK_WALLET_PUBKEY }, ...tenantRails.values()]);
-  mountMockChain(app, provisioner, ownerAuth);
-  return { app, deps, vaults, tokens, agentToken, adminToken, vaultId, ownerAuth, rails, sealKeys, sealing, provisioner, tenants, onboarding, beta, oauth };
+  mountMockChain(app, provisioner, ownerAuth, (account) => railsByAccount.get(account) ?? (account === walletAccount ? rails : undefined), DEMO.USDC.assetId);
+  return { app, deps, vaults, tokens, agentToken, adminToken, vaultId, ownerAuth, rails, sealKeys, sealing, provisioner, tenants, onboarding, beta, oauth, tenantRails };
 }
 
 /** The mock wallet's on-chain key, bound into vote messages the way OutLayer binds the real one. */
@@ -204,7 +210,17 @@ function mountMockApprovals(app: ReturnType<typeof createApp>, allRails: () => {
  * Mock mode only: the owner's wallet sending `store_wallet_policy` to the policy contract. In live mode the dashboard asks
  * the owner's NEAR wallet to sign and send the transaction; here the signed-in owner session stands in for the wallet.
  */
-function mountMockChain(app: ReturnType<typeof createApp>, provisioner: MockProvisioner, auth: OwnerAuth) {
+function mountMockChain(app: ReturnType<typeof createApp>, provisioner: MockProvisioner, auth: OwnerAuth, railsFor: (account: string) => ReturnType<typeof createMockRails> | undefined, usdc: string) {
+  // A direct deposit on NEAR (ft_transfer_call to intents.near, msg = the vault's account) lands in that vault's public balance.
+  app.post("/mock-outlayer/chain/direct_deposit", async (c) => {
+    const m = /^Bearer (norr_owner_.+)$/.exec(c.req.header("authorization") ?? "");
+    if (!(m?.[1] && auth.session(m[1]))) return c.json({ error: "unauthorized" }, 401);
+    const b = (await c.req.json().catch(() => null)) as { args?: { receiver_id?: string; amount?: string; msg?: string } } | null;
+    const r = b?.args?.msg ? railsFor(b.args.msg) : undefined;
+    if (!r || b?.args?.receiver_id !== "intents.near" || !/^[0-9]+$/.test(b.args.amount ?? "")) return c.json({ error: "bad_request" }, 400);
+    r.creditPublic(usdc, b.args.amount!);
+    return c.json({ ok: true });
+  });
   app.post("/mock-outlayer/chain/store_wallet_policy", async (c) => {
     const m = /^Bearer (norr_owner_.+)$/.exec(c.req.header("authorization") ?? "");
     const session = m?.[1] ? auth.session(m[1]) : null;

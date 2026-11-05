@@ -119,11 +119,17 @@ export function PendingChecks({ items, list, apiBase = "", owner = "", onChanged
     <ul className="flex flex-col gap-10">
       {items.map((p) => (
         <li key={p.requestId} className="border-l border-line-strong pl-4">
-          <p className="text-fg">
-            Norr asked to send <b className="mono font-medium">{amount(p.sends.amount)} {p.sends.symbol}</b> and receive at least{" "}
-            <b className="mono font-medium">{amount(p.receivesAtLeast.amount)} {p.receivesAtLeast.symbol}</b>
-            {p.venue === "confidential" ? ", confidentially" : ", publicly"}.
-          </p>
+          {p.kind === "shield" ? (
+            <p className="text-fg">
+              You asked to move <b className="mono font-medium">{amount(p.sends.amount)} {p.sends.symbol}</b> from the vault's public balance into its confidential balance.
+            </p>
+          ) : (
+            <p className="text-fg">
+              Norr asked to send <b className="mono font-medium">{amount(p.sends.amount)} {p.sends.symbol}</b> and receive at least{" "}
+              <b className="mono font-medium">{amount(p.receivesAtLeast.amount)} {p.receivesAtLeast.symbol}</b>
+              {p.venue === "confidential" ? ", confidentially" : ", publicly"}.
+            </p>
+          )}
           <p className="mt-1 text-sm text-mute">Paid to the vault's own account ({shortId(p.recipient, 10, 6)}).</p>
           {p.approvalId && base ? (
             <ApprovalCard approvalId={p.approvalId} item={p} base={base} recipient={recipient} owner={owner} onChanged={onChanged} sign={sign} fetchImpl={fetchImpl} />

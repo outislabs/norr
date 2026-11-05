@@ -1,5 +1,6 @@
+import { DirectDepositPanel, PublicBalance } from "./DirectDeposit";
 import { useEffect, useMemo, useState } from "react";
-import type { Api, FundingOffer, FundingSource, FundingStatus } from "../lib/api";
+import { ApiError, type Api, type DirectDeposit, type FundingOffer, type FundingSource, type FundingStatus } from "../lib/api";
 import { connectEvm, explorerTx, injectedWallet, payWithEvmWallet, qrPayload } from "../lib/funding";
 import { usd } from "../lib/format";
 import { QrCode } from "./QrCode";
@@ -22,6 +23,8 @@ const refundPlaceholder = (s: FundingSource): string => (s.family === "near" ? "
  * page only chooses where the money comes from and where a refund would go. The agent has no way to ask for any of it.
  */
 export function FundingPanel({ api, vaultId, account = "", pollMs = 5000, onArrived }: { api: Api; vaultId: string; account?: string; pollMs?: number; onArrived?: () => void }) {
+  const [direct, setDirect] = useState<DirectDeposit | null>(null);
+  const [publicVersion, setPublicVersion] = useState(0);
   const [sources, setSources] = useState<FundingSource[] | null>(null);
   const [sourceId, setSourceId] = useState("");
   const [amount, setAmount] = useState("5");
@@ -71,6 +74,7 @@ export function FundingPanel({ api, vaultId, account = "", pollMs = 5000, onArri
 
   async function request() {
     setError(null);
+    setDirect(null);
     setBusy(true);
     try {
       const refundTo = (refund[source.chain] ?? "").trim();
@@ -81,6 +85,9 @@ export function FundingPanel({ api, vaultId, account = "", pollMs = 5000, onArri
       setTxHash(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not get a deposit address.");
+      // 1Click could not quote a NEAR token: the service offers paying the vault directly on NEAR instead.
+      const d = e instanceof ApiError ? (e.body as { directDeposit?: DirectDeposit } | null)?.directDeposit : undefined;
+      if (d) setDirect(d);
     } finally {
       setBusy(false);
     }
@@ -184,6 +191,8 @@ export function FundingPanel({ api, vaultId, account = "", pollMs = 5000, onArri
       ) : null}
 
       {error && <p role="alert" className="border-l border-line-strong pl-4 text-sm text-fg">{error}</p>}
+      {direct && <DirectDepositPanel api={api} deposit={direct} onSent={() => setPublicVersion((n) => n + 1)} />}
+      <PublicBalance api={api} vaultId={vaultId} version={publicVersion} pollMs={pollMs} />
 
       {offer && (
         <div className="flex flex-col gap-5 border-t border-line pt-6">

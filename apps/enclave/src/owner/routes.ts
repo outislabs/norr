@@ -81,6 +81,21 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
   const note = (owner: string, action: string, vaultId?: string) => ctx.audit.push({ at: new Date(deps.now()).toISOString(), owner, action, ...(vaultId ? { vaultId } : {}) });
 
   const funding = new FundingTracker();
+  /** Shields the owner asked for (public USDC into the confidential layer), until they settle. In memory: after a restart
+   *  an unsettled one still waits at the custody provider and shows under Approvals as not asked for by Norr. */
+  const shields = new Map<string, { vaultId: string; requestId: string; token: string; amount: string; at: number }>();
+  /** Paying the vault directly on NEAR: the owner's wallet calls ft_transfer_call on the token, crediting the vault's own
+   *  NEAR Intents account (msg = that account). The destination is the vault, set here. It lands in the public layer. */
+  const directDeposit = (v: { walletAccount: string }, units: string) => ({
+    contractId: cash().id.replace(/^nep141:/, ""),
+    methodName: "ft_transfer_call" as const,
+    args: { receiver_id: "intents.near", amount: units, msg: v.walletAccount },
+    gas: "100000000000000",
+    deposit: "1",
+    amountUsdc: unitsToNumber(units, cash().decimals),
+    recipient: v.walletAccount,
+    note: "This deposit is public: the sender, the vault's account and the amount are visible on chain until you move it into the confidential layer (Move into the confidential layer, then approve).",
+  });
   const limiter = ctx.limiter ?? new RateLimiter(deps.now);
   const onboarding = ctx.onboarding;
   /** An onboarding failure as the plain answer the dashboard shows. */
@@ -325,7 +340,14 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
       if (/refundTo is not valid/i.test(msg)) return c.json({ error: `1Click did not accept "${refundTo}" as a ${src.chainName} refund address. Check it and try again.` }, 400);
       if (/(lose more than|below the listed price|no USD values)/.test(msg)) return c.json({ error: `No address is offered: ${msg.replace(/^1Click deposit quote: /, "1Click's quote ")}. Try USDC, or a larger amount.` }, 502);
       if (/Quoting for this pair is not available/i.test(msg)) {
-        return c.json({ error: `1Click is not quoting deposits from ${src.symbol} on ${src.chainName} into the vault right now (it answered "Quoting for this pair is not available"). This is on 1Click's side, not your vault or refund address. Try again later, or fund from another chain.` }, 503);
+        const direct = sameAsset && src.family === "near";
+        return c.json(
+          {
+            error: `1Click is not quoting deposits from ${src.symbol} on ${src.chainName} into the vault right now (it answered "Quoting for this pair is not available"). This is on 1Click's side, not your vault or refund address. ${direct ? "You can deposit directly on NEAR instead (public until you move it into the confidential layer), try again later, or fund from another chain." : "Try again later, or fund from another chain."}`,
+            ...(direct ? { directDeposit: directDeposit(v, usdcOut) } : {}),
+          },
+          503,
+        );
       }
       return c.json({ error: `No deposit address: ${upstreamReason(e, "1Click deposit quote")}` }, 502);
     }
@@ -478,6 +500,35 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
   });
 
   // What Norr asked the custody provider for, so the owner can check it against the approval screen before signing.
+  // Move the vault's public USDC into its confidential balance (after a direct deposit). A confidential operation, so it
+  // waits for the owner's approval unless the vault is autonomous; it stays inside the vault either way.
+  app.post("/owner/v1/vaults/:id/shield", async (c) => {
+    const owner = c.get("owner") as string;
+    const v = mine(owner, c.req.param("id"));
+    if (!v) return c.json({ error: "not found" }, 404);
+    if (!deps.balances) return c.json({ error: "This service cannot read public balances, so nothing can be moved from here." }, 501);
+    let units: string;
+    try {
+      units = (await deps.balances.holdings(v.walletAccount))[cash().id] ?? "0";
+    } catch (e) {
+      return c.json({ error: `Could not read the vault's public balance. ${upstreamReason(e, "NEAR Intents balances")}` }, 503);
+    }
+    if (BigInt(units) <= 0n) return c.json({ error: "Nothing to move: the vault's public USDC balance is 0. If you just sent a deposit, wait for it to confirm (a few seconds) and try again." }, 400);
+    if ([...shields.values()].some((x) => x.vaultId === v.id)) return c.json({ error: "A move into the confidential layer is already waiting for your approval. Approve or reject it in Approvals first." }, 409);
+    let st;
+    try {
+      st = await v.custody.shield(cash().id, units);
+    } catch (e) {
+      return c.json({ error: `The move was not started. ${upstreamReason(e, "Custody provider shield")}` }, 502);
+    }
+    const amountUsdc = unitsToNumber(units, cash().decimals);
+    note(owner, `asked to move ${amountUsdc} USDC into the confidential layer`, v.id);
+    if (st.state === "failed") return c.json({ error: `The custody provider refused the move${st.detail ? `: ${st.detail}` : ""}.` }, 502);
+    if (st.state === "success") return c.json({ status: "done", amountUsdc });
+    shields.set(st.requestId, { vaultId: v.id, requestId: st.requestId, token: cash().id, amount: units, at: deps.now() });
+    return c.json({ status: "pending_approval", requestId: st.requestId, amountUsdc, message: `Waiting for your approval: move ${amountUsdc} USDC into the confidential layer. Approve it in Approvals.` });
+  });
+
   app.get("/owner/v1/vaults/:id/pending", async (c) => {
     const v = mine(c.get("owner") as string, c.req.param("id"));
     if (!v) return c.json({ error: "not found" }, 404);
@@ -491,6 +542,7 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
       const p = r.pending!;
       return {
         ledgerId: r.id,
+        kind: "trade" as "trade" | "shield",
         requestId: p.requestId,
         requestHash: p.requestHash ?? null,
         venue: p.venue,
@@ -503,6 +555,28 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
         check: "Approve only if the approval screen shows the same tokens and amount, and the request hash above if it shows one.",
       };
     });
+    // Shields Norr asked for: settle the finished ones, list the rest beside the trades.
+    for (const sh of [...shields.values()].filter((x) => x.vaultId === v.id)) {
+      const st = await v.custody.status(sh.requestId).catch(() => null);
+      if (st && (st.state === "success" || st.state === "failed")) {
+        shields.delete(sh.requestId);
+        continue;
+      }
+      const amount = unitsToNumber(sh.amount, cash().decimals);
+      pending.push({
+        ledgerId: `shield-${sh.requestId}`,
+        kind: "shield",
+        requestId: sh.requestId,
+        requestHash: null,
+        venue: "confidential" as const,
+        sends: { token: sh.token, amount, symbol: cash().symbol },
+        receivesAtLeast: { token: sh.token, amount, symbol: cash().symbol },
+        recipient: v.walletAccount,
+        intended: { tokenIn: sh.token, amountIn: sh.amount, tokenOut: sh.token, minAmountOut: sh.amount },
+        approvalId: null,
+        check: "Moves USDC from the vault's public balance into its confidential balance. It stays in the vault.",
+      });
+    }
     // The provider's approval ids, matched to Norr's records by request id. An approval Norr did not ask for is listed
     // separately: the dashboard offers only Reject for it. Listing needs the wallet key; voting never goes through Norr.
     let unknown: { approvalId: string; requestId: string | null; type: string; expiresAt: string }[] = [];
