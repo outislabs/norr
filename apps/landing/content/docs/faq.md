@@ -30,7 +30,7 @@ Any MCP client: Claude Code, Claude Desktop (through `mcp-remote`), or your own.
 
 ## What is the smallest trade?
 
-Crypto: a few dollars. Tokenized stocks: the smallest order that quotes, about $5 on the most liquid tickers at US market open and $26 for others, higher outside market hours.
+Crypto: a few dollars. Tokenized stocks: the smallest order that quotes, about $5 on the most liquid tickers and $26 for others when measured; minimums vary with available liquidity.
 
 ## Can US persons trade stocks?
 

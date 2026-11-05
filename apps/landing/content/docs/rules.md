@@ -46,7 +46,7 @@ In this order: Scam Shield (crypto) or eligibility (stocks), then your rules, th
 
 ## Tokenized stocks
 
-Stocks and ETFs are Ondo's (and other issuers') tokens: structured notes that track the underlying security, with no shareholder rights, offered to non-US persons only. Norr asks for the ticker and routes to the best-priced issuer. The smallest order that quotes moves with the market: about $5 on the most liquid tickers at US market open, $26 for others, higher outside market hours. `list_assets` shows the current floor.
+Stocks and ETFs are Ondo's (and other issuers') tokens: structured notes that track the underlying security, with no shareholder rights, offered to non-US persons only. Norr asks for the ticker and routes to the best-priced issuer. The smallest order that quotes varies with available liquidity: about $5 on the most liquid tickers and $26 for others when measured. `list_assets` shows the current floor.
 
 ## The custody provider's limits (set in OutLayer)
 

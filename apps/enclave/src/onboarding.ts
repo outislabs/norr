@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { buildCustodyPolicy, custodyPolicyProblems, describeCustodyPolicy, presetPolicy, type CustodyPolicy, type PolicyAsset, type Registry, type RegistryEntry } from "@norr/core";
+import { buildCustodyPolicy, custodyPolicyProblems, describeCustodyPolicy, equityMinimum, presetPolicy, type CustodyPolicy, type PolicyAsset, type Registry, type RegistryEntry } from "@norr/core";
 import type { Custody, CustodyProvisioner, PolicyStoreCall } from "@norr/intents";
 import type { Policy } from "@norr/shared";
 import type { BetaControl } from "./beta";
@@ -29,7 +29,9 @@ export interface OnboardingDeps {
 export const BETA_RULES = { maxTradeUsd: 10, dailySpendCapUsd: 30, dailyLossCapUsd: 10, cooldownSec: 30 } as const;
 /** Crypto a new vault may hold, with the chain of the version the custody policy allows. */
 const BETA_CRYPTO: Record<string, string> = { SOL: "sol", ETH: "eth", BTC: "btc" };
-const BETA_EQUITIES = ["NVDA", "TSLA", "SPY", "QQQ"];
+/** Stocks a new vault may trade: only those whose observed minimum order fits the default trade limit (SPY's $26 does not). */
+const BETA_EQUITY_CANDIDATES = ["NVDA", "TSLA", "QQQ", "AAPL", "SPY"];
+export const BETA_EQUITIES = BETA_EQUITY_CANDIDATES.filter((t) => equityMinimum(t).usd <= BETA_RULES.maxTradeUsd);
 
 export function betaRules(vaultId: string, nonUsConfirmed: boolean): Policy {
   return {

@@ -541,6 +541,74 @@
           }
         }
       }
+    },
+    "/v1/about": {
+      "get": {
+        "tags": [
+          "Vault"
+        ],
+        "operationId": "about",
+        "summary": "How Norr works, for this vault",
+        "description": "From the running service: the custody model, whether swaps wait for the owner's approval (and where), who can see what, what Norr stores, the attestation status with a verify link, and the incident feed status. MCP tool: about_norr.",
+        "responses": {
+          "200": {
+            "description": "Facts about the service and this vault.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "what",
+                    "custody",
+                    "approvals",
+                    "privacy",
+                    "storage",
+                    "attestation",
+                    "incidentFeed"
+                  ],
+                  "properties": {
+                    "what": {
+                      "type": "string"
+                    },
+                    "custody": {
+                      "type": "object"
+                    },
+                    "approvals": {
+                      "$ref": "#/components/schemas/ApprovalInfo"
+                    },
+                    "privacy": {
+                      "type": "object"
+                    },
+                    "storage": {
+                      "type": "object"
+                    },
+                    "attestation": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "verifyUrl": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "incidentFeed": {
+                      "$ref": "#/components/schemas/IncidentFeed"
+                    },
+                    "docs": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -657,7 +725,8 @@
           "DAILY_SPEND_CAP",
           "PRIVACY_UNAVAILABLE",
           "PRICING_UNAVAILABLE",
-          "VAULT_CAP"
+          "VAULT_CAP",
+          "AMBIGUOUS_ASSET"
         ]
       },
       "Executed": {
@@ -762,6 +831,25 @@
           },
           "incidentFeed": {
             "$ref": "#/components/schemas/IncidentFeed"
+          },
+          "approval": {
+            "type": "object",
+            "description": "Where the owner approves it (Norr dashboard, Approvals), a link, and when the approval expires (24 hours).",
+            "properties": {
+              "where": {
+                "type": "string"
+              },
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
           }
         }
       },
@@ -865,6 +953,9 @@
           },
           "incidentFeed": {
             "$ref": "#/components/schemas/IncidentFeed"
+          },
+          "approval": {
+            "$ref": "#/components/schemas/ApprovalInfo"
           }
         }
       },
@@ -1586,6 +1677,49 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "ApprovalInfo": {
+        "type": "object",
+        "description": "Whether swaps in this vault wait for the owner, read from the custody provider's own policy (cached up to 15 minutes).",
+        "required": [
+          "required",
+          "mode",
+          "where",
+          "expiresHours",
+          "note"
+        ],
+        "properties": {
+          "required": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "autonomous",
+              "none",
+              "unknown"
+            ]
+          },
+          "where": {
+            "type": "string"
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expiresHours": {
+            "type": "number"
+          },
+          "note": {
+            "type": "string"
           }
         }
       }

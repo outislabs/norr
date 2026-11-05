@@ -37,7 +37,7 @@ export function AssetCheckPanel({ api, vaultId }: { api: Api; vaultId: string })
     <section aria-labelledby="check-token" className="flex flex-col gap-4">
       <div>
         <h3 id="check-token" className="font-display text-xl">Check a token</h3>
-        <p className="mt-1 text-sm text-mute">What Scam Shield tells your agent before it trades: market data (liquidity, market cap, age) and contract checks from GoPlus Security.</p>
+        <p className="mt-1 text-sm text-mute">What Scam Shield tells your agent before it trades: market data (liquidity, market cap, age) and contract checks from GoPlus Security. Name a token by symbol, or exactly by chain and contract address (for example <span className="mono">base:0x8335…</span>).</p>
       </div>
       <form
         className="flex gap-2"
@@ -46,13 +46,27 @@ export function AssetCheckPanel({ api, vaultId }: { api: Api; vaultId: string })
           void run();
         }}
       >
-        <input className="field" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="SOL, a ticker, or an asset id" aria-label="Token to check" autoCapitalize="none" spellCheck={false} />
+        <input className="field" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="SOL, NVDA, or chain:contract" aria-label="Token to check" autoCapitalize="none" spellCheck={false} />
         <button type="submit" className="btn shrink-0" disabled={busy || !query.trim()}>
           {busy ? "Checking…" : "Check"}
         </button>
       </form>
       {error && <p role="alert" className="text-sm text-fg">{error}</p>}
       {result && !result.found && <p className="text-sm text-mute">{result.message}</p>}
+      {result && !result.found && result.safety?.risk && (
+        <div className="border-t border-line pt-3" data-testid="safety-report">
+          <p className="eyebrow mb-1">Safety report for {result.contract?.chain}:{result.contract?.address} (not tradable)</p>
+          <p className="font-mono text-xs uppercase tracking-[0.08em]">
+            {result.safety.risk.level} risk · {result.safety.risk.score}/100
+          </p>
+          <ul className="mt-2 flex flex-col gap-1 text-sm text-mute">
+            {result.safety.risk.reasons.map((r) => (
+              <li key={r}>{r}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {result?.found && result.ambiguous && <p role="status" className="border-l border-line-strong pl-3 text-sm text-fg">{result.message}</p>}
       {result?.found && (
         <div className="flex flex-col gap-4" data-testid="asset-check">
           {result.class === "equity" && (
@@ -65,6 +79,7 @@ export function AssetCheckPanel({ api, vaultId }: { api: Api; vaultId: string })
               <p className="flex flex-wrap items-baseline justify-between gap-2">
                 <span>
                   {v.symbol} <span className="text-sm text-mute">on {v.chain}{v.issuer ? `, ${v.issuer}` : ""}</span>
+                  {v.contract && <span className="mono block text-xs text-dim">{v.chain}:{v.contract}</span>}
                 </span>
                 {v.risk && (
                   <span className="font-mono text-xs uppercase tracking-[0.08em]">

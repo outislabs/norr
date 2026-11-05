@@ -110,6 +110,7 @@ export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed
     now,
     sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
     settle: { waitMs: 5_000, intervalMs: 250 },
+    dashboardUrl: o.dashboardUrl ?? "http://localhost:5173",
   };
 
   const tokens = new AgentTokens(undefined, now);

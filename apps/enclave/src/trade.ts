@@ -1,3 +1,4 @@
+import { APPROVAL_TTL_HOURS, approvalInfo } from "./about";
 import {
   checkPriceSanity,
   dustWarning,
@@ -64,6 +65,8 @@ export interface TradeDeps {
   /** How long to wait on a swap before reporting it as pending, and the poll interval. */
   settle?: { waitMs: number; intervalMs: number };
   maxPriceDeviationPct?: number;
+  /** The owner dashboard's address, for links in answers (e.g. to Approvals). */
+  dashboardUrl?: string;
   /** Public beta: buys are refused while a self-serve vault holds more than its cap, in USD (docs/MULTI-USER.md). Undefined: no cap. */
   vaultCapUsd?: (vaultId: string) => number | undefined;
 }
@@ -88,6 +91,8 @@ export interface PendingSettlement {
   warnings?: string[];
   /** The custody provider's request hash, so the owner can match it to the approval screen. */
   requestHash?: string;
+  /** When the swap was sent (ms), for the approval's expiry. */
+  sentAt?: number;
 }
 
 /** A trade that passed every check and has a quote, ready to send (or just to show as a preview). */
@@ -384,6 +389,7 @@ async function executeTradeLocked(deps: TradeDeps, request: TradeRequest, opts: 
   }
 
   const ctx: PendingSettlement = {
+    sentAt: deps.now(),
     requestId: status.requestId,
     intended: plan.intended,
     quoteUsd: { in: plan.quote.amountInUsd, out: plan.quote.amountOutUsd },
@@ -420,7 +426,14 @@ export async function settle(deps: TradeDeps, vaultId: string, ctx: PendingSettl
   }
 
   if (st.state === "pending_approval") {
-    return { status: "pending_approval", requestId: ctx.requestId, message: "The vault owner must approve this swap before it runs." };
+    const a = await approvalInfo(deps, vault);
+    const expiresAt = new Date((ctx.sentAt ?? deps.now()) + APPROVAL_TTL_HOURS * 3600_000).toISOString();
+    return {
+      status: "pending_approval",
+      requestId: ctx.requestId,
+      message: `Sent, and waiting for the vault owner's approval in the ${a.where}${a.url ? ` (${a.url})` : ""}. It runs once they approve, and the approval expires at ${expiresAt} (${APPROVAL_TTL_HOURS} hours). Tell the owner; follow up with get_activity and do not resend.`,
+      approval: { where: a.where, url: a.url, expiresAt },
+    };
   }
   if (st.state === "in_progress") {
     return { status: "pending_approval", requestId: ctx.requestId, message: "The swap is still processing. Check the activity log for the result." };

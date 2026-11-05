@@ -200,3 +200,16 @@ describe("TokenList", () => {
     await waitFor(() => expect(revokeToken).toHaveBeenCalledWith("v", "999888777666"));
   });
 });
+
+describe("AssetCheckPanel by contract", () => {
+  it("shows the safety report for a contract NEAR Intents does not route, labelled not tradable", async () => {
+    const api = { checkAsset: vi.fn(async () => ({ found: false, routable: false, message: "base:0xbad is not available on NEAR Intents yet, so it can't be traded privately. Norr does not trade it. The safety report below is for information only.", contract: { chain: "base", address: "0xbad" }, safety: { liquidityUsd: null, marketCapUsd: null, ageDays: null, risk: { level: "high", score: 90, reasons: ["Honeypot: holders cannot sell it."] } } })) } as unknown as Api;
+    render(<AssetCheckPanel api={api} vaultId="v" />);
+    fireEvent.change(screen.getByLabelText("Token to check"), { target: { value: "base:0xbad" } });
+    fireEvent.click(screen.getByRole("button", { name: "Check" }));
+    expect(await screen.findByText(/can't be traded privately/)).toBeTruthy();
+    expect(screen.getByText(/Safety report for base:0xbad \(not tradable\)/)).toBeTruthy();
+    expect(screen.getByText("Honeypot: holders cannot sell it.")).toBeTruthy();
+    expect(api.checkAsset).toHaveBeenCalledWith("v", "base:0xbad");
+  });
+});

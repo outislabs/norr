@@ -40,8 +40,11 @@ export async function preTradeChecks(i: PreTradeInput): Promise<PreTradePass | B
     return block("PAUSED", "This vault is paused by its owner. No trades are allowed until it is resumed.");
   }
 
-  const res = i.registry.resolve(i.request.asset);
-  if (!res) return block("UNKNOWN_ASSET", `"${i.request.asset}" is not a tradable asset. Use list_assets to see what is available.`);
+  const found = i.registry.lookup(i.request.asset);
+  if (found.kind === "not_routable") return notRoutable(found.ref);
+  if (found.kind === "unknown") return block("UNKNOWN_ASSET", `"${i.request.asset}" is not a tradable asset. Use list_assets to see what is available, or name it by chain and contract address (for example base:0x…).`);
+  const res = found.resolution;
+  if (res.ambiguous) return ambiguousAsset(i.request.asset, res.candidates);
 
   if (res.class === "equity") {
     const eligibility = checkEquityEligibility(i.policy.nonUsConfirmed);
@@ -110,6 +113,17 @@ export const privacyUnavailable = (detail: string): Block =>
 /** The asset list has not loaded (the market data service was unreachable at startup); the service is retrying. */
 export const pricingUnavailable = (): Block =>
   block("PRICING_UNAVAILABLE", "Pricing is unavailable right now: the market data service could not be reached at startup. Norr is retrying in the background. Try again in a minute.");
+
+/** A contract the NEAR Intents catalog does not route: it cannot be traded privately, so Norr does not trade it. */
+export const notRoutable = (ref: { chain: string; address: string }): Block =>
+  block("UNKNOWN_ASSET", `${ref.chain}:${ref.address} is not available on NEAR Intents yet, so it can't be traded privately. Use check_asset for its safety report.`);
+
+/** Several different tokens share a symbol: the agent must say which one, by chain and contract. */
+export const ambiguousAsset = (symbol: string, candidates: { chain: string; contractAddress: string | null; id: string }[]): Block =>
+  block(
+    "AMBIGUOUS_ASSET",
+    `Several different tokens are called ${symbol.toUpperCase()}: ${candidates.map((c) => `${c.chain}:${c.contractAddress ?? c.id}`).join(", ")}. Name the one you mean by chain and contract address (for example ${candidates[0]!.chain}:${candidates[0]!.contractAddress ?? "<contract>"}); Norr will not guess between look-alikes.`,
+  );
 
 /** Public beta: a self-serve vault holds more than its cap, so buys pause (sells still work). */
 export const vaultCapReached = (valueUsd: number, capUsd: number): Block =>

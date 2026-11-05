@@ -107,7 +107,7 @@ describe("minimums stated up front over the API", () => {
     const by = Object.fromEntries(all.equities.map((e: { ticker: string; minimumUsd: number }) => [e.ticker, e.minimumUsd]));
     expect(by).toMatchObject({ NVDA: 5.1, TSLA: 5.1 }); // SPY is in the demo catalog and is a "standard" ticker:
     expect(by.SPY).toBe(26);
-    expect(all.equityMinimumNote).toContain("outside US market hours");
+    expect(all.equityMinimumNote).toContain("minimums vary with available liquidity");
   });
 
   it("get_quote shows the stated minimum and carries the dust warning", async () => {

@@ -1,7 +1,7 @@
 import { BlockCode } from "@norr/shared";
 import { describe, expect, it } from "vitest";
-import { NVDA_ON, NVDA_X, RUG, USDC_FAKE, policy, registry, request, riskProvider, state } from "./fixtures";
-import { isBlock, noLiquidity, preTradeChecks, pricingUnavailable, privacyUnavailable, vaultCapReached, type PreTradeInput } from "./pipeline";
+import { NVDA_ON, NVDA_X, RUG, USDC_FAKE, USDC_NEAR, policy, registry, request, riskProvider, state } from "./fixtures";
+import { ambiguousAsset, isBlock, noLiquidity, preTradeChecks, pricingUnavailable, privacyUnavailable, vaultCapReached, type PreTradeInput } from "./pipeline";
 import { checkPriceSanity } from "./risk";
 
 const base = (over: Partial<PreTradeInput> = {}): PreTradeInput => ({
@@ -23,10 +23,13 @@ describe("preTradeChecks", () => {
     if (!isBlock(r)) expect(r.candidates.map((c) => c.id)).toEqual([NVDA_ON.assetId]);
   });
 
-  it("prefers the safe version when a look-alike symbol survives the risk gate", async () => {
+  it("a symbol shared by different tokens (a look-alike) is refused until the exact token is named; the exact one trades", async () => {
     const r = await preTradeChecks(base({ request: request({ asset: "USDC", amountUsd: 5 }), policy: policy({ allowMediumRisk: true }) }));
-    expect(isBlock(r)).toBe(false);
-    if (!isBlock(r)) expect(r.candidates.map((c) => c.id)).not.toContain(USDC_FAKE.assetId);
+    expect(r).toMatchObject({ code: "AMBIGUOUS_ASSET" });
+    expect((r as { message: string }).message).toContain(USDC_FAKE.assetId);
+    const exact = await preTradeChecks(base({ request: request({ asset: USDC_NEAR.assetId, amountUsd: 5 }), policy: policy({ allowMediumRisk: true }) }));
+    expect(isBlock(exact)).toBe(false);
+    if (!isBlock(exact)) expect(exact.candidates.map((c) => c.id)).toEqual([USDC_NEAR.assetId]);
   });
 
   describe("order: the vault's rules and scam risk come before the incident feed", () => {
@@ -104,6 +107,7 @@ const cases: [string, () => Promise<unknown>][] = [
   ["SHIELD_INCIDENT", () => preTradeChecks(base({ shield: null }))],
   ["PRICING_UNAVAILABLE", async () => pricingUnavailable()],
   ["VAULT_CAP", async () => vaultCapReached(120, 100)],
+  ["AMBIGUOUS_ASSET", async () => ambiguousAsset("kat", [{ chain: "near", contractAddress: "kat.token0.near", id: "a" }, { chain: "sol", contractAddress: "6UtY9iTZ", id: "b" }])],
 ];
 
 describe("every block code is reachable", () => {

@@ -27,10 +27,10 @@ async function connect(opts: { token?: string; fetch?: (u: string, i?: RequestIn
 }
 
 describe("tool surface", () => {
-  it("exposes exactly the nine Norr tools, each with a description", async () => {
+  it("exposes exactly the ten Norr tools, each with a description", async () => {
     const { mcp } = await connect();
     const { tools } = await mcp.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["check_asset", "get_activity", "get_market_data", "get_pnl", "get_policy", "get_portfolio", "get_quote", "list_assets", "trade"]);
+    expect(tools.map((t) => t.name).sort()).toEqual(["about_norr", "check_asset", "get_activity", "get_market_data", "get_pnl", "get_policy", "get_portfolio", "get_quote", "list_assets", "trade"]);
     for (const t of tools) expect(t.description!.length).toBeGreaterThan(40);
   });
 
@@ -49,10 +49,13 @@ describe("tool surface", () => {
     expect(byName.trade!.annotations?.readOnlyHint).toBe(false);
   });
 
-  it("trade requires side, asset and amountUsd; reason is optional", async () => {
-    const { mcp } = await connect();
+  it("trade requires side and amountUsd, and an asset either as asset or as chain + contract; reason is optional", async () => {
+    const { mcp, call } = await connect();
     const trade = (await mcp.listTools()).tools.find((t) => t.name === "trade")!;
-    expect((trade.inputSchema as { required: string[] }).required.sort()).toEqual(["amountUsd", "asset", "side"]);
+    expect((trade.inputSchema as { required: string[] }).required.sort()).toEqual(["amountUsd", "side"]);
+    expect(Object.keys((trade.inputSchema as { properties: object }).properties)).toEqual(expect.arrayContaining(["asset", "chain", "contract", "reason"]));
+    const none = await call("trade", { side: "buy", amountUsd: 5 });
+    expect(none).toMatchObject({ isError: true, text: "Name the asset: a symbol or ticker (asset), or chain and contract." });
   });
 });
 
@@ -168,5 +171,52 @@ describe("trade is authoritative, even when the agent skips every pre-check", ()
     const { mcp } = await connect();
     const trade = (await mcp.listTools()).tools.find((t) => t.name === "trade")!;
     expect(trade.description).toContain("ask Norr instead of guessing");
+  });
+});
+
+describe("what agents are told about Norr (from a new user's test on the Claude app, 2026-11-05)", () => {
+  it("instructions arrive on initialize: custody, approvals, privacy and what is stored, without claiming plaintext logging", async () => {
+    const { mcp } = await connect();
+    const ins = mcp.getInstructions() ?? "";
+    expect(ins).toMatch(/OutLayer custody wallet whose keys live in OutLayer's TEE/);
+    expect(ins).toMatch(/controller; Norr cannot change it/);
+    expect(ins).toMatch(/Approvals tab\); approvals expire after 24 hours/);
+    expect(ins).toMatch(/ledger encrypted at rest/);
+    expect(ins).toMatch(/sealed to the owner's key/);
+    expect(ins).toMatch(/Request bodies, balances, positions and rules are not logged/);
+    expect(ins).not.toMatch(/logs every request(?! in the clear: it does not)/);
+    expect(ins.length).toBeLessThan(2500); // short
+  });
+
+  it("about_norr answers from the running service", async () => {
+    const { call } = await connect();
+    const a = (await call("about_norr")).json();
+    expect(a.custody.provider).toMatch(/OutLayer/);
+    expect(a.custody.you).toMatch(/cannot withdraw, change rules, or choose where funds go/);
+    expect(a.custody.trust).toMatch(/not trustless/);
+    expect(a.approvals).toMatchObject({ mode: "none", required: false }); // the mock demo vault has no approval step
+    expect(a.storage.reasoning).toMatch(/only the owner can read it/);
+    expect(a.attestation.status).toMatch(/not running in a TEE/);
+    expect(a.attestation.verifyUrl).toBe("http://localhost:5173/#/verify");
+    expect(a.incidentFeed).toBeTruthy();
+  });
+
+  it("quotes say whether the swap would wait for approval; a pending trade says where, with the link and the expiry", async () => {
+    const m = createMockEnclave({ requireApproval: true, now: () => T0 });
+    m.deps.settle = { waitMs: 0, intervalMs: 1 };
+    const via = async (url: string, init?: RequestInit) => m.app.request(url.replace("http://enclave.test", ""), init);
+    const client = new EnclaveClient({ baseUrl: "http://enclave.test", token: m.agentToken, fetch: via });
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    await createNorrServer(client).connect(a);
+    const mcp = new Client({ name: "t", version: "1" });
+    await mcp.connect(b);
+    const call = async (name: string, args: Record<string, unknown>) => JSON.parse(((await mcp.callTool({ name, arguments: args })).content as { text: string }[])[0]!.text);
+    const q = await call("get_quote", { side: "buy", asset: "SOL", amountUsd: 5 });
+    expect(q.approval).toMatchObject({ required: true, mode: "owner", url: "http://localhost:5173/#/vault/demo/approvals", expiresHours: 24 });
+    expect(q.approval.note).toMatch(/Every swap in this vault waits for the owner's approval/);
+    const t = await call("trade", { side: "buy", asset: "SOL", amountUsd: 5 });
+    expect(t.status).toBe("pending_approval");
+    expect(t.approval).toEqual({ where: "Norr dashboard, the vault's Approvals tab", url: "http://localhost:5173/#/vault/demo/approvals", expiresAt: new Date(T0 + 24 * 3600_000).toISOString() });
+    expect(t.message).toMatch(/waiting for the vault owner's approval in the Norr dashboard.*expires at .*24 hours/);
   });
 });

@@ -27,7 +27,7 @@ export function equityMinimum(ticker: string): EquityMinimum {
 }
 
 export const MINIMUMS_NOTE =
-  `Observed minimum order sizes for tokenized stocks (measured ${MINIMUMS_OBSERVED_ON}); they can be higher outside US market hours or on weekends. ` +
+  `Observed minimum order sizes for tokenized stocks (measured ${MINIMUMS_OBSERVED_ON}); minimums vary with available liquidity. ` +
   "If a trade is refused for liquidity, Norr tells you the smallest size that quotes right now.";
 
 /** Sizes tried, smallest first, when a stock trade finds no liquidity. */
@@ -42,7 +42,7 @@ export function noLiquidityMessage(ticker: string, requestedUsd: number, smalles
   const stated = equityMinimum(ticker).usd;
   const head = `No liquidity for $${requestedUsd} of ${ticker} right now. Observed minimum for this ticker: about $${stated}.`;
   if (smallestUsd !== undefined) return `${head} The smallest size that quotes right now is about $${smallestUsd}; try that or more.`;
-  return `${head} No size up to $${maxUsd} quotes right now, so it may be outside US market hours or the market is thin. Try again later.`;
+  return `${head} No size up to $${maxUsd} quotes right now, because available liquidity is thin right now. Try again later or a larger size.`;
 }
 
 /** A warning when a sell would leave a remainder too small to sell later. Null when the remainder is zero or large enough. */

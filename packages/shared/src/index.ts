@@ -71,6 +71,7 @@ export const BlockCode = z.enum([
   "PRIVACY_UNAVAILABLE",
   "PRICING_UNAVAILABLE",
   "VAULT_CAP",
+  "AMBIGUOUS_ASSET",
 ]);
 export type BlockCode = z.infer<typeof BlockCode>;
 
@@ -93,7 +94,13 @@ export const Decision = z.discriminatedUnion("status", [
     /** For NO_LIQUIDITY on a stock: the smallest USD size that quotes right now, if one was found. */
     suggestedUsd: z.number().optional(),
   }),
-  z.object({ status: z.literal("pending_approval"), requestId: z.string(), message: z.string() }),
+  z.object({
+    status: z.literal("pending_approval"),
+    requestId: z.string(),
+    message: z.string(),
+    /** Where and until when the owner can approve it. */
+    approval: z.object({ where: z.string(), url: z.string().nullable(), expiresAt: z.string() }).optional(),
+  }),
   z.object({ status: z.enum(["failed", "refunded"]), message: z.string() }),
 ]);
 export type Decision = z.infer<typeof Decision>;

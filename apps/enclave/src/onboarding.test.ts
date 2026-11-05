@@ -366,3 +366,43 @@ describe("direct NEAR deposit when 1Click cannot quote", () => {
     expect((await rails.balances.holdings(vault.walletAccount))[usdc]).toBeUndefined();
   });
 });
+
+describe("default assets fit the default trade limit", () => {
+  it("a new vault's rules and custody policy leave out stocks whose minimum is above $10 (SPY), and list_assets flags them", async () => {
+    const { m, call } = boot();
+    const a = await activeVault(m, call, "alice.near", true);
+    const spy = m.deps.registry.entries("equity").find((e) => e.ticker === "SPY")!;
+    const nvda = m.deps.registry.entries("equity").find((e) => e.ticker === "NVDA")!;
+    expect(a.prep.policy.rules.allowed_tokens).toContain(nvda.id);
+    expect(a.prep.policy.rules.allowed_tokens).not.toContain(spy.id);
+    const rules = await (await call("/v1/policy", { token: a.agent })).json();
+    expect(rules.allowedEquities).toEqual(expect.arrayContaining(["NVDA", "TSLA", "QQQ"]));
+    expect(rules.allowedEquities).not.toContain("SPY");
+    const assets = await (await call("/v1/assets?class=equity", { token: a.agent })).json();
+    expect(assets.equities.find((e: { ticker: string }) => e.ticker === "SPY")).toMatchObject({ minimumUsd: 26, aboveYourTradeLimit: true, note: "Its minimum order (about $26) is above this vault's largest trade ($10)." });
+    expect(assets.equities.find((e: { ticker: string }) => e.ticker === "NVDA").aboveYourTradeLimit).toBeUndefined();
+    expect(assets.equityMinimumNote).toMatch(/minimums vary with available liquidity/);
+  });
+});
+
+describe("trading and checking by contract address", () => {
+  it("a routable contract trades like any asset; an unroutable one gets a safety report and is never traded", async () => {
+    const { m, call } = boot();
+    const a = await activeVault(m, call, "alice.near", true);
+    m.deps.vaultCapUsd = () => undefined;
+    // USDC on Base is in the mock catalog with its contract.
+    const byContract = await (await call("/v1/assets/check?asset=base:0x833589FCD6EDB6E08F4C7C32D4F71B54BDA02913", { token: a.agent })).json();
+    expect(byContract).toMatchObject({ found: true, byContract: true, versions: [{ chain: "base", contract: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }] });
+    const bad = "base:0x0000000000000000000000000000000000000bad";
+    const report = await (await call(`/v1/assets/check?asset=${bad}`, { token: a.agent })).json();
+    expect(report).toMatchObject({ found: false, routable: false, contract: { chain: "base", address: "0x0000000000000000000000000000000000000bad" } });
+    expect(report.message).toMatch(/is not available on NEAR Intents yet, so it can't be traded privately/);
+    expect(report.safety.risk).toBeTruthy();
+    expect((await (await call(`/v1/market?asset=${bad}`, { token: a.agent })).json()).routable).toBe(false);
+    const t = await (await call("/v1/trade", { token: a.agent, body: { side: "buy", asset: bad, amountUsd: 5 } })).json();
+    expect(t).toMatchObject({ status: "blocked", code: "UNKNOWN_ASSET" });
+    expect(t.message).toMatch(/can't be traded privately/);
+    // The owner's Check a token takes the same input.
+    expect((await (await call(`/owner/v1/vaults/${a.id}/assets/check?asset=${bad}`, { token: a.token })).json()).routable).toBe(false);
+  });
+});

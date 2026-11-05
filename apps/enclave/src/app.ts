@@ -4,7 +4,8 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { resolveBuildInfo, type BuildInfo } from "./build-info";
 import { vaultPnl } from "./vault-pnl";
-import { assetCheck } from "./asset-check";
+import { aboutNorr, approvalInfo } from "./about";
+import { assetCheck, contractReport } from "./asset-check";
 import { rateLimiter, type Attestor } from "./attestation";
 import type { SealKeyStore, SealingLedger } from "./seal";
 import { mountOwnerRoutes, type OwnerAuditEntry } from "./owner/routes";
@@ -106,6 +107,13 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
     await next();
   });
 
+  // How Norr works, from the running service: custody, approvals, privacy, storage, attestation, incident feed.
+  app.get("/v1/about", async (c) => {
+    const vault = deps.vaults.get(c.get("vaultId"))!;
+    const verifyUrl = deps.dashboardUrl ? `${deps.dashboardUrl.replace(/\/+$/, "")}/#/verify` : "https://app.norr.finance/#/verify";
+    return c.json(await aboutNorr(deps, vault, { attested: Boolean(attestor), commit: build0.commit, verifyUrl, selfServe: Boolean(onboarding) }));
+  });
+
   // For the MCP endpoint: is this bearer token valid right now? (Answers 401 through the middleware when it is not.)
   app.get("/v1/token", (c) => c.json({ ok: true }));
 
@@ -122,7 +130,12 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
       for (const e of deps.registry.entries("equity")) {
         byTicker.set(e.ticker, [...(byTicker.get(e.ticker) ?? []), { issuer: e.issuer, symbol: e.symbol, id: e.id }]);
       }
-      out.equities = [...byTicker].map(([ticker, issuers]) => ({ ticker, minimumUsd: equityMinimum(ticker).usd, issuers }));
+      // Each stock says whether its observed minimum fits this vault's largest trade, so the agent does not try ones that cannot.
+      const maxTrade = deps.vaults.get(c.get("vaultId"))?.policy.maxTradeUsd ?? Infinity;
+      out.equities = [...byTicker].map(([ticker, issuers]) => {
+        const minimumUsd = equityMinimum(ticker).usd;
+        return { ticker, minimumUsd, ...(minimumUsd > maxTrade ? { aboveYourTradeLimit: true, note: `Its minimum order (about $${minimumUsd}) is above this vault's largest trade ($${maxTrade}).` } : {}), issuers };
+      });
       out.equityNotice = EQUITY_DISCLAIMER;
       out.equityMinimumNote = MINIMUMS_NOTE;
     }
@@ -162,6 +175,8 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
       venue: plan.venue,
       ...(plan.candidate.class === "equity" ? { statedMinimumUsd: equityMinimum(plan.candidate.ticker).usd } : {}),
       ...(plan.warnings.length ? { warnings: plan.warnings } : {}),
+      // Whether this swap would wait for the owner, read from the custody provider's own policy.
+      approval: await approvalInfo(deps, vault),
       incidentFeed: feedInfo(),
     });
   });
@@ -220,18 +235,20 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
   app.get("/v1/market", async (c) => {
     const q = c.req.query("asset");
     if (!q) return c.json({ error: "asset is required" }, 400);
-    const res = deps.registry.resolve(q);
-    if (!res) return c.json({ found: false, message: `"${q}" is not a tradable asset.` });
+    const found = deps.registry.lookup(q);
+    if (found.kind === "not_routable") return c.json({ found: false, routable: false, ...(await contractReport(deps, found.ref)), incidentFeed: feedInfo() });
+    if (found.kind === "unknown") return c.json({ found: false, message: `"${q}" is not a tradable asset. Name it by chain and contract address (for example base:0x…) to look up a specific token.` });
+    const res = found.resolution;
     const versions = await Promise.all(
       res.candidates.map(async (e) => {
-        const base = { symbol: e.symbol, issuer: e.issuer, chain: e.chain, id: e.id, priceUsd: e.priceUsd };
+        const base = { symbol: e.symbol, issuer: e.issuer, chain: e.chain, id: e.id, contract: e.contractAddress, priceUsd: e.priceUsd };
         if (res.class === "equity") return { ...base, minimumUsd: equityMinimum(res.ticker).usd };
         const signals = await deps.marketSignals?.(e).catch(() => null);
         const risk = await deps.risk.assess(e).catch(() => null);
         return { ...base, liquidityUsd: signals?.liquidityUsd ?? null, marketCapUsd: signals?.marketCapUsd ?? null, ageDays: signals?.ageDays ?? null, routable: signals?.routable ?? null, risk: risk ? { level: risk.level, score: risk.score } : null, contract: risk?.contract ?? null };
       }),
     );
-    return c.json({ found: true, class: res.class, ticker: res.ticker, versions, incidentFeed: feedInfo(), source: res.class === "crypto" ? "Price: NEAR Intents token list. Liquidity, market cap and age: DexScreener (read-only). Contract checks: GoPlus Security (read-only). Both as scored by Scam Shield." : "Price: NEAR Intents token list." });
+    return c.json({ found: true, class: res.class, ticker: res.ticker, versions, ...(res.ambiguous ? { ambiguous: true, message: `Several different tokens are called ${res.ticker}; name the one you mean by chain and contract address.` } : {}), incidentFeed: feedInfo(), source: res.class === "crypto" ? "Price: NEAR Intents token list. Liquidity, market cap and age: DexScreener (read-only). Contract checks: GoPlus Security (read-only). Both as scored by Scam Shield." : "Price: NEAR Intents token list." });
   });
 
   app.get("/v1/activity", async (c) => {

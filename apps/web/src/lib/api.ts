@@ -81,7 +81,14 @@ export interface AssetCheck {
   message?: string;
   class?: "crypto" | "equity";
   ticker?: string;
-  versions?: { symbol: string; issuer: string | null; chain: string; shieldBlocked: string | null; risk: { score: number; level: "low" | "medium" | "high"; reasons: string[]; contract?: ContractSummary } | null }[];
+  /** Not in the NEAR Intents catalog: never traded; a safety report for information. */
+  routable?: false;
+  contract?: { chain: string; address: string };
+  safety?: { liquidityUsd: number | null; marketCapUsd: number | null; ageDays: number | null; risk: { level: "low" | "medium" | "high"; score: number; reasons: string[]; contract?: ContractSummary | null } | null };
+  /** Several different tokens share the symbol: trades need chain + contract. */
+  ambiguous?: boolean;
+  byContract?: boolean;
+  versions?: { symbol: string; issuer: string | null; chain: string; contract?: string | null; shieldBlocked: string | null; risk: { score: number; level: "low" | "medium" | "high"; reasons: string[]; contract?: ContractSummary } | null }[];
   eligible?: boolean;
   notice?: string;
   incidentFeed?: { status: "active" | "not_configured"; note?: string };

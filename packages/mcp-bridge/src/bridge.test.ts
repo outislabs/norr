@@ -39,7 +39,7 @@ describe("@norrfi/mcp bridge", () => {
   it("exposes exactly the hosted endpoint's tools and forwards calls with the agent's token", async () => {
     const { client, close } = await connect(mock.agentToken);
     try {
-      expect((await client.listTools()).tools.map((t) => t.name).sort()).toEqual(["check_asset", "get_activity", "get_market_data", "get_pnl", "get_policy", "get_portfolio", "get_quote", "list_assets", "trade"]);
+      expect((await client.listTools()).tools.map((t) => t.name).sort()).toEqual(["about_norr", "check_asset", "get_activity", "get_market_data", "get_pnl", "get_policy", "get_portfolio", "get_quote", "list_assets", "trade"]);
       expect(JSON.parse(text(await client.callTool({ name: "get_policy", arguments: {} }))).maxTradeUsd).toBe(50);
       const blocked = JSON.parse(text(await client.callTool({ name: "trade", arguments: { side: "buy", asset: "TSLA", amountUsd: 150 } })));
       expect(blocked).toMatchObject({ status: "blocked", code: "OVER_TRADE_LIMIT" });

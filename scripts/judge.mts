@@ -72,8 +72,8 @@ try {
   await agent.connect(transport);
   const tool = async (name: string, a: Record<string, unknown> = {}) => parse(await agent.callTool({ name, arguments: a }));
   const tools = (await agent.listTools()).tools.map((t) => t.name).sort();
-  const expected = ["check_asset", "get_activity", "get_market_data", "get_pnl", "get_policy", "get_portfolio", "get_quote", "list_assets", "trade"];
-  record("demo", "the MCP server exposes 9 tools; none can withdraw, change rules or set a destination", JSON.stringify(tools) === JSON.stringify(expected), tools.join(", "), "apps/mcp/src/tools.ts");
+  const expected = ["about_norr", "check_asset", "get_activity", "get_market_data", "get_pnl", "get_policy", "get_portfolio", "get_quote", "list_assets", "trade"];
+  record("demo", "the MCP server exposes 10 tools; none can withdraw, change rules or set a destination", JSON.stringify(tools) === JSON.stringify(expected), tools.join(", "), "apps/mcp/src/tools.ts");
 
   const policy = await tool("get_policy");
   record("demo", "get_policy returns the vault's rules", policy.maxTradeUsd === 50, `max trade $${policy.maxTradeUsd}, cooldown ${policy.cooldownSec}s`, "apps/mcp/src/tools.ts, packages/core/src/presets.ts");

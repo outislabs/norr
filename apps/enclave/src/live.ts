@@ -119,6 +119,7 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env, opts: 
     pricingReady: () => pricing.ready(),
     now,
     sleep,
+    dashboardUrl: env.NORR_DASHBOARD_URL || parseOrigins(env.NORR_ALLOWED_ORIGINS)[0],
   };
   const beta = BetaControl.fromEnv(env, dir);
   deps.vaultCapUsd = (id) => (tenants.ids().includes(id) ? beta.get().depositCapUsd : undefined);

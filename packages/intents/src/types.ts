@@ -108,6 +108,9 @@ export interface Custody {
    * signature, which the owner's browser sends to the provider directly; Norr never holds it.
    */
   pendingApprovals?(): Promise<CustodyApproval[]>;
+  /** Whether swaps wait for the owner, from the custody provider's own policy: "owner" (approval needed), "autonomous"
+   *  (confidential operations exempt), or "none" (no approval configured). */
+  approvalMode?(): Promise<"owner" | "autonomous" | "none">;
 }
 
 /** One operation waiting for the owner's approval at the custody provider. */

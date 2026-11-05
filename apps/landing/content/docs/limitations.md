@@ -24,6 +24,7 @@
 Planned, not built:
 
 - **Multi-vault and client management.** Several vaults per owner (one per agent or strategy), and an operator view for people who run vaults for clients, with each client's data still sealed to that client.
+- **Public route for long-tail tokens (optional).** Tokens NEAR Intents does not route could be offered through a clearly labelled public (not private) route, for owners who opt in. Today Norr refuses them with a safety report.
 - **TypeScript SDK.** A typed client for the [agent API](/docs/api/), generated from the OpenAPI spec, for agents that do not use MCP.
 - **Verified P&L and Follow.** P&L that others can check, each trade backed by evidence, so an owner can publish a track record without revealing positions in real time, and others can follow it.
 

@@ -114,6 +114,10 @@ export function createMockRails(entries: RegistryEntry[], vaultAccount: string, 
       return view(id, rec);
     },
 
+    async approvalMode() {
+      return o.requireApproval ? ("owner" as const) : ("none" as const);
+    },
+
     async status(requestId: string): Promise<SwapStatus> {
       const r = records.get(requestId);
       return r ? view(requestId, r) : { state: "failed", requestId, detail: "unknown request" };

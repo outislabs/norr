@@ -71,6 +71,17 @@ export class OutLayerCustody implements Custody {
     });
   }
 
+  /** GET /wallet/v1/policy, read with the wallet's key: is there an approval rule, and are confidential ops exempt? */
+  async approvalMode(): Promise<"owner" | "autonomous" | "none"> {
+    const r = obj(await requestJson(this.f, `${this.baseUrl}/wallet/v1/policy`, { headers: this.headers }, "OutLayer policy"));
+    if (r.policy === "none") return "none";
+    const a = obj(r.approval);
+    const required = typeof a.threshold === "number" ? a.threshold : Number(obj(a.threshold).required ?? 0);
+    if (!(required > 0) || !Array.isArray(a.approvers) || a.approvers.length === 0) return "none";
+    const excluded = Array.isArray(a.excluded_types) ? a.excluded_types : [];
+    return excluded.includes("confidential") ? "autonomous" : "owner";
+  }
+
   async status(requestId: string): Promise<SwapStatus> {
     const res = obj(
       await requestJson(this.f, `${this.baseUrl}/wallet/v1/requests/${encodeURIComponent(requestId)}`, { headers: this.headers }, "OutLayer request"),

@@ -34,7 +34,24 @@ export interface Resolution {
   ticker: string;
   /** Every routable version of what the agent asked for (several issuers or chains). */
   candidates: RegistryEntry[];
+  /** Several different tokens share this symbol (different CoinGecko ids): never pick one by price. */
+  ambiguous?: true;
+  /** Resolved from a chain and contract address: exactly one token. */
+  byContract?: true;
 }
+
+/** A token named by chain and contract address ("base:0x8335…", "sol:EPjF…", "near:wrap.near"). */
+export interface ContractRef {
+  chain: string;
+  address: string;
+}
+
+/** What a query names: a known asset (possibly ambiguous), a contract the catalog does not route, or nothing. */
+export type Lookup = { kind: "found"; resolution: Resolution } | { kind: "not_routable"; ref: ContractRef } | { kind: "unknown" };
+
+const EVM_ADDRESS = /^0x[0-9a-fA-F]{40}$/;
+/** Same contract? EVM addresses compare case-insensitively; every other chain's addresses are case-sensitive. */
+export const sameAddress = (a: string, b: string): boolean => (EVM_ADDRESS.test(a) && EVM_ADDRESS.test(b) ? a.toLowerCase() === b.toLowerCase() : a === b);
 
 export interface RegistryInput {
   crypto: OneClickToken[];
@@ -100,6 +117,31 @@ export class Registry {
    * Resolve what an agent typed: an asset id, an exact symbol ("NVDAon", "SOL"), or an
    * equity ticker ("NVDA", which maps to every issuer's version). Unknown returns null.
    */
+  /** The chains the catalog covers (1Click's blockchain names). */
+  chains(): Set<string> {
+    return new Set(this.entries().map((e) => e.chain));
+  }
+
+  /** "chain:address" with a chain the catalog knows, else null. Asset ids ("nep141:…") are not contract refs. */
+  parseContractRef(query: string): ContractRef | null {
+    const m = /^([a-z0-9-]+):(\S{2,128})$/.exec(query.trim());
+    if (!m || this.byIdMap.has(query.trim()) || !this.chains().has(m[1]!)) return null;
+    return { chain: m[1]!, address: m[2]! };
+  }
+
+  /** Resolve a query, telling apart an unroutable contract and an ambiguous symbol. */
+  lookup(query: string): Lookup {
+    const ref = this.parseContractRef(query);
+    if (ref) {
+      const hit = this.entries().filter((e) => e.chain === ref.chain && e.contractAddress && sameAddress(e.contractAddress, ref.address));
+      if (hit.length === 0) return { kind: "not_routable", ref };
+      const e = hit[0]!;
+      return { kind: "found", resolution: { class: e.class, ticker: e.ticker, candidates: hit.slice(0, 1), byContract: true } };
+    }
+    const r = this.resolve(query);
+    return r ? { kind: "found", resolution: r } : { kind: "unknown" };
+  }
+
   resolve(query: string): Resolution | null {
     const q = query.trim();
     if (!q) return null;
@@ -113,7 +155,11 @@ export class Registry {
       const crypto = bySymbol.filter((e) => e.class === "crypto");
       const picked = crypto.length > 0 ? crypto : bySymbol;
       const first = picked[0]!;
-      return { class: first.class, ticker: first.ticker, candidates: picked };
+      // Look-alikes: crypto versions of one symbol must be the same token (one CoinGecko id). Otherwise a symbol alone
+      // cannot say which token is meant, and picking the best quote could buy the wrong one.
+      const ids = new Set(picked.map((e) => e.coingeckoId ?? `unknown:${e.id}`));
+      const ambiguous = first.class === "crypto" && picked.length > 1 && ids.size > 1;
+      return { class: first.class, ticker: first.ticker, candidates: picked, ...(ambiguous ? { ambiguous: true as const } : {}) };
     }
 
     const byTicker = this.entries("equity").filter((e) => e.ticker === up);
