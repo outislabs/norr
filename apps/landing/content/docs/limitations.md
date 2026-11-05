@@ -8,7 +8,7 @@
 - **Confidential swaps have no independent audit trail.** They are checked from balances and the provider's own report, and labelled `custody-reported`.
 - **Funding and withdrawals are public**, and the custody provider and NEAR Intents operator see confidential trades. A funding transfer and the next hop can be correlated by timing and amount.
 - **Public beta limits.** Up to $100 per vault and one vault per NEAR account. Creating a vault costs about 0.02 to 0.04 NEAR of on-chain storage for its custody policy (refundable). The custody provider's free tier allows 100 operations per wallet per day.
-- **Self-serve vaults are new.** Built and tested in mock mode; the first live self-serve vault has not been created yet.
+- **Self-serve vaults are new.** The first live one was created on 2026-11-05; funding and trading in a self-serve vault are not yet run live.
 - **The Claude app connector (OAuth)** is tested against Norr's own OAuth client, not yet from the Claude app itself.
 - **Funding from other chains is quoted, not yet proven.** USDC on NEAR is proven on mainnet; the other chains were quoted live but not run with real funds.
 - **Owning a vault needs a NEAR account.** EVM and Solana users can fund a vault but not sign in or approve swaps.
