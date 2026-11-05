@@ -3,6 +3,7 @@ import { buildCustodyPolicy, custodyPolicyProblems, describeCustodyPolicy, prese
 import type { Custody, CustodyProvisioner, PolicyStoreCall } from "@norr/intents";
 import type { Policy } from "@norr/shared";
 import type { BetaControl } from "./beta";
+import { upstreamReason } from "./errors";
 import { newVault, type Vault, type VaultStore } from "./state";
 import type { TenantRecord, TenantStore } from "./tenants";
 
@@ -59,7 +60,16 @@ export class OnboardingError extends Error {
   }
 }
 
+/** A vault name: 1 to 40 visible characters, trimmed; no control characters. Null when it does not qualify. */
+export function cleanVaultName(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const n = raw.replace(/\s+/g, " ").trim();
+  if (n.length < 1 || n.length > 40 || /[\u0000-\u001f\u007f<>]/.test(n)) return null;
+  return n;
+}
+
 export interface CreateInput {
+  name?: string;
   acceptTerms: string;
   nonUsConfirmed?: boolean;
 }
@@ -90,15 +100,18 @@ export class Onboarding {
     const all = this.d.tenants.list();
     if (all.filter((r) => r.owner === owner).length >= beta.maxVaultsPerOwner) throw new OnboardingError(409, `The beta allows ${beta.maxVaultsPerOwner} vault per account.`);
     if (all.length >= beta.maxVaults) throw new OnboardingError(403, "The beta is full for now. Try again later.");
+    const name = input.name === undefined ? null : cleanVaultName(input.name);
+    if (input.name !== undefined && !name) throw new OnboardingError(400, "A vault name is 1 to 40 characters, without < or >.");
     let wallet;
     try {
       wallet = await this.d.provisioner.register();
-    } catch {
-      throw new OnboardingError(502, "The custody provider did not create a wallet. Try again in a minute.");
+    } catch (e) {
+      throw new OnboardingError(502, `No vault was created: the custody provider did not register a wallet. ${upstreamReason(e, "OutLayer register")}`);
     }
     const now = new Date(this.d.now()).toISOString();
     const rec: TenantRecord = {
       id: `v_${randomBytes(10).toString("hex")}`,
+      ...(name ? { name } : {}),
       owner,
       walletId: wallet.walletId,
       walletAccount: wallet.walletAccount,
@@ -130,8 +143,8 @@ export class Onboarding {
     let call: PolicyStoreCall;
     try {
       call = await this.d.provisioner.preparePolicyStore({ walletId: rec.walletId, apiKey: key }, policy, rec.owner);
-    } catch {
-      throw new OnboardingError(502, "The custody provider did not prepare the policy. Try again in a minute.");
+    } catch (e) {
+      throw new OnboardingError(502, `The custody provider did not prepare the policy. ${upstreamReason(e, "OutLayer")}`);
     }
     this.d.tenants.put({ ...rec, custody: { policy, walletPubkey: call.args.wallet_pubkey, autonomous: o.autonomous, maxTradeUsd: BETA_RULES.maxTradeUsd, dailyCapUsd: BETA_RULES.dailySpendCapUsd, preparedAt: new Date(this.d.now()).toISOString() } });
     return { policy, summary: describeCustodyPolicy(policy, BETA_RULES.maxTradeUsd, BETA_RULES.dailySpendCapUsd), call, controller: rec.owner };
@@ -147,8 +160,8 @@ export class Onboarding {
     let chain;
     try {
       chain = await this.d.provisioner.onChainPolicy(rec.custody.walletPubkey);
-    } catch {
-      throw new OnboardingError(503, "Could not read the chain right now. Try again in a moment.");
+    } catch (e) {
+      throw new OnboardingError(503, `Could not read the policy contract on chain. ${upstreamReason(e, "NEAR RPC")}`);
     }
     if (!chain) return { status: "setup", problems: ["The policy is not on chain yet. Sign the transaction in your wallet, then check again."] };
     if (chain.owner !== rec.owner) return { status: "setup", problems: [`The wallet's policy is controlled by ${chain.owner}, not by you. This vault cannot be used; create a new one.`] };
@@ -156,8 +169,8 @@ export class Onboarding {
     let stored;
     try {
       stored = await this.d.provisioner.readPolicy(key);
-    } catch {
-      throw new OnboardingError(503, "Could not read the policy from the custody provider right now. Try again in a moment.");
+    } catch (e) {
+      throw new OnboardingError(503, `Could not read the stored policy from the custody provider. ${upstreamReason(e, "OutLayer policy")}`);
     }
     const problems = custodyPolicyProblems(rec.custody.policy, stored ? { ...stored, frozen: chain.frozen || stored.frozen } : null);
     if (problems.length > 0) return { status: "setup", problems };
@@ -165,6 +178,12 @@ export class Onboarding {
     this.d.tenants.put(active);
     this.d.vaults.add(this.vaultOf(active, key));
     return { status: "active" };
+  }
+
+  /** Rename a vault still in setup (an active vault is renamed in the vault store). */
+  renameSetup(owner: string, id: string, name: string): void {
+    const rec = this.owned(owner, id);
+    this.d.tenants.put({ ...rec, name });
   }
 
   /** At startup: put every active self-serve vault back into service (its saved state wins over the defaults). */
@@ -184,6 +203,7 @@ export class Onboarding {
     return newVault(
       {
         id: rec.id,
+        ...(rec.name ? { name: rec.name } : {}),
         owner: rec.owner,
         policy: betaRules(rec.id, rec.nonUsConfirmed),
         state: { realizedLossTodayUsd: 0, spentTodayUsd: 0, lastTradeAtMs: null, portfolioValueUsd: 0, equityValueUsd: 0 },
@@ -198,6 +218,7 @@ export class Onboarding {
   view(r: TenantRecord) {
     return {
       id: r.id,
+      name: r.name ?? null,
       status: r.status,
       walletAccount: r.walletAccount,
       createdAt: r.createdAt,

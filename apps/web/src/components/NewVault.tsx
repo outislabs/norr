@@ -9,6 +9,7 @@ import { setupHref } from "../lib/route";
 export function NewVault({ api, account, beta, onCreated, navigate = (h) => (window.location.hash = h) }: { api: Api; account: string; beta: BetaInfo; onCreated?: () => void; navigate?: (hash: string) => void }) {
   const [terms, setTerms] = useState(false);
   const [nonUs, setNonUs] = useState(false);
+  const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [invited, setInvited] = useState(false);
@@ -30,7 +31,7 @@ export function NewVault({ api, account, beta, onCreated, navigate = (h) => (win
     setBusy(true);
     setError(null);
     try {
-      const v = await api.createVault({ acceptTerms: beta.termsVersion ?? "", nonUsConfirmed: nonUs });
+      const v = await api.createVault({ ...(name.trim() ? { name: name.trim() } : {}), acceptTerms: beta.termsVersion ?? "", nonUsConfirmed: nonUs });
       onCreated?.();
       navigate(setupHref(v.id));
     } catch (e) {
@@ -63,6 +64,10 @@ export function NewVault({ api, account, beta, onCreated, navigate = (h) => (win
           </li>
         ))}
       </ol>
+      <div>
+        <label className="label" htmlFor="vault-name">Name it (optional; you can rename it later)</label>
+        <input id="vault-name" className="field max-w-sm" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} placeholder="My agent's vault" autoComplete="off" />
+      </div>
       <div className="flex flex-col gap-3">
         <p className="eyebrow">Public beta</p>
         <ul className="flex flex-col gap-1 text-sm text-mute">

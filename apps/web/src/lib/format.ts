@@ -13,3 +13,6 @@ export function ago(iso: string, now = Date.now()): string {
 export const shortId = (s: string, head = 8, tail = 4): string => (s.length > head + tail + 1 ? `${s.slice(0, head)}…${s.slice(-tail)}` : s);
 
 export const amount = (n: number | null, max = 6): string => (n === null ? "?" : n.toLocaleString("en-US", { maximumFractionDigits: max }));
+
+/** What to call a vault on screen: the owner's name, else its id. */
+export const vaultLabel = (v: { id: string; name?: string | null }): string => v.name?.trim() || v.id;

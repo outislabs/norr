@@ -1,6 +1,6 @@
 import { NewVault } from "../components/NewVault";
 import { isSetup, type Api, type BetaInfo } from "../lib/api";
-import { usd } from "../lib/format";
+import { usd, vaultLabel } from "../lib/format";
 import { setupHref, vaultHref } from "../lib/route";
 import { useAsync } from "../lib/useAsync";
 
@@ -30,7 +30,7 @@ export function VaultsPage({ api, account, version, onChanged }: { api: Api; acc
             <li key={v.id} className="border-b border-line">
               <a href={setupHref(v.id)} className="-mx-3 block rounded-xl px-3 py-5 hover:bg-raised">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="font-display text-2xl">New vault</span>
+                  <span className="font-display text-2xl">{v.name || "New vault"}</span>
                   <span className="text-mute">Setup not finished</span>
                 </div>
                 <p className="mt-1 text-sm text-mute">{v.custody.prepared ? "Sign its custody policy with your wallet, then activate it." : "Review its custody policy and sign it with your wallet."}</p>
@@ -40,7 +40,7 @@ export function VaultsPage({ api, account, version, onChanged }: { api: Api; acc
             <li key={v.id} className="border-b border-line">
               <a href={vaultHref(v.id)} className="-mx-3 block rounded-xl px-3 py-5 hover:bg-raised">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="font-display text-2xl">{v.id}</span>
+                  <span className="font-display text-2xl">{vaultLabel(v)}</span>
                   <span className={v.paused ? "text-alert" : "text-ok"}>{v.paused ? "Paused" : "Active"}</span>
                 </div>
                 <p className="mt-1 text-sm text-mute">

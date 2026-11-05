@@ -1,3 +1,4 @@
+import { VaultTitle } from "../components/VaultTitle";
 import { useState } from "react";
 import type { Policy } from "@norr/shared";
 import { ActivityList } from "../components/ActivityList";
@@ -62,7 +63,7 @@ export function VaultPage({ api, account, id, tab, mcpUrl, apiUrl, onChanged }: 
   return (
     <section>
       <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h1 className="font-display text-3xl">{v.id}</h1>
+        <VaultTitle api={api} vault={v} onRenamed={() => (vault.reload(), onChanged())} />
         <div className="flex items-center gap-3">
           <span className={v.paused ? "text-alert" : "text-ok"}>{v.paused ? "Paused" : "Active"}</span>
           <button

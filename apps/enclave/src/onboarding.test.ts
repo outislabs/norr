@@ -11,6 +11,8 @@ import { DataCipher } from "./seal";
 import { FileTenantStore } from "./tenants";
 import { AgentTokens, FileTokenPersistence } from "./tokens";
 import { TERMS_VERSION } from "./beta";
+import { upstreamReason } from "./errors";
+import { IntentsApiError } from "@norr/intents";
 
 type Mock = ReturnType<typeof createMockEnclave>;
 
@@ -268,5 +270,54 @@ describe("persistence of self-serve vaults", () => {
     expect(again.restore()).toBe(1);
     expect(vaults.list().map((v) => [v.id, v.owner])).toEqual([[a.id, "alice.near"]]);
     expect(again.restore()).toBe(0);
+  });
+});
+
+describe("funding errors name the real cause (seen live 2026-11-05)", () => {
+  it("1Click refusing the route, a failed balance read, and a bad refund address each say what happened", async () => {
+    const { m, call } = boot();
+    const a = await activeVault(m, call, "alice.near", true);
+    m.deps.vaultCapUsd = () => undefined;
+    const funder = m.deps.funder!;
+    const fund = async () => (await call(`/owner/v1/vaults/${a.id}/funding`, { token: a.token, body: { amountUsd: 5, refundTo: "legalalienx.near" } })).json();
+
+    funder.requestDeposit = async () => { throw new IntentsApiError(400, "1Click deposit quote: Quoting for this pair is not available"); };
+    expect((await fund()).error).toMatch(/1Click is not quoting deposits from USDC on NEAR into the vault right now \(it answered "Quoting for this pair is not available"\)\. This is on 1Click's side, not your vault or refund address/);
+
+    funder.requestDeposit = async () => { throw new IntentsApiError(400, "1Click deposit quote: refundTo is not valid"); };
+    expect((await fund()).error).toBe('1Click did not accept "legalalienx.near" as a NEAR refund address. Check it and try again.');
+
+    funder.requestDeposit = async () => { throw new IntentsApiError(503, "1Click deposit quote: upstream timeout"); };
+    expect((await fund()).error).toBe('No deposit address: 1Click deposit quote failed on its side (HTTP 503: "upstream timeout"). Try again shortly.');
+
+    const custody = m.vaults.get(a.id)!.custody;
+    custody.confidentialHoldings = async () => { throw new IntentsApiError(401, "OutLayer confidential balance: invalid api key"); };
+    expect((await fund()).error).toMatch(/^No address was requested: the vault's confidential balance could not be read first\. OutLayer confidential balance refused it \(HTTP 401\): "invalid api key"\.$/);
+  });
+
+  it("upstreamReason: unreachable, rate-limited, policy, server error, refusal", () => {
+    expect(upstreamReason(new IntentsApiError(0, "NEAR RPC: fetch failed"), "x")).toBe("NEAR RPC: could not be reached (fetch failed). Try again shortly.");
+    expect(upstreamReason(new IntentsApiError(429, "1Click: Too Many Requests"), "x")).toMatch(/^1Click is limiting requests/);
+    expect(upstreamReason(new IntentsApiError(403, "OutLayer: Address 'x.near' is not in whitelist"), "x")).toBe(`The vault's custody policy refused this (the custody provider answered "Address 'x.near' is not in whitelist").`);
+    expect(upstreamReason(new Error("boom"), "GoPlus")).toBe('GoPlus refused it: "boom".');
+  });
+});
+
+describe("vault names", () => {
+  it("named at creation, renamed later (in setup or active), shown in the list and on the consent screen; bad names refused", async () => {
+    const { m, call } = boot();
+    const s = await signIn(m, call, "alice.near");
+    expect((await call("/owner/v1/vaults", { token: s.token, body: { acceptTerms: TERMS_VERSION, name: "<script>" } })).status).toBe(400);
+    expect(m.provisioner.registrations).toBe(0); // refused before any wallet is made
+    const v = await (await call("/owner/v1/vaults", { token: s.token, body: { acceptTerms: TERMS_VERSION, name: "  Claude's   NVDA fund " } })).json();
+    expect(v.name).toBe("Claude's NVDA fund");
+    expect(await (await call(`/owner/v1/vaults/${v.id}/name`, { token: s.token, method: "PUT", body: { name: "Agent fund" } })).json()).toEqual({ id: v.id, name: "Agent fund" });
+    const prep = await (await call(`/owner/v1/vaults/${v.id}/custody-policy`, { token: s.token, body: {} })).json();
+    await call("/mock-outlayer/chain/store_wallet_policy", { token: s.token, body: { args: prep.call.args } });
+    await call(`/owner/v1/vaults/${v.id}/activate`, { token: s.token, body: {} });
+    expect((await (await call(`/owner/v1/vaults/${v.id}`, { token: s.token })).json()).name).toBe("Agent fund");
+    await call(`/owner/v1/vaults/${v.id}/name`, { token: s.token, method: "PUT", body: { name: "Main" } });
+    expect((await (await call("/owner/v1/vaults", { token: s.token })).json()).vaults[0]).toMatchObject({ id: v.id, name: "Main", status: "active" });
+    expect((await call(`/owner/v1/vaults/${v.id}/name`, { token: s.token, method: "PUT", body: { name: "x".repeat(41) } })).status).toBe(400);
   });
 });

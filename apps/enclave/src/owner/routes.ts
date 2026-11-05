@@ -14,8 +14,9 @@ import type { OwnerAuth } from "./auth";
 import type { ValueHistory } from "../history";
 import { vaultPnl } from "../vault-pnl";
 import { assetCheck } from "../asset-check";
+import { upstreamReason } from "../errors";
 import { RateLimiter, type BetaControl } from "../beta";
-import { OnboardingError, type Onboarding } from "../onboarding";
+import { cleanVaultName, OnboardingError, type Onboarding } from "../onboarding";
 import type { OAuthServer } from "../oauth";
 
 /** What an owner did through the dashboard, newest last. Kept in memory for now. */
@@ -84,7 +85,7 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
   const onboarding = ctx.onboarding;
   /** An onboarding failure as the plain answer the dashboard shows. */
   const fail = (c: { json: (b: unknown, s: number) => Response }, e: unknown) =>
-    e instanceof OnboardingError ? c.json({ error: e.message }, e.status) : c.json({ error: "Something went wrong. Try again in a moment." }, 500);
+    e instanceof OnboardingError ? c.json({ error: e.message }, e.status) : c.json({ error: `Unexpected failure: ${e instanceof Error ? e.message : String(e)}` }, 500);
 
   // With allowed origins configured, only those dashboards can sign in, and the challenge is bound to the one asking.
   const origins = ctx.allowedOrigins ?? [];
@@ -126,6 +127,7 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
   };
   const summary = (v: NonNullable<ReturnType<typeof mine>>) => ({
     id: v.id,
+    name: v.name ?? null,
     status: "active" as const,
     walletAccount: v.walletAccount,
     policy: v.policy,
@@ -156,7 +158,7 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
     const r = ctx.oauth?.request(c.req.param("rid"));
     if (!r) return c.json({ error: "This sign-in request has expired or was already used. Start again from your app." }, 404);
     const owner = c.get("owner") as string;
-    return c.json({ ...r, vaults: deps.vaults.list().filter((v) => v.owner === owner).map((v) => ({ id: v.id, paused: v.policy.paused })) });
+    return c.json({ ...r, vaults: deps.vaults.list().filter((v) => v.owner === owner).map((v) => ({ id: v.id, name: v.name ?? null, paused: v.policy.paused })) });
   });
 
   app.post("/owner/v1/oauth/requests/:rid/approve", async (c) => {
@@ -181,8 +183,8 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
   app.post("/owner/v1/vaults", async (c) => {
     const owner = c.get("owner") as string;
     if (!onboarding) return c.json({ error: "Creating vaults is not available on this service." }, 404);
-    const body = z.object({ acceptTerms: z.string().max(40), nonUsConfirmed: z.boolean().optional() }).safeParse(await c.req.json().catch(() => null));
-    if (!body.success) return c.json({ error: "Accept the terms and risk disclosure first." }, 400);
+    const body = z.object({ name: z.string().max(200).optional(), acceptTerms: z.string().max(40), nonUsConfirmed: z.boolean().optional() }).safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "Accept the terms and risk disclosure first (acceptTerms is missing)." }, 400);
     if (!limiter.allow(`create:${owner}`, 5, 3_600_000) || !limiter.allow("create:all", 20, 60_000)) return c.json({ error: "Too many new vaults right now. Try again later." }, 429);
     try {
       const rec = await onboarding.create(owner, body.data);
@@ -191,6 +193,21 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
     } catch (e) {
       return fail(c, e);
     }
+  });
+
+  // Rename: any vault the owner has, active or still in setup.
+  app.put("/owner/v1/vaults/:id/name", async (c) => {
+    const owner = c.get("owner") as string;
+    const id = c.req.param("id");
+    const v = mine(owner, id);
+    const setup = onboarding?.mine(owner).find((r) => r.id === id);
+    if (!v && !setup) return c.json({ error: "not found" }, 404); // before validating: no hint that someone else's vault exists
+    const name = cleanVaultName(((await c.req.json().catch(() => null)) as { name?: unknown } | null)?.name);
+    if (!name) return c.json({ error: "A vault name is 1 to 40 characters, without < or >." }, 400);
+    if (v) deps.vaults.setName(v.id, name);
+    if (setup) onboarding!.renameSetup(owner, id, name);
+    note(owner, "renamed a vault", id);
+    return c.json({ id, name });
   });
 
   app.get("/owner/v1/vaults/:id/setup", (c) => {
@@ -280,48 +297,56 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
     const cap = deps.vaultCapUsd?.(v.id);
     if (cap !== undefined) {
       const held = (await readPortfolio(deps, v))?.totalUsd;
-      if (held === undefined) return c.json({ error: "Could not read the vault's value, so no address is offered (the beta has a deposit limit). Try again in a moment." }, 503);
+      if (held === undefined) return c.json({ error: "Could not read the vault's balances from the custody provider, so no address is offered (the beta's $" + cap + " limit needs them). Try again shortly." }, 503);
       if (held + usd > cap) return c.json({ error: `The beta allows up to $${cap} per vault. This vault holds about $${held.toFixed(2)}, so you can add up to $${Math.max(0, Math.floor(cap - held))}.` }, 400);
     }
+    // Step 1: the vault's confidential balance now, to tell later when the deposit has arrived.
+    let baseline: string;
     try {
-      const baseline = (await v.custody.confidentialHoldings())[cash().id] ?? "0";
-      const usdcOut = usdToUnits(usd, CASH_USD, cash().decimals);
-      const amount = sameAsset ? usdcOut : unitsForUsd(usd, src.priceUsd, src.decimals);
-      // Norr's own 1Click quote is the source (nothing depends on the custody policy); the custody provider is the fallback
-      // for USDC on NEAR. Either way the recipient is the vault itself, set here.
-      const source = deps.funder ? "1click" : "custody";
-      const req = deps.funder
+      baseline = (await v.custody.confidentialHoldings())[cash().id] ?? "0";
+    } catch (e) {
+      return c.json({ error: `No address was requested: the vault's confidential balance could not be read first. ${upstreamReason(e, "Custody provider")}` }, 503);
+    }
+    const usdcOut = usdToUnits(usd, CASH_USD, cash().decimals);
+    const amount = sameAsset ? usdcOut : unitsForUsd(usd, src.priceUsd, src.decimals);
+    // Step 2: the deposit address. Norr's own 1Click quote is the source (nothing depends on the custody policy); the
+    // custody provider is the fallback for USDC on NEAR. Either way the recipient is the vault itself, set here.
+    const source = deps.funder ? "1click" : "custody";
+    let req: { intentId: string; depositAddress: string; amount: string; amountFormatted?: string; minAmountOut: string };
+    try {
+      req = deps.funder
         ? await deps.funder
             .requestDeposit({ token: cash().id, ...(sameAsset ? {} : { originAsset: src.assetId, expectedOut: usdcOut }), amount, recipient: v.walletAccount, refundTo })
             .then((o) => ({ intentId: o.depositAddress, depositAddress: o.depositAddress, amount: o.amountIn, amountFormatted: o.amountInFormatted, minAmountOut: o.minAmountOut }))
         : { ...(await v.custody.requestConfidentialDeposit(cash().id, amount)), amountFormatted: undefined };
-      if (!SAFE_ADDRESS.test(req.depositAddress)) return c.json({ error: "The address returned does not look valid, so it is not shown." }, 502);
-      const id = `fund-${now.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-      const expiresAt = now + FUNDING_WINDOW_MS;
-      funding.add({ id, vaultId: v.id, token: cash().id, amount: req.amount, minAmount: req.minAmountOut, address: req.depositAddress, intentId: req.intentId, source, baseline, requestedAt: now, expiresAt });
-      note(owner, `requested a deposit address for $${usd} from ${src.symbol} on ${src.chainName}`, v.id);
-      const sendAmount = req.amountFormatted ?? String(unitsToNumber(req.amount, src.decimals));
-      return c.json({
-        id,
-        address: req.depositAddress,
-        amountUsd: usd,
-        amountUsdc: usd,
-        /** The least that counts as arrived, in USDC, from the quote. */
-        minArrivingUsdc: unitsToNumber(req.minAmountOut, cash().decimals),
-        send: { amount: sendAmount, units: req.amount, symbol: src.symbol, chain: src.chain, chainName: src.chainName, family: src.family, ...(src.evmChainId ? { evmChainId: src.evmChainId } : {}), contract: src.contract, decimals: src.decimals },
-        asset: { symbol: src.symbol, chain: src.chainName, contract: src.contract ?? cash().id.replace(/^nep141:/, "") },
-        refundTo,
-        expiresAt: new Date(expiresAt).toISOString(),
-      });
     } catch (e) {
-      // The custody provider gates this request by transaction type ("call"). Say so, rather than a vague failure.
-      if (e instanceof Error && /not allowed by policy/i.test(e.message)) {
-        return c.json({ error: "Your custody policy does not allow deposit-address requests (transaction type \"call\"). Allow it in your custody dashboard while you fund this vault, then remove it again." }, 409);
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/not allowed by policy/i.test(msg)) return c.json({ error: "Your custody policy does not allow deposit-address requests (transaction type \"call\"). Allow it in your custody dashboard while you fund this vault, then remove it again." }, 409);
+      if (/refundTo is not valid/i.test(msg)) return c.json({ error: `1Click did not accept "${refundTo}" as a ${src.chainName} refund address. Check it and try again.` }, 400);
+      if (/(lose more than|below the listed price|no USD values)/.test(msg)) return c.json({ error: `No address is offered: ${msg.replace(/^1Click deposit quote: /, "1Click's quote ")}. Try USDC, or a larger amount.` }, 502);
+      if (/Quoting for this pair is not available/i.test(msg)) {
+        return c.json({ error: `1Click is not quoting deposits from ${src.symbol} on ${src.chainName} into the vault right now (it answered "Quoting for this pair is not available"). This is on 1Click's side, not your vault or refund address. Try again later, or fund from another chain.` }, 503);
       }
-      if (e instanceof Error && /refundTo is not valid/i.test(e.message)) return c.json({ error: `1Click did not accept that ${src.chainName} address for refunds. Check it and try again.` }, 400);
-      if (e instanceof Error && /(lose more than|below the listed price|no USD values)/.test(e.message)) return c.json({ error: "The route for that amount costs too much right now, so no address is offered. Try USDC, or a larger amount." }, 502);
-      return c.json({ error: "Could not get a deposit address. Try again in a moment." }, 503);
+      return c.json({ error: `No deposit address: ${upstreamReason(e, "1Click deposit quote")}` }, 502);
     }
+    if (!SAFE_ADDRESS.test(req.depositAddress)) return c.json({ error: "The address 1Click returned does not look like an address, so it is not shown. Nothing was sent." }, 502);
+    const id = `fund-${now.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const expiresAt = now + FUNDING_WINDOW_MS;
+    funding.add({ id, vaultId: v.id, token: cash().id, amount: req.amount, minAmount: req.minAmountOut, address: req.depositAddress, intentId: req.intentId, source, baseline, requestedAt: now, expiresAt });
+    note(owner, `requested a deposit address for $${usd} from ${src.symbol} on ${src.chainName}`, v.id);
+    const sendAmount = req.amountFormatted ?? String(unitsToNumber(req.amount, src.decimals));
+    return c.json({
+      id,
+      address: req.depositAddress,
+      amountUsd: usd,
+      amountUsdc: usd,
+      /** The least that counts as arrived, in USDC, from the quote. */
+      minArrivingUsdc: unitsToNumber(req.minAmountOut, cash().decimals),
+      send: { amount: sendAmount, units: req.amount, symbol: src.symbol, chain: src.chain, chainName: src.chainName, family: src.family, ...(src.evmChainId ? { evmChainId: src.evmChainId } : {}), contract: src.contract, decimals: src.decimals },
+      asset: { symbol: src.symbol, chain: src.chainName, contract: src.contract ?? cash().id.replace(/^nep141:/, "") },
+      refundTo,
+      expiresAt: new Date(expiresAt).toISOString(),
+    });
   });
 
   app.get("/owner/v1/vaults/:id/funding/:fid", async (c) => {
@@ -335,8 +360,8 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
       const executed = r.source === "1click" ? await deps.auditor.audit(r.address).catch(() => null) : null;
       const independentlyConfirmed = executed !== null && executed.recipient === v.walletAccount && executed.tokenOut === r.token && BigInt(executed.amountOut) >= BigInt(r.minAmount);
       return c.json({ state: s.state, receivedUsdc: unitsToNumber(s.received, cash().decimals), balanceUsdc: unitsToNumber(balance, cash().decimals), expiresAt: new Date(r.expiresAt).toISOString(), reportedBy: "custody provider", independentlyConfirmed });
-    } catch {
-      return c.json({ error: "Could not read the vault's balance right now." }, 503);
+    } catch (e) {
+      return c.json({ error: `Could not check the deposit: ${upstreamReason(e, "Custody provider")}` }, 503);
     }
   });
 

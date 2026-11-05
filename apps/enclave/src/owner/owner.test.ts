@@ -499,12 +499,12 @@ describe("owner routes", () => {
     expect(await viaCustody.text()).not.toContain("script");
   });
 
-  it("funding: if 1Click cannot give an address, the owner gets a plain retry message and nothing is recorded", async () => {
+  it("funding: if 1Click cannot give an address, the owner is told what 1Click answered, and nothing is recorded", async () => {
     const { m, req, token } = await boot();
-    m.deps.funder!.requestDeposit = async () => { throw new Error("1Click deposit quote: HTTP 503"); };
+    m.deps.funder!.requestDeposit = async () => { throw new Error("1Click deposit quote: upstream unavailable"); };
     const r = await req("/owner/v1/vaults/demo/funding", { token, body: { amountUsdc: 5 } });
-    expect(r.status).toBe(503);
-    expect(await r.text()).not.toContain("HTTP 503"); // provider details are not passed through
+    expect(r.status).toBe(502);
+    expect((await r.json()).error).toBe('No deposit address: 1Click deposit quote refused it: "upstream unavailable".');
     m.deps.funder!.requestDeposit = async () => ({ depositAddress: "okaddress1234", amountIn: "5000000", amountOut: "5000000", minAmountOut: "4950000", deadline: "x" });
     for (let i = 0; i < 3; i++) expect((await req("/owner/v1/vaults/demo/funding", { token, body: { amountUsdc: 5 } })).status).toBe(200); // failures did not use up the open-request limit
   });

@@ -56,6 +56,7 @@ interface SavedVault {
   pnl: DayPnl;
   spend: DaySum;
   bookRepair?: BookRepair;
+  name?: string;
 }
 
 /** The vault store with its mutable state kept in `<dir>/vaults/<id>.json`, re-read before every use. */
@@ -99,6 +100,7 @@ export class FileVaultStore extends MemoryVaultStore {
     v.pnl = saved.pnl;
     v.spend = saved.spend;
     if (saved.bookRepair) v.bookRepair = saved.bookRepair;
+    if (saved.name) v.name = saved.name;
     v.state = { ...v.state, lastTradeAtMs: saved.lastTradeAtMs };
     if (saved.pauseReason !== null) this.pauseReasons.set(id, saved.pauseReason);
     else this.pauseReasons.delete(id);
@@ -108,7 +110,7 @@ export class FileVaultStore extends MemoryVaultStore {
   private save(id: string): void {
     const v = super.get(id);
     if (!v) return;
-    const saved: SavedVault = { policy: v.policy, pauseReason: this.pauseReasons.get(id) ?? null, lastTradeAtMs: v.state.lastTradeAtMs, book: v.book, pnl: v.pnl, spend: v.spend, ...(v.bookRepair ? { bookRepair: v.bookRepair } : {}) };
+    const saved: SavedVault = { policy: v.policy, pauseReason: this.pauseReasons.get(id) ?? null, lastTradeAtMs: v.state.lastTradeAtMs, book: v.book, pnl: v.pnl, spend: v.spend, ...(v.bookRepair ? { bookRepair: v.bookRepair } : {}), ...(v.name ? { name: v.name } : {}) };
     writeAtomic(this.path(id), JSON.stringify({ v: 1, ...this.cipher.encrypt(JSON.stringify(saved), `vault:${id}`) }));
   }
 
@@ -140,6 +142,10 @@ export class FileVaultStore extends MemoryVaultStore {
 
   override setPolicy(id: string, policy: Policy): void {
     this.mutate(id, () => super.setPolicy(id, policy));
+  }
+
+  override setName(id: string, name: string): void {
+    this.mutate(id, () => super.setName(id, name));
   }
 
   override pause(id: string, reason: string): void {

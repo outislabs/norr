@@ -5,6 +5,7 @@ import { NewVault } from "../components/NewVault";
 import type { Api, BetaInfo, PreparedPolicy } from "../lib/api";
 import { SetupPage } from "./SetupPage";
 import { AuthorizePage } from "./AuthorizePage";
+import { VaultTitle } from "../components/VaultTitle";
 
 afterEach(cleanup);
 
@@ -110,5 +111,27 @@ describe("AuthorizePage (OAuth consent)", () => {
     cleanup();
     render(<AuthorizePage api={{ oauthRequest: vi.fn(async () => { throw new Error("This sign-in request has expired or was already used. Start again from your app."); }) } as unknown as Api} account="a" rid="r2" go={go} />);
     expect(await screen.findByText(/expired or was already used/)).toBeTruthy();
+  });
+});
+
+describe("vault names in the dashboard", () => {
+  it("NewVault sends the name; VaultTitle shows the name over the id and renames in place", async () => {
+    const createVault = vi.fn(async () => ({ id: "v_abc" }));
+    render(<NewVault api={{ createVault } as unknown as Api} account="alice.near" beta={beta} navigate={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText(/Name it/), { target: { value: "Agent fund" } });
+    fireEvent.click(screen.getByLabelText(/I have read and accept/));
+    fireEvent.click(screen.getByRole("button", { name: "Create vault" }));
+    await waitFor(() => expect(createVault).toHaveBeenCalledWith({ name: "Agent fund", acceptTerms: "2026-11-04", nonUsConfirmed: false }));
+    cleanup();
+    const renameVault = vi.fn(async () => ({ id: "v_abc", name: "Main" }));
+    const onRenamed = vi.fn();
+    render(<VaultTitle api={{ renameVault } as unknown as Api} vault={{ id: "v_abc", name: "Agent fund" }} onRenamed={onRenamed} />);
+    expect(screen.getByRole("heading", { name: "Agent fund" })).toBeTruthy();
+    expect(screen.getByText("v_abc")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    fireEvent.change(screen.getByLabelText("Vault name"), { target: { value: "Main" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(onRenamed).toHaveBeenCalled());
+    expect(renameVault).toHaveBeenCalledWith("v_abc", "Main");
   });
 });

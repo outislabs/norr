@@ -59,7 +59,7 @@ export function AuthorizePage({ api, account, rid, go = (url) => window.location
           {r.vaults.map((v) => (
             <label key={v.id} className="flex cursor-pointer items-center gap-3 rounded-xl border border-line px-3 py-3">
               <input type="radio" name="vault" className="accent-white" checked={chosen === v.id} onChange={() => setVaultId(v.id)} />
-              <span className="mono">{v.id}</span>
+              <span>{v.name || <span className="mono">{v.id}</span>}</span>
               {v.paused && <span className="text-sm text-mute">paused</span>}
             </label>
           ))}

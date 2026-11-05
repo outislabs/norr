@@ -10,7 +10,7 @@ async function run(fn: () => Promise<unknown>) {
   try {
     return text(await fn());
   } catch (e) {
-    return fail(e instanceof EnclaveError ? e.message : "Something went wrong talking to the Norr service.");
+    return fail(e instanceof EnclaveError ? e.message : `The Norr service answered something this tool could not read (${e instanceof Error ? e.message : String(e)}).`);
   }
 }
 

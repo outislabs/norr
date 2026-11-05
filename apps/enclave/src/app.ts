@@ -278,6 +278,7 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
     });
   }
 
-  app.onError((_e, c) => c.json({ error: "internal error" }, 500));
+  // Unexpected failures name the request, never the body or headers (they can hold tokens).
+  app.onError((e, c) => c.json({ error: `Norr failed while handling ${c.req.method} ${c.req.path}: ${e instanceof Error ? e.name : "error"}. This is a bug in Norr; check the activity before retrying.` }, 500));
   return app;
 }

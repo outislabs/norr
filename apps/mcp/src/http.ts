@@ -76,7 +76,7 @@ export function createHttpServer(o: HttpOptions) {
       await server.connect(transport);
       await transport.handleRequest(req, res);
     } catch {
-      if (!res.headersSent) reject(res, 500, "internal error");
+      if (!res.headersSent) reject(res, 500, "the MCP endpoint failed while handling this request; try again, and report it if it repeats");
     }
   });
 }

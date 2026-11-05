@@ -14,6 +14,8 @@ export interface Challenge { nonce: string; message: string; recipient: string; 
 export interface SessionInfo { token: string; accountId: string; expiresAt: number }
 export interface VaultSummary {
   id: string;
+  /** The owner's name for it; null when unnamed (show the id). */
+  name?: string | null;
   status?: "active";
   walletAccount: string;
   policy: Policy;
@@ -83,6 +85,7 @@ export interface AssetCheck {
 /** A self-serve vault that is not active yet (its custody policy is not on chain, or not checked). */
 export interface SetupVault {
   id: string;
+  name?: string | null;
   status: "setup";
   walletAccount: string;
   createdAt: string;
@@ -148,13 +151,14 @@ export function createApi(o: ApiOptions) {
     me: () => call<{ accountId: string; vaults: number; mock: boolean; selfServe?: boolean }>("/owner/v1/me"),
     vaults: () => call<{ vaults: VaultListItem[] }>("/owner/v1/vaults"),
     beta: () => call<BetaInfo>("/beta"),
-    createVault: (b: { acceptTerms: string; nonUsConfirmed?: boolean }) => call<SetupVault>("/owner/v1/vaults", { body: b }),
+    createVault: (b: { name?: string; acceptTerms: string; nonUsConfirmed?: boolean }) => call<SetupVault>("/owner/v1/vaults", { body: b }),
+    renameVault: (id: string, name: string) => call<{ id: string; name: string }>(`/owner/v1/vaults/${encodeURIComponent(id)}/name`, { method: "PUT", body: { name } }),
     setupVault: (id: string) => call<SetupVault>(`/owner/v1/vaults/${encodeURIComponent(id)}/setup`),
     prepareCustody: (id: string, autonomous: boolean) => call<PreparedPolicy>(`/owner/v1/vaults/${encodeURIComponent(id)}/custody-policy`, { body: { autonomous } }),
     activateVault: (id: string) => call<{ status: "active" } | { status: "setup"; problems: string[] }>(`/owner/v1/vaults/${encodeURIComponent(id)}/activate`, { body: {} }),
     /** Mock mode only: the signed-in owner stands in for their wallet sending the contract call. */
     mockStorePolicy: (args: PolicyStoreCall["args"]) => call<{ ok: boolean }>("/mock-outlayer/chain/store_wallet_policy", { body: { args } }),
-    oauthRequest: (rid: string) => call<{ clientName: string; redirectHost: string; expiresAt: string; vaults: { id: string; paused: boolean }[] }>(`/owner/v1/oauth/requests/${encodeURIComponent(rid)}`),
+    oauthRequest: (rid: string) => call<{ clientName: string; redirectHost: string; expiresAt: string; vaults: { id: string; name?: string | null; paused: boolean }[] }>(`/owner/v1/oauth/requests/${encodeURIComponent(rid)}`),
     oauthApprove: (rid: string, vaultId: string) => call<{ redirect: string }>(`/owner/v1/oauth/requests/${encodeURIComponent(rid)}/approve`, { body: { vaultId } }),
     oauthDeny: (rid: string) => call<{ redirect: string }>(`/owner/v1/oauth/requests/${encodeURIComponent(rid)}/deny`, { body: {} }),
     tokens: (id: string) => call<{ tokens: TokenInfo[] }>(`/owner/v1/vaults/${encodeURIComponent(id)}/tokens`),

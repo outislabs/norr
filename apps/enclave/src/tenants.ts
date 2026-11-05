@@ -11,6 +11,8 @@ import type { DataCipher } from "./seal";
  */
 export interface TenantRecord {
   id: string;
+  /** The owner's name for the vault. */
+  name?: string;
   /** The NEAR account that created the vault: its only owner and approver, and the custody policy's controller. */
   owner: string;
   walletId: string;
