@@ -6,7 +6,7 @@ Norr is a private trading layer for AI agents. An agent (Claude, ChatGPT, your o
 
 **Site:** [norr.finance](https://norr.finance) · **Docs:** [norr.finance/docs](https://norr.finance/docs/) · **Dashboard:** [app.norr.finance](https://app.norr.finance) · **X:** [@norrfi](https://x.com/norrfi)
 
-Built for the NEAR hackathon (Nov 1 to Nov 14, 2026). Tracks: Privacy & Private AI, Unstoppable DeFi, AI Security, Agent Economy. The project was built with Claude Code as the main implementation assistant, directed by the repository owner. Read [Timeline & disclosure](#timeline--disclosure) for exactly what was built when.
+Built for the NEAR hackathon (Nov 1 to Nov 14, 2026). Tracks: Privacy & Private AI, Unstoppable DeFi, AI Security, Agent Economy. Built by Kelvin Alkorogie, with Claude Code as a coding assistant. Read [Timeline & disclosure](#timeline--disclosure) for exactly what was built when.
 
 > Not audited software. Hackathon build, tiny balances. Do not put in money you cannot lose.
 
@@ -222,7 +222,8 @@ Organizers confirmed pre-window work is permitted. The hackathon rules count cod
 
 ## Built with
 
-- **AI:** Claude Code (Anthropic) wrote most of the code, tests and docs, directed and reviewed by the repository owner. The reference agent runs its model on NEAR AI Cloud.
+- **Credits:** Built by Kelvin Alkorogie, with Claude Code as a coding assistant.
+- **Agent model:** the reference agent runs its model on NEAR AI Cloud.
 - **Libraries:** TypeScript, Node.js, pnpm, vitest, zod, Hono (`@hono/node-server`), the MCP TypeScript SDK (`@modelcontextprotocol/sdk`), `@phala/dstack-sdk`, `@phala/dcap-qvl-web`, `near-api-js`, NEAR Wallet Selector (core, modal UI, HOT, Meteor, MyNearWallet), React, Vite, Tailwind CSS, `@noble/curves` and `@noble/hashes`, `marked`, `qrcode-generator`, Geist fonts (`@fontsource`), and Phala's `dstack-ingress` container.
 - **Services:** NEAR Intents (1Click API, Confidential Intents, Shield feed), OutLayer Agent Custody, Phala Cloud (dstack, TDX), NEAR AI Cloud, DexScreener (read-only market data), GoPlus Security (read-only token contract checks), Cloudflare Pages, GitHub Actions and GHCR.
 - **Own earlier code:** none; everything is in this repository's history.

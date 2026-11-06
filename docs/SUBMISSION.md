@@ -1,5 +1,7 @@
 # Final demo, video, X post and submission plan
 
+Built by Kelvin Alkorogie, with Claude Code as a coding assistant.
+
 Drafted 2026-11-02. Rules are from the organizers' `HACKATHON.md` (https://nearhackathon.com/HACKATHON.md), read the same day. Nothing here has been sent or posted. Personal values (name, email, wallet) are placeholders: they go in only when the owner submits, and the payload is never committed.
 
 ## What the rules require (checked against HACKATHON.md)

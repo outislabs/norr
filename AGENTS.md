@@ -2,6 +2,8 @@
 
 For AI agents and reviewers reading this repository (Claude Code, Codex and others). Humans: start with `README.md`.
 
+Built by Kelvin Alkorogie, with Claude Code as a coding assistant.
+
 ## What Norr is
 
 A private trading layer for AI agents. An agent connects over MCP with a token scoped to one vault and trades crypto and tokenized US stocks through NEAR Intents (Confidential Intents where the vault holds funds). Rules (trade size, daily caps, allowlists, cooldown, kill switch) and a scam check are enforced by the Norr service, which runs in an Intel TDX confidential VM on Phala that anyone can attest. Keys live with OutLayer's custody; the agent's token can never withdraw, change rules, or choose a destination.
