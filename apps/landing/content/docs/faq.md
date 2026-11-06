@@ -16,6 +16,10 @@ Nothing trades. Your funds stay in the custody wallet, and you can still withdra
 
 USDC on NEAR, Ethereum, Base, Arbitrum, Optimism, Polygon, BNB Chain or Solana, or ETH or SOL. It arrives as USDC in the vault's confidential balance. Funding with USDC on NEAR is proven on mainnet; the other chains were quoted live (USDC at about 0.01%, 20 to 45 seconds) but not yet funded with real money.
 
+## Which wallets can I sign in with?
+
+HOT Wallet (tested), and, not yet tested with Norr: Meteor Wallet, MyNearWallet, Intear Wallet, Nightly, Sender and Ledger. Each one implements NEP-413 message signing, which sign-in and approvals need; the sign-in picker marks the untested ones "(untested)". The picker always shows every wallet, and signing out forgets the wallet you used. If a wallet cannot start in your browser, the sign-in page says so.
+
 ## Do I need a NEAR wallet?
 
 To own a vault, yes: sign-in is a NEAR signed message, and swap approvals are signed by your NEAR account, in Norr's Approvals tab. [HOT Wallet](https://hot-labs.org/wallet/) gives you a NEAR account next to your EVM and Solana ones. Funding can come from any listed chain.

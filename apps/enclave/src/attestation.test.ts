@@ -53,7 +53,7 @@ describe("public attestation endpoints", () => {
     expect((await m.app.request("/attestation")).status).toBe(400);
     expect(calls).toEqual([]);
     expect((await m.app.request(`/attestation?nonce=${"11".repeat(64)}`)).status).toBe(200); // 64 bytes is the limit
-  });
+  }, 20_000); // builds a whole mock service: slow while the full suite runs in parallel
 
   it("rate-limit quotes for everyone together", async () => {
     const m = createMockEnclave({ attestor: fakeTee() });

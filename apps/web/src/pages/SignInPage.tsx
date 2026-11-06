@@ -16,12 +16,15 @@ export function SignInPage({ api, onSession }: { api: Api; onSession: (s: Sessio
   const health = useAsync(() => api.health(), "health");
   const [busy, setBusy] = useState<"wallet" | "demo" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Wallets that are configured but did not start in this browser, said instead of silently missing from the picker. */
+  const [notice, setNotice] = useState<string | null>(null);
   const run = async (kind: "wallet" | "demo") => {
     setBusy(kind);
     setError(null);
+    setNotice(null);
     try {
       const mockOwner = health.data?.mockOwner;
-      onSession(kind === "demo" && mockOwner ? await demoSignIn(api, mockOwner) : await walletSignIn(api));
+      onSession(kind === "demo" && mockOwner ? await demoSignIn(api, mockOwner) : await walletSignIn(api, { onNotice: setNotice }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sign-in failed.");
     } finally {
@@ -58,6 +61,7 @@ export function SignInPage({ api, onSession }: { api: Api; onSession: (s: Sessio
           </a>
           {offline && <div className="mt-5"><Offline compact /></div>}
           {health.error && !offline && <p role="alert" className="mt-5 border-l border-line-strong pl-4 text-sm text-fg">{health.error}</p>}
+          {notice && <p role="status" className="mt-5 border-l border-line-strong pl-4 text-sm text-mute">{notice}</p>}
           {error && <p role="alert" className="mt-5 border-l border-line-strong pl-4 text-sm text-fg">{error}</p>}
           <div className="mt-6 flex items-center justify-between gap-4">
             <a href="#/verify" className="text-sm text-fg hover:text-mute">Verify the enclave →</a>

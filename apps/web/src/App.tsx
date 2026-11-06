@@ -3,6 +3,7 @@ import { PublicFrame, Shell } from "./components/Shell";
 import { createApi, type SessionInfo } from "./lib/api";
 import { parseRoute, useHashPath } from "./lib/route";
 import { clearSession, loadSession, saveSession } from "./lib/session";
+import { disconnectWallet } from "./lib/signin";
 import { SignInPage } from "./pages/SignInPage";
 import { VaultPage } from "./pages/VaultPage";
 import { VaultsPage } from "./pages/VaultsPage";
@@ -21,6 +22,7 @@ export function App({ base = "/api", mcpUrl = "http://127.0.0.1:8788/mcp" }: { b
         getToken: () => loadSession()?.token ?? null,
         onUnauthorized: () => {
           clearSession();
+          void disconnectWallet();
           setSession(null);
         },
       }),
@@ -56,6 +58,7 @@ export function App({ base = "/api", mcpUrl = "http://127.0.0.1:8788/mcp" }: { b
       onSignOut={() => {
         void api.logout().catch(() => undefined);
         clearSession();
+        void disconnectWallet(); // forget the wallet too, so the next sign-in shows every wallet
         setSession(null);
       }}
       onPauseAll={async () => {

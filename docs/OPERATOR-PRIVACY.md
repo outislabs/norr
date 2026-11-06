@@ -19,6 +19,10 @@ as associated data. **The operator generates that key** (`openssl rand`, `docs/F
 - Even holding a vault's custody key, the operator is bound by that vault's custody policy: destinations are the owner's
   whitelisted account only, and swaps wait for the owner's approval unless the owner chose autonomous mode.
 
+## What this CVM uses (confirmed with `phala cvms get norr-demo --json`, 2026-11-06)
+
+`kms_type: phala`: Phala's own KMS (`kms.dstack-pha-prod7.phala.network`), **not** on-chain KMS (no chain ID, no DstackApp contract, no deployer address). App id `85e1d6a5…`, created by the Phala Cloud account `outislabs`, private logs, production OS image. So the app's creator updates the code with a Phala Cloud login (no on-chain step), and the key service that would hold the derived key is Phala's, which this project already trusts for the encrypted environment variables. On-chain KMS is chosen when an app is created, so moving to it later means a new app, which is the same event as the "recreate the CVM" risk below.
+
 ## What dstack offers (checked against Phala's docs, 2026-11-06)
 
 `DstackClient.getKey(path)` (socket `/var/run/dstack.sock`, already mounted) returns 32 bytes derived from the
@@ -85,5 +89,4 @@ I recommend **A for the beta**, with step 1 as the guard, and **C** as a follow-
 
 ## Cost
 
-About a day, plus the two redeploys of step 1. I need two answers: (1) which KMS this CVM uses (Phala's or on-chain) and
-who owns the app, because that decides what "the operator can update the compose" means here; (2) A, B or C above.
+About a day, plus the two redeploys of step 1. Question (1), which KMS and who owns the app, is answered above. What I still need is the choice among A, B or C.

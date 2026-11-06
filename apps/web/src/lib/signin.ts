@@ -2,6 +2,7 @@ import { Buffer } from "buffer";
 import type { Api, DirectDeposit, PolicyStoreCall, SessionInfo } from "./api";
 import { base64ToBytes, generateDemoKey, type DemoKey } from "./nep413";
 import { UNLOCK_MESSAGE, UNLOCK_NONCE, UNLOCK_RECIPIENT } from "./seal";
+import { missingWallets, walletFactories } from "./wallets";
 
 /** Mock mode only: sign in as the demo owner with a throwaway browser key. The mock service accepts any key. */
 let demoKey: DemoKey | null = null;
@@ -12,27 +13,59 @@ export async function demoSignIn(api: Api, owner: string): Promise<SessionInfo> 
   return api.login({ accountId: owner, publicKey: key.publicKey, signature, nonce: c.nonce });
 }
 
-/** The wallet selector with the wallets Norr supports. Loaded on demand. */
+/** The wallet selector with every wallet in lib/wallets.ts. Loaded on demand. */
 async function loadSelector() {
   (globalThis as { Buffer?: typeof Buffer }).Buffer ??= Buffer;
-  const [{ setupWalletSelector }, { setupModal }, { setupMeteorWallet }, { setupMyNearWallet }, { setupHotWallet }] = await Promise.all([
-    import("@near-wallet-selector/core"),
-    import("@near-wallet-selector/modal-ui"),
-    import("@near-wallet-selector/meteor-wallet"),
-    import("@near-wallet-selector/my-near-wallet"),
-    import("@near-wallet-selector/hot-wallet"),
-  ]);
+  const [{ setupWalletSelector }, { setupModal }] = await Promise.all([import("@near-wallet-selector/core"), import("@near-wallet-selector/modal-ui")]);
   await import("@near-wallet-selector/modal-ui/styles.css");
-  const selector = await setupWalletSelector({ network: "mainnet", modules: [setupHotWallet(), setupMeteorWallet(), setupMyNearWallet()] });
-  return { selector, setupModal };
+  // The selector drops a wallet that fails to start without a word; remember why, so the sign-in page can say it.
+  const failures = new Map<string, unknown>();
+  const selector = await setupWalletSelector({ network: "mainnet", modules: walletFactories((id, e) => failures.set(id, e)) });
+  const missing = missingWallets(selector.store.getState().modules.map((m) => m.id), failures);
+  return { selector, setupModal, missing };
+}
+
+export type SelectorKit = Awaited<ReturnType<typeof loadSelector>>;
+
+/** The wallet-selector keeps the connected wallet in localStorage for good (the dashboard's own session is per tab). */
+export const hasRememberedWallet = (): boolean => {
+  try {
+    return Boolean(localStorage.getItem("near-wallet-selector:selectedWalletId"));
+  } catch {
+    return false;
+  }
+};
+
+async function disconnect(selector: SelectorKit["selector"]): Promise<void> {
+  try {
+    await (await selector.wallet()).signOut();
+  } catch {
+    /* already disconnected, or the wallet is gone: either way nothing is remembered */
+  }
+}
+
+/** Forget the connected wallet (on sign-out), so the next sign-in shows the whole picker. */
+export async function disconnectWallet(load: () => Promise<SelectorKit> = loadSelector): Promise<void> {
+  if (!hasRememberedWallet()) return;
+  try {
+    await disconnect((await load()).selector);
+  } catch {
+    /* nothing to disconnect */
+  }
 }
 
 /**
  * Real sign-in: the user's NEAR wallet signs the server's challenge (NEP-413). Verified in Safari with HOT
  * Wallet; the server-side verification is covered by tests.
+ *
+ * The picker always shows. A wallet remembered from an earlier sign-in used to replace it (the selector reuses the
+ * connected wallet, and nothing ever disconnected it), so after one HOT sign-in HOT was the only choice, even after
+ * signing out. Now a remembered wallet is disconnected first and the owner picks again.
  */
-export async function walletSignIn(api: Api): Promise<SessionInfo> {
-  const { selector, setupModal } = await loadSelector();
+export async function walletSignIn(api: Api, o: { onNotice?: (message: string) => void; load?: () => Promise<SelectorKit> } = {}): Promise<SessionInfo> {
+  const { selector, setupModal, missing } = await (o.load ?? loadSelector)();
+  if (missing.length > 0) o.onNotice?.(`Not available in this browser: ${missing.map((m) => `${m.name} (${m.reason})`).join("; ")}.`);
+  if (selector.store.getState().accounts.length > 0) await disconnect(selector);
   if (selector.store.getState().accounts.length === 0) {
     const modal = setupModal(selector, { theme: "dark" });
     modal.show();
@@ -52,7 +85,7 @@ export async function walletSignIn(api: Api): Promise<SessionInfo> {
     });
   }
   const wallet = await selector.wallet();
-  if (!wallet.signMessage) throw new Error("This wallet cannot sign messages. Try another wallet.");
+  if (!wallet.signMessage) throw new Error(`${wallet.metadata.name} cannot sign messages, which sign-in needs. Choose another wallet.`);
   const c = await api.challenge();
   const signed = await wallet.signMessage({ message: c.message, recipient: c.recipient, nonce: Buffer.from(c.nonce, "base64") });
   if (!signed) throw new Error("The wallet did not return a signature.");
