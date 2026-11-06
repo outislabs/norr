@@ -37,7 +37,10 @@ an empty, unrestricted wallet; the attested code never funds or uses it before a
 3. **Custody policy** (`POST /owner/v1/vaults/:id/custody-policy`): Norr builds the safe default (below), shows it in
    plain words and as JSON, and returns the encrypted, keystore-signed payload for the owner's account. The dashboard asks
    the owner's wallet to send `store_wallet_policy` to `outlayer.near` with the storage deposit. The owner can tick
-   "Autonomous mode" here (off by default), which adds `excluded_types: ["confidential"]` and nothing else.
+   "Autonomous mode" here (off by default; turning it on needs a second, explicit confirmation that the service also
+   requires), which adds `excluded_types: ["confidential"]` and nothing else. The owner can switch it later in Rules:
+   the same policy with only that exemption changed, one signature (an update by the controller), verified like
+   activation before the new mode is reported.
 4. **Activate** (`POST /owner/v1/vaults/:id/activate`): Norr reads `get_wallet_policy` on chain (controller must be the
    owner, not frozen) and the keystore's decrypted policy (it must be the one Norr prepared: approver, whitelist,
    types, limits). Only then the vault becomes `active`: funding, agent tokens and trading open.

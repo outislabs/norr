@@ -181,6 +181,9 @@ describe("what agents are told about Norr (from a new user's test on the Claude 
     expect(ins).toMatch(/OutLayer custody wallet whose keys live in OutLayer's TEE/);
     expect(ins).toMatch(/controller; Norr cannot change it/);
     expect(ins).toMatch(/Approvals tab\); approvals expire after 24 hours/);
+    expect(ins).toMatch(/Autonomous mode is optional and off by default: the owner turns it on or off in Rules/);
+    expect(ins).toMatch(/only within the largest trade, the daily cap and the operations-per-hour limit \(a trade over a limit is refused\)/);
+    expect(ins).toMatch(/money can only reach the owner's whitelisted address/);
     expect(ins).toMatch(/ledger encrypted at rest/);
     expect(ins).toMatch(/sealed to the owner's key/);
     expect(ins).toMatch(/Request bodies, balances, positions and rules are not logged/);
@@ -195,7 +198,13 @@ describe("what agents are told about Norr (from a new user's test on the Claude 
     expect(a.custody.you).toMatch(/cannot withdraw, change rules, or choose where funds go/);
     expect(a.custody.trust).toMatch(/not trustless/);
     expect(a.approvals).toMatchObject({ mode: "none", required: false }); // the mock demo vault has no approval step
+    expect(a.autonomousMode.what).toMatch(/Optional and off by default.*owner turns it on or off in Rules/);
+    expect(a.autonomousMode.whenOn).toMatch(/only within the vault's largest trade, daily spending cap.*operations-per-hour limit.*refused/);
+    expect(a.autonomousMode.money).toMatch(/only reach the owner's whitelisted address/);
     expect(a.storage.reasoning).toMatch(/only the owner can read it/);
+    expect(a.operator.operatorCannot).toMatch(/cannot read the sealed reasoning.*cannot send money anywhere but the owner's whitelisted address/);
+    expect(a.operator.today).toMatch(/operator holds the key that encrypts Norr's stored data.*could decrypt a copy of the data, or deploy changed code.*proposed, not built/);
+    expect(a.operator.others).toMatch(/OutLayer sees every custody operation.*solvers see confidential intents in plaintext/);
     expect(a.attestation.status).toMatch(/not running in a TEE/);
     expect(a.attestation.verifyUrl).toBe("http://localhost:5173/#/verify");
     expect(a.incidentFeed).toBeTruthy();

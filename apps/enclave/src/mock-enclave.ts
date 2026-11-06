@@ -142,7 +142,8 @@ export function createMockEnclave(o: { startingUsd?: number; shield?: ShieldFeed
     custodyFor: (rec) => {
       const r = createMockRails(registry.entries(), rec.walletAccount, {
         confidentialSeed: { [DEMO.USDC.assetId]: String(MOCK_VAULT_START_USD * 1e6) },
-        requireApproval: !(rec.custody?.autonomous ?? false),
+        // Follows the vault's recorded custody mode, so switching it in Rules changes what the mock requires.
+        requireApproval: () => !(tenants.get(rec.id)?.custody?.autonomous ?? false),
         approvalPrefix: rec.id.slice(2, 10),
       });
       tenantRails.set(rec.id, { rails: r, owner: rec.owner, walletPubkey: rec.custody?.walletPubkey ?? `ed25519:${rec.walletAccount}` });

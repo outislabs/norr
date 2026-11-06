@@ -13,6 +13,8 @@ const near = (yocto: string) => (Number(BigInt(yocto) / 10n ** 18n) / 1e6).toFix
 export function SetupPage({ api, account, id, onChanged, send = sendPolicyStore, navigate = (h) => (window.location.hash = h), sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }: { api: Api; account: string; id: string; onChanged?: () => void; send?: typeof sendPolicyStore; navigate?: (hash: string) => void; sleep?: (ms: number) => Promise<void> }) {
   const setup = useAsync(() => api.setupVault(id), `setup-${id}`);
   const [autonomous, setAutonomous] = useState(false);
+  /** The second, deliberate step: autonomous mode is only prepared after the owner says they understand. */
+  const [understood, setUnderstood] = useState(false);
   const [prepared, setPrepared] = useState<PreparedPolicy | null>(null);
   const [busy, setBusy] = useState<null | "prepare" | "sign" | "check">(null);
   const [error, setError] = useState<string | null>(null);
@@ -94,17 +96,27 @@ export function SetupPage({ api, account, id, onChanged, send = sendPolicyStore,
 
       {!prepared && (
         <div className="flex flex-col gap-4">
-          <label className="flex cursor-pointer gap-3">
-            <input type="checkbox" className="mt-1.5 accent-white" checked={autonomous} onChange={(e) => setAutonomous(e.target.checked)} />
-            <span>
-              <span className="block text-fg">Autonomous mode (off by default)</span>
-              <span className="block text-sm text-mute">
-                Your agent's swaps run without your signature, within the limits. Withdrawals and transfers also skip approval, but they can still only go to your own account. Leave it off to approve every operation in Norr's Approvals tab.
-              </span>
-            </span>
-          </label>
+          <div className="rounded-xl border border-line p-4">
+            <p className="text-fg">
+              Autonomous mode: <b className="font-medium">{autonomous ? "ON" : "OFF"}</b>
+            </p>
+            <p className="mt-1 text-sm text-mute">
+              Off (the default): every swap waits for your signature in Norr's Approvals tab. On: your agent's swaps run without your signature, within the limits; withdrawals and transfers also skip approval but can still only go to your own account.
+            </p>
+            {/* Only the short line below is the control: tapping the explanation never changes it. */}
+            <label htmlFor="autonomous-on" className="mt-3 inline-flex cursor-pointer items-center gap-2 text-sm">
+              <input id="autonomous-on" type="checkbox" className="accent-white" checked={autonomous} onChange={(e) => (setAutonomous(e.target.checked), setUnderstood(false))} />
+              <span>Turn autonomous mode on</span>
+            </label>
+            {autonomous && (
+              <label htmlFor="autonomous-understood" className="mt-3 flex cursor-pointer gap-2 border-l border-line-strong pl-3 text-sm">
+                <input id="autonomous-understood" type="checkbox" className="mt-0.5 accent-white" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} />
+                <span>I understand my agent's swaps will run without my approval, up to the limits. I can turn this off later in Rules.</span>
+              </label>
+            )}
+          </div>
           <div>
-            <button type="button" className="btn btn-solid" disabled={busy !== null} onClick={() => void prepare()}>
+            <button type="button" className="btn btn-solid" disabled={busy !== null || (autonomous && !understood)} onClick={() => void prepare()}>
               {busy === "prepare" ? "Preparing…" : "Review the policy"}
             </button>
             {v.custody.prepared && (
@@ -118,6 +130,9 @@ export function SetupPage({ api, account, id, onChanged, send = sendPolicyStore,
 
       {prepared && (
         <div className="flex flex-col gap-4" data-testid="prepared-policy">
+          <p className="text-fg" data-testid="mode-line">
+            Autonomous mode: <b className="font-medium">{autonomous ? "ON" : "OFF"}</b>
+          </p>
           <ul className="flex flex-col border-t border-line">
             {prepared.summary.map((s) => (
               <li key={s} className="border-b border-line py-3">{s}</li>

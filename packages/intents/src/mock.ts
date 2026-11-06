@@ -17,7 +17,7 @@ export interface MockOptions {
   minOrderUsd?: (assetId: string) => number;
   /** Skew every quoted price (basis points) to exercise the price-sanity check. */
   skewBps?: number;
-  requireApproval?: boolean;
+  requireApproval?: boolean | (() => boolean);
   /** Distinguishes approval ids when several mock vaults run side by side (8 hex characters). Default "00000000". */
   approvalPrefix?: string;
   /** Alter what the swap "actually did", to simulate a tampering gateway. */
@@ -55,6 +55,8 @@ const positive = (l: Layer): Record<string, string> => Object.fromEntries(Object
 export function createMockRails(entries: RegistryEntry[], vaultAccount: string, o: MockOptions = {}) {
   const byId = new Map(entries.map((e) => [e.id, e]));
   const feeBps = o.feeBps ?? 30;
+  /** The owner's approval requirement can change while the mock runs (the vault's custody mode is switched). */
+  const needsApproval = (): boolean => (typeof o.requireApproval === "function" ? o.requireApproval() : Boolean(o.requireApproval));
   const held: Record<Venue, Layer> = { public: toLayer(o.seed), confidential: toLayer(o.confidentialSeed) };
   const executed = new Map<string, ExecutedSwap>();
   const records = new Map<string, Record_>();
@@ -108,14 +110,14 @@ export function createMockRails(entries: RegistryEntry[], vaultAccount: string, 
       // Only the public layer has an independent record to audit.
       const depositAddress = venue === "public" ? `mock-deposit-${n}` : undefined;
       if (depositAddress) executed.set(depositAddress, done);
-      const rec: Record_ = { venue, done, state: o.requireApproval ? "pending_approval" : "success", depositAddress, ...(o.requireApproval ? { approvalId: `${o.approvalPrefix ?? "00000000"}-0000-4000-8000-${String(n).padStart(12, "0")}`, createdAt: Date.now() } : {}) };
+      const rec: Record_ = { venue, done, state: needsApproval() ? "pending_approval" : "success", depositAddress, ...(needsApproval() ? { approvalId: `${o.approvalPrefix ?? "00000000"}-0000-4000-8000-${String(n).padStart(12, "0")}`, createdAt: Date.now() } : {}) };
       records.set(id, rec);
       if (rec.state === "success") apply(venue, done);
       return view(id, rec);
     },
 
     async approvalMode() {
-      return o.requireApproval ? ("owner" as const) : ("none" as const);
+      return needsApproval() ? ("owner" as const) : ("none" as const);
     },
 
     async status(requestId: string): Promise<SwapStatus> {
@@ -135,7 +137,7 @@ export function createMockRails(entries: RegistryEntry[], vaultAccount: string, 
     async shield(token: string, amount: string): Promise<SwapStatus> {
       const id = `mock-req-${++n}`;
       if ((held.public[token] ?? 0n) < BigInt(amount)) return { state: "failed", requestId: id, detail: "insufficient balance" };
-      if (o.requireApproval) {
+      if (needsApproval()) {
         records.set(id, { venue: "confidential", shield: true, done: { tokenIn: token, tokenOut: token, amountIn: amount, amountOut: amount, recipient: vaultAccount }, state: "pending_approval", approvalId: `${o.approvalPrefix ?? "00000000"}-0000-4000-8000-${String(n).padStart(12, "0")}`, createdAt: Date.now() });
         return { state: "pending_approval", requestId: id };
       }

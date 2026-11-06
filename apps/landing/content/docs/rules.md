@@ -20,6 +20,12 @@ Two layers of limits protect a vault. Norr's rules are checked before every trad
 
 Trades for one vault run one at a time, so parallel requests cannot slip past a cap.
 
+## Autonomous mode
+
+Optional, and **off by default**: every swap waits for your approval in the Approvals tab. You turn it on or off in **Rules** (it is also chosen at setup). The mode lives in your custody policy, so a switch is one transaction your wallet signs; Norr then checks that the custody provider holds exactly that change (only the approval exemption differs) before it reports the new mode. The vault page shows "Autonomous mode: ON" or "Approvals on".
+
+When it is on, your agent's swaps run without your signature, but still only within the largest trade, the daily spending cap, the daily loss cap, the cooldown and the operations-per-hour limit; a trade over a limit is refused. Money can only reach your whitelisted address, with the mode on or off. The agent is told which mode applies (`about_norr`, and the `approval` field on every quote).
+
 ## Presets
 
 | | Cautious | Balanced | Degen |

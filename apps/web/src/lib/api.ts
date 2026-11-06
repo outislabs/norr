@@ -19,6 +19,8 @@ export interface VaultSummary {
   /** The owner's name for it; null when unnamed (show the id). */
   name?: string | null;
   status?: "active";
+  /** Swaps skip the owner's approval (custody policy). null: set by hand at the custody provider, so unknown here. */
+  autonomous?: boolean | null;
   walletAccount: string;
   policy: Policy;
   paused: boolean;
@@ -177,7 +179,10 @@ export function createApi(o: ApiOptions) {
     shield: (id: string) => call<{ status: "done" | "pending_approval"; amountUsdc: number; requestId?: string; message?: string }>(`/owner/v1/vaults/${encodeURIComponent(id)}/shield`, { body: {} }),
     renameVault: (id: string, name: string) => call<{ id: string; name: string }>(`/owner/v1/vaults/${encodeURIComponent(id)}/name`, { method: "PUT", body: { name } }),
     setupVault: (id: string) => call<SetupVault>(`/owner/v1/vaults/${encodeURIComponent(id)}/setup`),
-    prepareCustody: (id: string, autonomous: boolean) => call<PreparedPolicy>(`/owner/v1/vaults/${encodeURIComponent(id)}/custody-policy`, { body: { autonomous } }),
+    prepareCustody: (id: string, autonomous: boolean) => call<PreparedPolicy>(`/owner/v1/vaults/${encodeURIComponent(id)}/custody-policy`, { body: { autonomous, ...(autonomous ? { confirmAutonomous: true } : {}) } }),
+    /** Switch autonomous mode on an active vault: the update the owner's wallet signs. Turning it on carries the confirmation. */
+    setCustodyMode: (id: string, autonomous: boolean) => call<PreparedPolicy & { autonomous: boolean }>(`/owner/v1/vaults/${encodeURIComponent(id)}/custody-mode`, { body: { autonomous, ...(autonomous ? { confirmAutonomous: true } : {}) } }),
+    confirmCustodyMode: (id: string) => call<{ status: "applied"; autonomous: boolean } | { status: "waiting"; problems: string[] }>(`/owner/v1/vaults/${encodeURIComponent(id)}/custody-mode/confirm`, { body: {} }),
     activateVault: (id: string) => call<{ status: "active" } | { status: "setup"; problems: string[] }>(`/owner/v1/vaults/${encodeURIComponent(id)}/activate`, { body: {} }),
     /** Mock mode only: the signed-in owner stands in for their wallet sending the contract call. */
     /** Mock mode only: a direct deposit "lands" in the vault's public balance. */

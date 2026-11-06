@@ -70,9 +70,20 @@ export async function aboutNorr(deps: TradeDeps, vault: Vault, ctx: AboutContext
       trust: "Custody is not trustless: for swaps, OutLayer's gateway builds the route and its TEE does not re-check token or amount. Norr checks every result afterwards and pauses the vault on a mismatch.",
     },
     approvals: approval,
+    autonomousMode: {
+      what: "Optional and off by default. The vault's owner turns it on or off in Rules (one wallet signature); approvals.mode says which applies to this vault right now.",
+      whenOn: "Your swaps run without the owner's signature, but still only within the vault's largest trade, daily spending cap, daily loss cap, cooldown and operations-per-hour limit. A trade over a limit is refused (blocked), not queued for approval.",
+      money: "Money can only reach the owner's whitelisted address, with autonomous mode on or off: withdrawals and transfers go only there, and swaps settle back into the vault.",
+    },
     privacy: {
       confidential: "Trades run in NEAR Intents' confidential layer when the vault's funds are there (each answer's 'venue' says which): amounts, pairs and balances are not on the public chain.",
       whoSees: "Not private from: OutLayer (it builds and signs each operation), the NEAR Intents operator and solvers (they see confidential intents in plaintext), and the Norr service (it must read trades to enforce the rules). Funding, withdrawals and moves between the public and confidential layers are public on chain.",
+    },
+    operator: {
+      insideTheEnclave: "Inside the enclave the Norr service handles your requests, balances, positions, rules and the ledger in plaintext. It sees the 'reason' you send only until it seals it to the owner's key.",
+      operatorCannot: "The operator who runs Norr cannot read the sealed reasoning (only the owner's key opens it), cannot change a self-serve vault's custody policy (the owner controls it on chain), and cannot send money anywhere but the owner's whitelisted address; swaps wait for the owner's approval unless the owner turned on autonomous mode.",
+      today: "Today the operator holds the key that encrypts Norr's stored data. The production image has no shell and logs are private, so there is no ordinary way to read it, but the operator could decrypt a copy of the data, or deploy changed code (every deployed version is visible through attestation). Moving that key into the enclave is proposed, not built (docs/OPERATOR-PRIVACY.md).",
+      others: "OutLayer sees every custody operation it builds and signs. The NEAR Intents operator and solvers see confidential intents in plaintext.",
     },
     storage: {
       reasoning: "The 'reason' you give with a trade is sealed to the owner's key: only the owner can read it, not Norr's operator.",

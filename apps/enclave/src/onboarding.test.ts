@@ -39,7 +39,7 @@ async function signIn(m: Mock, call: ReturnType<typeof boot>["call"], account: s
 async function activeVault(m: Mock, call: ReturnType<typeof boot>["call"], account: string, autonomous = false) {
   const s = await signIn(m, call, account);
   const created = await (await call("/owner/v1/vaults", { token: s.token, body: { acceptTerms: TERMS_VERSION, nonUsConfirmed: true } })).json();
-  const prep = await (await call(`/owner/v1/vaults/${created.id}/custody-policy`, { token: s.token, body: { autonomous } })).json();
+  const prep = await (await call(`/owner/v1/vaults/${created.id}/custody-policy`, { token: s.token, body: { autonomous, ...(autonomous ? { confirmAutonomous: true } : {}) } })).json();
   expect((await call("/mock-outlayer/chain/store_wallet_policy", { token: s.token, body: { args: prep.call.args } })).status).toBe(200);
   expect(await (await call(`/owner/v1/vaults/${created.id}/activate`, { token: s.token, body: {} })).json()).toEqual({ status: "active" });
   const agent = (await (await call(`/owner/v1/vaults/${created.id}/tokens`, { token: s.token, body: { label: "test agent" } })).json()).token as string;
@@ -79,7 +79,7 @@ describe("self-serve vaults: create, policy signed by the owner's wallet, activa
     expect(await (await call("/mock-outlayer/chain/store_wallet_policy", { token: mallory.token, body: { args: prep.call.args } })).json()).toMatchObject({ error: "Invalid Ed25519 wallet signature" });
     expect((await call("/mock-outlayer/chain/store_wallet_policy", { token: alice.token, body: { args: prep.call.args } })).status).toBe(200);
     expect(await (await call(`/owner/v1/vaults/${v.id}/activate`, { token: alice.token, body: {} })).json()).toEqual({ status: "active" });
-    expect(await m.provisioner.onChainPolicy(prep.call.args.wallet_pubkey)).toEqual({ owner: "alice.near", frozen: false });
+    expect(await m.provisioner.onChainPolicy(prep.call.args.wallet_pubkey)).toMatchObject({ owner: "alice.near", frozen: false });
     expect((await call(`/owner/v1/vaults/${v.id}/custody-policy`, { token: alice.token, body: {} })).status).toBe(409); // active: only Alice, as controller, changes it
 
     // Active: the beta rules, an agent token, and a trade that waits for Alice's approval (not autonomous).
@@ -404,5 +404,72 @@ describe("trading and checking by contract address", () => {
     expect(t.message).toMatch(/can't be traded privately/);
     // The owner's Check a token takes the same input.
     expect((await (await call(`/owner/v1/vaults/${a.id}/assets/check?asset=${bad}`, { token: a.token })).json()).routable).toBe(false);
+  });
+});
+
+
+describe("autonomous mode: off by default, never a side effect, switchable by one owner signature (seen live 2026-11-05)", () => {
+  it("the default policy has no approval exemption, and turning it on at setup needs an explicit confirmation", async () => {
+    const { m, call } = boot();
+    const s = await signIn(m, call, "alice.near");
+    const v = await (await call("/owner/v1/vaults", { token: s.token, body: { acceptTerms: TERMS_VERSION } })).json();
+    const dflt = await (await call(`/owner/v1/vaults/${v.id}/custody-policy`, { token: s.token, body: {} })).json();
+    expect(dflt.policy.approval.excluded_types).toBeUndefined();
+    expect(dflt.summary.join(" ")).toMatch(/waits for your approval/);
+    // A bare autonomous: true (one stray tap, a script) is refused; nothing is prepared.
+    const bare = await call(`/owner/v1/vaults/${v.id}/custody-policy`, { token: s.token, body: { autonomous: true } });
+    expect(bare.status).toBe(400);
+    expect((await bare.json()).error).toMatch(/Confirm that you want it on \(confirmAutonomous: true\)/);
+    expect(m.tenants.get(v.id)!.custody!.autonomous).toBe(false);
+    const on = await (await call(`/owner/v1/vaults/${v.id}/custody-policy`, { token: s.token, body: { autonomous: true, confirmAutonomous: true } })).json();
+    expect(on.policy.approval.excluded_types).toEqual(["confidential"]);
+  });
+
+  it("the owner switches it on and off from Rules: one signature, only the exemption changes, and the vault follows", async () => {
+    const { m, call } = boot();
+    const a = await activeVault(m, call, "alice.near", true); // created autonomous, as the live vault was
+    m.vaults.setPolicy(a.id, { ...m.vaults.get(a.id)!.policy, cooldownSec: 0 }); // two trades in a row below
+    const trade = async () => (await (await call("/v1/trade", { token: a.agent, body: { side: "buy", asset: "SOL", amountUsd: 1.5 } })).json()).status;
+    expect((await (await call(`/owner/v1/vaults/${a.id}`, { token: a.token })).json()).autonomous).toBe(true);
+    expect(await trade()).toBe("executed"); // autonomous: no approval
+
+    // Switching on again is a no-op; switching off needs no confirmation; nothing changes until the chain shows the new policy.
+    expect((await call(`/owner/v1/vaults/${a.id}/custody-mode`, { token: a.token, body: { autonomous: true, confirmAutonomous: true } })).status).toBe(409);
+    const off = await (await call(`/owner/v1/vaults/${a.id}/custody-mode`, { token: a.token, body: { autonomous: false } })).json();
+    expect(off.summary.join(" ")).toMatch(/Autonomous mode OFF: every swap waits for your approval/);
+    expect(off.policy.approval.excluded_types).toBeUndefined();
+    // Only the exemption differs from the stored policy.
+    const { approval: newApproval, ...restNew } = off.policy;
+    const { approval: oldApproval, ...restOld } = a.prep.policy;
+    expect(restNew).toEqual(restOld);
+    expect({ ...oldApproval, excluded_types: undefined }).toEqual({ ...newApproval, excluded_types: undefined });
+    // Only the storage difference is attached (the policy gets smaller, so just the margin).
+    expect(BigInt(off.call.deposit)).toBeLessThanOrEqual(10n ** 21n);
+    expect(await (await call(`/owner/v1/vaults/${a.id}/custody-mode/confirm`, { token: a.token, body: {} })).json()).toMatchObject({ status: "waiting" });
+    expect((await (await call(`/owner/v1/vaults/${a.id}`, { token: a.token })).json()).autonomous).toBe(true); // unsigned: unchanged
+    // Someone else's wallet cannot apply it.
+    const mallory = await signIn(m, call, "mallory.near");
+    expect((await call("/mock-outlayer/chain/store_wallet_policy", { token: mallory.token, body: { args: off.call.args } })).status).toBe(400);
+    expect((await call("/mock-outlayer/chain/store_wallet_policy", { token: a.token, body: { args: off.call.args } })).status).toBe(200);
+    expect(await (await call(`/owner/v1/vaults/${a.id}/custody-mode/confirm`, { token: a.token, body: {} })).json()).toEqual({ status: "applied", autonomous: false });
+    expect((await (await call(`/owner/v1/vaults/${a.id}`, { token: a.token })).json()).autonomous).toBe(false);
+    expect(await trade()).toBe("pending_approval"); // now every swap waits for Alice
+
+    // Back on: refused without the confirmation, applied with it and the signature.
+    const bare = await call(`/owner/v1/vaults/${a.id}/custody-mode`, { token: a.token, body: { autonomous: true } });
+    expect(bare.status).toBe(400);
+    const on = await (await call(`/owner/v1/vaults/${a.id}/custody-mode`, { token: a.token, body: { autonomous: true, confirmAutonomous: true } })).json();
+    expect(on.summary.join(" ")).toMatch(/within the largest trade, the daily spending cap and the operations-per-hour limit/);
+    await call("/mock-outlayer/chain/store_wallet_policy", { token: a.token, body: { args: on.call.args } });
+    expect(await (await call(`/owner/v1/vaults/${a.id}/custody-mode/confirm`, { token: a.token, body: {} })).json()).toEqual({ status: "applied", autonomous: true });
+  });
+
+  it("another owner's vault answers 404 on both mode routes", async () => {
+    const { m, call } = boot();
+    const a = await activeVault(m, call, "alice.near");
+    const b = await activeVault(m, call, "bob.near");
+    for (const path of ["custody-mode", "custody-mode/confirm"]) {
+      expect((await call(`/owner/v1/vaults/${b.id}/${path}`, { token: a.token, body: { autonomous: true, confirmAutonomous: true } })).status).toBe(404);
+    }
   });
 });

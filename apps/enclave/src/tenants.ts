@@ -25,7 +25,16 @@ export interface TenantRecord {
   terms: { version: string; acceptedAt: string };
   nonUsConfirmed: boolean;
   /** The policy Norr prepared for the owner to store, and its key on chain. */
-  custody?: { policy: CustodyPolicy; walletPubkey: string; autonomous: boolean; maxTradeUsd: number; dailyCapUsd: number; preparedAt: string };
+  custody?: {
+    policy: CustodyPolicy;
+    walletPubkey: string;
+    autonomous: boolean;
+    maxTradeUsd: number;
+    dailyCapUsd: number;
+    preparedAt: string;
+    /** A switch of autonomous mode the owner has been asked to sign, until the chain shows it (or it is replaced). */
+    pending?: { autonomous: boolean; policy: CustodyPolicy; preparedAt: string };
+  };
 }
 
 export interface TenantStore {

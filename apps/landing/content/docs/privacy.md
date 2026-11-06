@@ -24,6 +24,7 @@ Private from the public is not private from everyone. This is who sees what.
 
 - Not invisible to the custody provider, the NEAR Intents operator or the Norr service: they see confidential trades in order to execute and check them.
 - A funding transfer and the next confidential hop can be correlated by timing and amount.
+- **The person who runs Norr (the operator) holds the key that encrypts Norr's stored data.** The production image has no shell and logs are private, so there is no ordinary way to read it, but with a copy of the data the operator could decrypt it, and could deploy changed code (attestation shows every deployed version; it does not prevent one). The operator cannot read your sealed reasoning, cannot change a self-serve vault's custody policy (you control it on chain), and cannot send money anywhere but your whitelisted account. Moving the key into the enclave is proposed, not built.
 - Custody is not trustless. For swaps, OutLayer's gateway builds the route and deposit address, and its enclave does not re-check token or amount. Limits and approvals bind an honest gateway; Norr detects tampering afterwards. Funds can still be lost to a dishonest or compromised gateway, up to what your limits allow.
 
 The observations behind this table, with dates and request ids: [docs/PRIVACY.md](https://github.com/outislabs/norr/blob/main/docs/PRIVACY.md).

@@ -13,7 +13,7 @@ interface MockWallet extends RegisteredWallet {
  */
 export class MockProvisioner implements CustodyProvisioner {
   private readonly wallets = new Map<string, MockWallet>();
-  private readonly chain = new Map<string, { owner: string; data: string; frozen: boolean }>();
+  private readonly chain = new Map<string, { owner: string; data: string; frozen: boolean; deposit: bigint }>();
   private readonly secret = randomBytes(32);
   registrations = 0;
   failRegister = false;
@@ -38,7 +38,7 @@ export class MockProvisioner implements CustodyProvisioner {
     return createHmac("sha512", this.secret).update(createHash("sha256").update(msg).digest()).digest("hex");
   }
 
-  async preparePolicyStore(wallet: { walletId: string; apiKey: string }, policy: unknown, caller: string): Promise<PolicyStoreCall> {
+  async preparePolicyStore(wallet: { walletId: string; apiKey: string }, policy: unknown, caller: string, existingDeposit = 0n): Promise<PolicyStoreCall> {
     const w = this.byKey(wallet.apiKey);
     if (w.walletId !== wallet.walletId) throw new Error("mock: wallet id does not match the key");
     const data = Buffer.from(JSON.stringify(policy)).toString("base64");
@@ -47,7 +47,7 @@ export class MockProvisioner implements CustodyProvisioner {
       methodName: "store_wallet_policy",
       args: { wallet_pubkey: w.walletPubkey, encrypted_data: data, wallet_signature: this.sign(w.walletPubkey, data, caller) },
       gas: "100000000000000",
-      deposit: policyStorageDeposit(w.walletPubkey, data).toString(),
+      deposit: policyStorageDeposit(w.walletPubkey, data, existingDeposit).toString(),
     };
   }
 
@@ -56,7 +56,7 @@ export class MockProvisioner implements CustodyProvisioner {
     if (args.wallet_signature !== this.sign(args.wallet_pubkey, args.encrypted_data, caller)) throw new Error("Invalid Ed25519 wallet signature");
     const existing = this.chain.get(args.wallet_pubkey);
     if (existing && existing.owner !== caller) throw new Error(`Only the original controller (${existing.owner}) can update this wallet policy`);
-    this.chain.set(args.wallet_pubkey, { owner: caller, data: args.encrypted_data, frozen: existing?.frozen ?? false });
+    this.chain.set(args.wallet_pubkey, { owner: caller, data: args.encrypted_data, frozen: existing?.frozen ?? false, deposit: policyStorageDeposit(args.wallet_pubkey, args.encrypted_data) });
   }
 
   freeze(walletPubkey: string): void {
@@ -73,7 +73,7 @@ export class MockProvisioner implements CustodyProvisioner {
 
   async onChainPolicy(walletPubkey: string): Promise<OnChainPolicy | null> {
     const e = this.chain.get(walletPubkey);
-    return e ? { owner: e.owner, frozen: e.frozen } : null;
+    return e ? { owner: e.owner, frozen: e.frozen, storageDeposit: e.deposit.toString() } : null;
   }
 
   async invalidateCache(): Promise<void> {}

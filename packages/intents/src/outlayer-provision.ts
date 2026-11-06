@@ -31,11 +31,14 @@ export interface OnChainPolicy {
   /** The controller: the account that stored the policy first. */
   owner: string;
   frozen: boolean;
+  /** The storage deposit already held for this policy, in yoctoNEAR. */
+  storageDeposit: string;
 }
 
 export interface CustodyProvisioner {
   register(): Promise<RegisteredWallet>;
-  preparePolicyStore(wallet: { walletId: string; apiKey: string }, policy: unknown, caller: string): Promise<PolicyStoreCall>;
+  /** `existingDeposit` (yoctoNEAR) is what an update already holds on chain: only the difference is attached. */
+  preparePolicyStore(wallet: { walletId: string; apiKey: string }, policy: unknown, caller: string, existingDeposit?: bigint): Promise<PolicyStoreCall>;
   /** The policy as the keystore decrypts it, or null when none is stored yet. */
   readPolicy(apiKey: string): Promise<Record<string, unknown> | null>;
   onChainPolicy(walletPubkey: string): Promise<OnChainPolicy | null>;
@@ -47,10 +50,15 @@ export const POLICY_CONTRACT = "outlayer.near";
 const YOCTO_PER_BYTE = 10n ** 19n; // STORAGE_PRICE_PER_BYTE in contract/src/lib.rs
 const MARGIN = 10n ** 21n; // 0.001 NEAR
 
-/** The contract's own storage formula (`calculate_wallet_policy_storage_size`, no beneficiary), in yoctoNEAR. */
-export function policyStorageDeposit(walletPubkey: string, encryptedData: string): bigint {
+/**
+ * The contract's own storage formula (`calculate_wallet_policy_storage_size`, no beneficiary), in yoctoNEAR, plus a small
+ * margin (any excess is refunded to the caller). For an update, the deposit the policy already holds counts toward it, so
+ * only the difference is attached.
+ */
+export function policyStorageDeposit(walletPubkey: string, encryptedData: string, existing = 0n): bigint {
   const bytes = 40 + (4 + walletPubkey.length) + (4 + 64 + 4 + encryptedData.length + 1 + 8 + 16);
-  return BigInt(bytes) * YOCTO_PER_BYTE + MARGIN;
+  const required = BigInt(bytes) * YOCTO_PER_BYTE;
+  return (required > existing ? required - existing : 0n) + MARGIN;
 }
 
 export class OutLayerProvisioner implements CustodyProvisioner {
@@ -77,7 +85,7 @@ export class OutLayerProvisioner implements CustodyProvisioner {
     return { walletId, apiKey, walletAccount };
   }
 
-  async preparePolicyStore(wallet: { walletId: string; apiKey: string }, policy: unknown, caller: string): Promise<PolicyStoreCall> {
+  async preparePolicyStore(wallet: { walletId: string; apiKey: string }, policy: unknown, caller: string, existingDeposit = 0n): Promise<PolicyStoreCall> {
     const enc = obj(
       await requestJson(this.f, `${this.baseUrl}/wallet/v1/encrypt-policy`, { method: "POST", headers: this.headers(wallet.apiKey), body: JSON.stringify({ ...(policy as object), wallet_id: wallet.walletId }) }, "OutLayer encrypt policy"),
     );
@@ -95,7 +103,7 @@ export class OutLayerProvisioner implements CustodyProvisioner {
       methodName: "store_wallet_policy",
       args: { wallet_pubkey: walletPubkey, encrypted_data: encrypted, wallet_signature: signature },
       gas: "100000000000000",
-      deposit: policyStorageDeposit(walletPubkey, encrypted).toString(),
+      deposit: policyStorageDeposit(walletPubkey, encrypted, existingDeposit).toString(),
     };
   }
 
@@ -112,8 +120,8 @@ export class OutLayerProvisioner implements CustodyProvisioner {
     const r = obj(await requestJson(this.f, this.rpcUrl, { method: "POST", headers: this.headers(), body: JSON.stringify(body) }, "NEAR RPC get_wallet_policy"));
     const result = obj(r.result);
     if (!Array.isArray(result.result)) throw new Error("NEAR RPC get_wallet_policy: no result");
-    const view = JSON.parse(Buffer.from(result.result as number[]).toString("utf8")) as { owner?: string; frozen?: boolean } | null;
-    return view?.owner ? { owner: view.owner, frozen: Boolean(view.frozen) } : null;
+    const view = JSON.parse(Buffer.from(result.result as number[]).toString("utf8")) as { owner?: string; frozen?: boolean; storage_deposit?: string } | null;
+    return view?.owner ? { owner: view.owner, frozen: Boolean(view.frozen), storageDeposit: String(view.storage_deposit ?? "0") } : null;
   }
 
   async invalidateCache(wallet: { walletId: string; apiKey: string }): Promise<void> {

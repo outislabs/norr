@@ -144,6 +144,9 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
     id: v.id,
     name: v.name ?? null,
     status: "active" as const,
+    // Whether this vault's swaps skip the owner's approval, from the custody policy Norr prepared and checked on chain.
+    // null for a vault whose custody policy the operator set by hand (the demo vault).
+    autonomous: onboarding?.mine(v.owner).find((r) => r.id === v.id)?.custody?.autonomous ?? null,
     walletAccount: v.walletAccount,
     policy: v.policy,
     paused: v.policy.paused,
@@ -236,13 +239,43 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
   app.post("/owner/v1/vaults/:id/custody-policy", async (c) => {
     const owner = c.get("owner") as string;
     if (!onboarding) return c.json({ error: "not found" }, 404);
-    const body = z.object({ autonomous: z.boolean().default(false) }).safeParse((await c.req.json().catch(() => ({}))) ?? {});
+    const body = z.object({ autonomous: z.boolean().default(false), confirmAutonomous: z.boolean().optional() }).safeParse((await c.req.json().catch(() => ({}))) ?? {});
     if (!body.success) return c.json({ error: "autonomous must be true or false" }, 400);
     if (!limiter.allow(`prepare:${owner}`, 20, 3_600_000)) return c.json({ error: "Too many attempts. Try again later." }, 429);
     try {
-      const out = await onboarding.prepare(owner, c.req.param("id"), { autonomous: body.data.autonomous });
+      const out = await onboarding.prepare(owner, c.req.param("id"), { autonomous: body.data.autonomous, confirmAutonomous: body.data.confirmAutonomous });
       note(owner, `prepared the custody policy${body.data.autonomous ? " (autonomous)" : ""}`, c.req.param("id"));
       return c.json(out);
+    } catch (e) {
+      return fail(c, e);
+    }
+  });
+
+  // Switch autonomous mode on an active vault: one signature from the owner's wallet (an update of the stored policy).
+  app.post("/owner/v1/vaults/:id/custody-mode", async (c) => {
+    const owner = c.get("owner") as string;
+    if (!onboarding) return c.json({ error: "not found" }, 404);
+    const body = z.object({ autonomous: z.boolean(), confirmAutonomous: z.boolean().optional() }).safeParse(await c.req.json().catch(() => null));
+    if (!onboarding.mine(owner).some((r) => r.id === c.req.param("id"))) return c.json({ error: "not found" }, 404);
+    if (!body.success) return c.json({ error: "Say whether autonomous mode should be on or off (autonomous: true or false)." }, 400);
+    if (!limiter.allow(`mode:${owner}`, 20, 3_600_000)) return c.json({ error: "Too many attempts. Try again later." }, 429);
+    try {
+      const out = await onboarding.prepareMode(owner, c.req.param("id"), body.data);
+      note(owner, `asked to turn autonomous mode ${body.data.autonomous ? "on" : "off"}`, c.req.param("id"));
+      return c.json(out);
+    } catch (e) {
+      return fail(c, e);
+    }
+  });
+
+  app.post("/owner/v1/vaults/:id/custody-mode/confirm", async (c) => {
+    const owner = c.get("owner") as string;
+    if (!onboarding) return c.json({ error: "not found" }, 404);
+    if (!limiter.allow(`modeconfirm:${owner}`, 40, 3_600_000)) return c.json({ error: "Too many attempts. Try again later." }, 429);
+    try {
+      const r = await onboarding.confirmMode(owner, c.req.param("id"));
+      if (r.status === "applied") note(owner, `autonomous mode is now ${r.autonomous ? "on" : "off"}`, c.req.param("id"));
+      return c.json(r);
     } catch (e) {
       return fail(c, e);
     }

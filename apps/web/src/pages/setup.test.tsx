@@ -5,6 +5,7 @@ import { NewVault } from "../components/NewVault";
 import type { Api, BetaInfo, PreparedPolicy } from "../lib/api";
 import { SetupPage } from "./SetupPage";
 import { AuthorizePage } from "./AuthorizePage";
+import { AutonomyPanel } from "../components/AutonomyPanel";
 import { VaultTitle } from "../components/VaultTitle";
 
 afterEach(cleanup);
@@ -67,9 +68,15 @@ describe("SetupPage", () => {
     const activateVault = vi.fn(async () => ({ status: "setup", problems: ["The address whitelist differs."] }));
     const api = { setupVault, prepareCustody, activateVault } as unknown as Api;
     render(<SetupPage api={api} account="alice.near" id="v_abc" send={vi.fn(async () => undefined)} navigate={vi.fn()} sleep={async () => undefined} />);
-    fireEvent.click(await screen.findByLabelText(/Autonomous mode/));
-    fireEvent.click(screen.getByRole("button", { name: "Review the policy" }));
+    expect(await screen.findByText("OFF")).toBeTruthy(); // off until deliberately turned on
+    fireEvent.click(await screen.findByLabelText("Turn autonomous mode on"));
+    // A second, deliberate step: nothing is prepared until the owner says they understand.
+    const review = screen.getByRole("button", { name: "Review the policy" }) as HTMLButtonElement;
+    expect(review.disabled).toBe(true);
+    fireEvent.click(screen.getByLabelText(/I understand my agent's swaps will run without my approval/));
+    fireEvent.click(review);
     expect(prepareCustody).toHaveBeenCalledWith("v_abc", true);
+    expect((await screen.findByTestId("mode-line")).textContent).toMatch(/ON/);
     fireEvent.click(await screen.findByRole("button", { name: "Sign with your wallet" }));
     expect(await screen.findByText("The address whitelist differs.")).toBeTruthy();
     expect(activateVault).toHaveBeenCalledTimes(1); // only "not on chain yet" is worth waiting for
@@ -133,5 +140,39 @@ describe("vault names in the dashboard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(onRenamed).toHaveBeenCalled());
     expect(renameVault).toHaveBeenCalledWith("v_abc", "Main");
+  });
+});
+
+
+describe("AutonomyPanel (Rules)", () => {
+  const call = { contractId: "outlayer.near", methodName: "store_wallet_policy" as const, args: { wallet_pubkey: "ed25519:aa", encrypted_data: "x", wallet_signature: "y" }, gas: "100000000000000", deposit: "1000000000000000000000" };
+  const prepared = { policy: {}, summary: ["Autonomous mode OFF: every swap waits for your approval in the Approvals tab.", "Only the approval exemption is removed from the stored policy; nothing else changes."], call, controller: "alice.near", autonomous: false };
+
+  it("says ON in words, turns it off with one wallet signature, and reports it only after the service verified the change", async () => {
+    const setCustodyMode = vi.fn(async () => prepared);
+    const confirmCustodyMode = vi.fn().mockResolvedValueOnce({ status: "waiting", problems: ["Approvers or approval settings differ."] }).mockResolvedValueOnce({ status: "applied", autonomous: false });
+    const send = vi.fn(async () => undefined);
+    const onChanged = vi.fn();
+    const api = { setCustodyMode, confirmCustodyMode } as unknown as Api;
+    render(<AutonomyPanel api={api} vaultId="v_1" autonomous account="alice.near" send={send} sleep={async () => undefined} onChanged={onChanged} />);
+    expect(screen.getByTestId("autonomy-state").textContent).toBe("ON");
+    fireEvent.click(screen.getByRole("button", { name: "Turn autonomous mode off" })); // off needs no extra confirmation
+    expect(await screen.findByText(/Autonomous mode OFF: every swap waits for your approval/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Sign with your wallet" }));
+    expect(await screen.findByText("Autonomous mode is now OFF. Every swap waits for your approval.")).toBeTruthy();
+    expect(send).toHaveBeenCalledWith(api, call, "alice.near");
+    expect(confirmCustodyMode).toHaveBeenCalledTimes(2); // waited once for the chain, then it matched
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it("turning it ON needs the owner to say they understand before anything is prepared", async () => {
+    const setCustodyMode = vi.fn(async () => ({ ...prepared, autonomous: true, summary: ["Autonomous mode ON: your agent's swaps run without your signature."] }));
+    render(<AutonomyPanel api={{ setCustodyMode } as unknown as Api} vaultId="v_1" autonomous={false} account="alice.near" />);
+    expect(screen.getByTestId("autonomy-state").textContent).toBe("OFF");
+    const turnOn = screen.getByRole("button", { name: "Turn autonomous mode on" }) as HTMLButtonElement;
+    expect(turnOn.disabled).toBe(true);
+    fireEvent.click(screen.getByLabelText(/I understand my agent's swaps will run without my approval/));
+    fireEvent.click(turnOn);
+    await waitFor(() => expect(setCustodyMode).toHaveBeenCalledWith("v_1", true));
   });
 });

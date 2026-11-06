@@ -1,3 +1,4 @@
+import { AutonomyPanel } from "../components/AutonomyPanel";
 import { VaultTitle } from "../components/VaultTitle";
 import { useState } from "react";
 import type { Policy } from "@norr/shared";
@@ -65,6 +66,11 @@ export function VaultPage({ api, account, id, tab, mcpUrl, apiUrl, onChanged }: 
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <VaultTitle api={api} vault={v} onRenamed={() => (vault.reload(), onChanged())} />
         <div className="flex items-center gap-3">
+          {typeof v.autonomous === "boolean" && (
+            <a href={vaultHref(id, "rules")} className="text-sm text-mute underline decoration-line-strong underline-offset-4 hover:text-fg" data-testid="mode-badge">
+              {v.autonomous ? "Autonomous mode: ON" : "Approvals on"}
+            </a>
+          )}
           <span className={v.paused ? "text-alert" : "text-ok"}>{v.paused ? "Paused" : "Active"}</span>
           <button
             type="button"
@@ -136,6 +142,7 @@ export function VaultPage({ api, account, id, tab, mcpUrl, apiUrl, onChanged }: 
         {tab === "fund" && <div className="max-w-2xl"><FundingPanel api={api} vaultId={id} account={account} onArrived={() => vault.reload()} /></div>}
         {tab === "rules" && (
           <div className="flex max-w-2xl flex-col gap-12">
+            {typeof v.autonomous === "boolean" && <AutonomyPanel key={String(v.autonomous)} api={api} vaultId={id} autonomous={v.autonomous} account={account} onChanged={() => (vault.reload(), onChanged())} />}
             <PolicyForm key={JSON.stringify(v.policy)} policy={v.policy} onSave={save} />
             <AssetCheckPanel api={api} vaultId={id} />
           </div>

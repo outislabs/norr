@@ -11,7 +11,7 @@ Open [app.norr.finance](https://app.norr.finance) and choose **Sign in with a NE
 **No vault yet?** Create one (public beta: up to $100, one vault per account):
 
 1. Accept the [beta terms and risk disclosure](/docs/terms/), and optionally confirm you are not a US person (needed for stocks). Norr opens a custody wallet for you and seals its key in its enclave.
-2. **Review the custody policy** Norr proposes: confidential operations only, money can only go to your own account, every operation waits for your approval, limits of about $10 per operation and $30 a day. Tick **Autonomous mode** only if you want swaps to run without your signature.
+2. **Review the custody policy** Norr proposes: confidential operations only, money can only go to your own account, every operation waits for your approval, limits of about $10 per operation and $30 a day. **Autonomous mode** is off by default and shown as ON or OFF; turning it on takes two deliberate steps (tick it, then confirm that you understand). You can switch it later in **Rules** with one wallet signature.
 3. **Sign with your wallet.** One transaction to `outlayer.near` stores the policy, with about 0.02 to 0.04 NEAR of storage (yours, refundable). Because your account stores it, you become the policy's controller: only you can change or freeze it, never Norr.
 4. Norr checks the chain and the custody provider, then activates the vault. Fund it and connect your agent.
 

@@ -3,6 +3,7 @@ import { buildCustodyPolicy, custodyPolicyProblems, describeCustodyPolicy, equit
 import type { Custody, CustodyProvisioner, PolicyStoreCall } from "@norr/intents";
 import type { Policy } from "@norr/shared";
 import type { BetaControl } from "./beta";
+import { forgetApprovalMode } from "./about";
 import { upstreamReason } from "./errors";
 import { newVault, type Vault, type VaultStore } from "./state";
 import type { TenantRecord, TenantStore } from "./tenants";
@@ -70,6 +71,25 @@ export function cleanVaultName(raw: unknown): string | null {
   return n;
 }
 
+/** Autonomous mode skips the owner's signature on swaps, so turning it on is never a side effect of one tap. */
+export const AUTONOMOUS_CONFIRM_MESSAGE =
+  "Autonomous mode lets your agent's swaps run without your signature, within the limits. Confirm that you want it on (confirmAutonomous: true), or leave it off to approve every operation.";
+
+/** What a mode switch means, in words, for the owner to read before signing. */
+export function modeChangeSummary(autonomous: boolean, owner: string): string[] {
+  return autonomous
+    ? [
+        "Autonomous mode ON: your agent's swaps run without your signature.",
+        "They still stay within the largest trade, the daily spending cap and the operations-per-hour limit (Norr's rules and the custody policy's limits); a trade over a limit is refused.",
+        `Money can only be sent to ${owner} or stay in the vault; the whitelist does not change.`,
+        "Only the approval exemption changes in the stored policy; nothing else.",
+      ]
+    : [
+        "Autonomous mode OFF: every swap waits for your approval in the Approvals tab.",
+        "Only the approval exemption is removed from the stored policy; nothing else changes.",
+      ];
+}
+
 export interface CreateInput {
   name?: string;
   acceptTerms: string;
@@ -128,10 +148,72 @@ export class Onboarding {
     return rec;
   }
 
-  /** The default policy for this vault, in words and as JSON, and the call the owner's wallet sends to store it. */
-  async prepare(owner: string, id: string, o: { autonomous: boolean }): Promise<{ policy: CustodyPolicy; summary: string[]; call: PolicyStoreCall; controller: string }> {
+  /**
+   * Switch autonomous mode for an active vault: the same stored policy with only the approval exemption changed, prepared
+   * for the owner's wallet to store as an update (the controller may update it; only the storage difference is attached).
+   * Turning it on needs the owner's explicit confirmation, as at creation.
+   */
+  async prepareMode(owner: string, id: string, o: { autonomous: boolean; confirmAutonomous?: boolean }): Promise<{ policy: CustodyPolicy; summary: string[]; call: PolicyStoreCall; controller: string; autonomous: boolean }> {
     const rec = this.owned(owner, id);
-    if (rec.status !== "setup") throw new OnboardingError(409, "This vault is already active. Its custody policy is changed by you, as controller, at the custody provider.");
+    if (rec.status !== "active" || !rec.custody) throw new OnboardingError(409, "Finish setting up the vault first: its custody policy is not active yet.");
+    if (o.autonomous && o.confirmAutonomous !== true) throw new OnboardingError(400, AUTONOMOUS_CONFIRM_MESSAGE);
+    if (rec.custody.autonomous === o.autonomous) throw new OnboardingError(409, `Autonomous mode is already ${o.autonomous ? "on" : "off"} for this vault.`);
+    const key = this.d.tenants.key(rec.id);
+    if (!key) throw new OnboardingError(503, "This vault's custody key is missing.");
+    const current = rec.custody.policy;
+    const { excluded_types: _drop, ...approval } = current.approval;
+    const policy: CustodyPolicy = { ...current, approval: o.autonomous ? { ...approval, excluded_types: ["confidential"] } : approval };
+    let chain;
+    try {
+      chain = await this.d.provisioner.onChainPolicy(rec.custody.walletPubkey);
+    } catch (e) {
+      throw new OnboardingError(503, `Could not read the policy contract on chain. ${upstreamReason(e, "NEAR RPC")}`);
+    }
+    if (!chain || chain.owner !== rec.owner) throw new OnboardingError(409, "The chain does not show you as this wallet's policy controller, so the policy cannot be updated from here.");
+    let call: PolicyStoreCall;
+    try {
+      call = await this.d.provisioner.preparePolicyStore({ walletId: rec.walletId, apiKey: key }, policy, rec.owner, BigInt(chain.storageDeposit));
+    } catch (e) {
+      throw new OnboardingError(502, `The custody provider did not prepare the policy update. ${upstreamReason(e, "OutLayer")}`);
+    }
+    this.d.tenants.put({ ...rec, custody: { ...rec.custody, pending: { autonomous: o.autonomous, policy, preparedAt: new Date(this.d.now()).toISOString() } } });
+    return { policy, summary: modeChangeSummary(o.autonomous, rec.owner), call, controller: rec.owner, autonomous: o.autonomous };
+  }
+
+  /** After the owner signed: apply the change only if the custody provider now holds exactly the policy that was prepared. */
+  async confirmMode(owner: string, id: string): Promise<{ status: "applied"; autonomous: boolean } | { status: "waiting"; problems: string[] }> {
+    const rec = this.owned(owner, id);
+    const pending = rec.custody?.pending;
+    if (!rec.custody || !pending) return { status: "waiting", problems: ["No change is waiting to be signed. Start one from Rules."] };
+    const key = this.d.tenants.key(rec.id);
+    if (!key) throw new OnboardingError(503, "This vault's custody key is missing.");
+    let chain;
+    try {
+      chain = await this.d.provisioner.onChainPolicy(rec.custody.walletPubkey);
+    } catch (e) {
+      throw new OnboardingError(503, `Could not read the policy contract on chain. ${upstreamReason(e, "NEAR RPC")}`);
+    }
+    if (!chain || chain.owner !== rec.owner) return { status: "waiting", problems: ["The chain does not show you as this wallet's controller."] };
+    await this.d.provisioner.invalidateCache({ walletId: rec.walletId, apiKey: key });
+    let stored;
+    try {
+      stored = await this.d.provisioner.readPolicy(key);
+    } catch (e) {
+      throw new OnboardingError(503, `Could not read the stored policy from the custody provider. ${upstreamReason(e, "OutLayer policy")}`);
+    }
+    const problems = custodyPolicyProblems(pending.policy, stored ? { ...stored, frozen: chain.frozen || stored.frozen } : null);
+    if (problems.length > 0) return { status: "waiting", problems: [...problems, "If you have not signed yet, sign the transaction in your wallet, then check again."] };
+    const { pending: _done, ...rest } = rec.custody;
+    this.d.tenants.put({ ...rec, custody: { ...rest, policy: pending.policy, autonomous: pending.autonomous } });
+    forgetApprovalMode(this.d.vaults.get(rec.id)!);
+    return { status: "applied", autonomous: pending.autonomous };
+  }
+
+  /** The default policy for this vault, in words and as JSON, and the call the owner's wallet sends to store it. */
+  async prepare(owner: string, id: string, o: { autonomous: boolean; confirmAutonomous?: boolean }): Promise<{ policy: CustodyPolicy; summary: string[]; call: PolicyStoreCall; controller: string }> {
+    const rec = this.owned(owner, id);
+    if (rec.status !== "setup") throw new OnboardingError(409, "This vault is already active. Change autonomous mode in Rules; other policy changes are made by you, as controller, at the custody provider.");
+    if (o.autonomous && o.confirmAutonomous !== true) throw new OnboardingError(400, AUTONOMOUS_CONFIRM_MESSAGE);
     const key = this.d.tenants.key(rec.id);
     if (!key) throw new OnboardingError(503, "This vault's custody key is missing.");
     const policy = buildCustodyPolicy({
@@ -226,7 +308,7 @@ export class Onboarding {
       createdAt: r.createdAt,
       terms: r.terms,
       nonUsConfirmed: r.nonUsConfirmed,
-      custody: r.custody ? { prepared: true, autonomous: r.custody.autonomous, walletPubkey: r.custody.walletPubkey, preparedAt: r.custody.preparedAt } : { prepared: false },
+      custody: r.custody ? { prepared: true, autonomous: r.custody.autonomous, walletPubkey: r.custody.walletPubkey, preparedAt: r.custody.preparedAt, ...(r.custody.pending ? { pendingAutonomous: r.custody.pending.autonomous } : {}) } : { prepared: false },
     };
   }
 }

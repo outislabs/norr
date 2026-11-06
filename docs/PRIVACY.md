@@ -19,12 +19,24 @@ Notes from NEAR Intents' documentation (and OutLayer's): a vault's confidential 
 | Data | Who can read it today | Target | Status |
 |---|---|---|---|
 | Agent's stated reasoning (`reason`) | **The owner only.** Sealed to a key derived in the owner's browser from one wallet signature (X25519 + AES-GCM). The service writes it but cannot read it back; the API returns only the sealed box. Until the owner has enrolled a key it is held sealed to the service's data key, then moved to the owner's key at enrollment | Same | Built |
-| Activity log and decisions | The service (it must read decisions to enforce caps and answer the agent). Encrypted on disk with the service data key (`data/ledger.jsonl`, mode 0600, gitignored), so copying the files alone reveals nothing | Data key sealed by the TEE | Encrypted at rest: Built. Key sealed in TEE: Planned |
+| Activity log and decisions | The service (it must read decisions to enforce caps and answer the agent). Encrypted on disk with the service data key, so copying the files alone reveals nothing. **The operator holds that key** (`NORR_DATA_KEY`), so the operator, given a copy of the files, could decrypt them | Data key derived inside the enclave, so the operator cannot (proposed: `docs/OPERATOR-PRIVACY.md`) | Encrypted at rest: Built. Operator-proof key: **Planned, not built** |
 | Per-vault counters, positions, policy and kill switch | The service. Same encrypted file layer (`data/vaults/<id>.json`); the agent sees a planning view only | Same, with the service running in a TEE | Encrypted at rest: Built. TEE: Planned |
 | Agent tokens | Only SHA-256 hashes are stored | Same | Built |
 | API keys for custody | The service's environment. On the Phala deployment they are encrypted environment variables that only the CVM can decrypt (Phala's key service is a trust assumption) | Same | Built (deployed 2026-11-02) |
 | Strategy / prompts in the agent | The agent's host (Claude Desktop, IronClaw or other) | Agent hosted in a TEE | Not Norr's to promise; IronClaw unverified |
 | Service code integrity | Anyone: the public `/attestation` and `/info` endpoints return a TDX quote bound to the caller's nonce, the measured configuration and the pinned image digests; the Verify screen and `scripts/verify-attestation.mts` check them (seven checks, including a production-OS-image check and the quote's signature chain, which the dashboard verifies in the browser against Intel's root certificate since 2026-11-03). It proves which code and images booted, not what secrets were given | Same | **Built and checked against our own CVM on 2026-11-02** |
+
+### Who can read what, today (the operator's position)
+
+| | Reads Norr's stored data | Reads your sealed reasoning | Moves money |
+|---|---|---|---|
+| The Norr service, inside the enclave | Yes, in plaintext, to enforce the rules and answer the agent | Never after sealing (it seals to your key at once) | Only through the custody provider, inside your policy |
+| The operator (the person who runs Norr) | **Could**, with a copy of the data and the key they hold; there is no ordinary way to reach the files (no shell in the production image, private logs). **Could** also deploy changed code, which attestation shows but does not prevent | No | Only as your custody policy allows: your whitelisted account, your approval unless you chose autonomous mode |
+| OutLayer (custody provider) | Sees every custody operation it builds and signs | No | Holds the wallet keys in its TEE; limits and approvals bind it |
+| NEAR Intents operator and solvers | See confidential intents in plaintext | No | No |
+| Anyone else | No | No | No |
+
+Moving the data key into the enclave, so the operator cannot decrypt a copy, is proposed in `docs/OPERATOR-PRIVACY.md` and is not built. Even then the operator could ship new code under the same app; only on-chain governance of allowed code versions closes that.
 
 ### How the private reasoning works, and what it does not protect
 - The owner's key is derived from a wallet signature over a fixed message (ed25519 signatures are deterministic, so it is the same every time). The private half never leaves the browser; only the public half is sent to the service.
