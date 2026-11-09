@@ -1,7 +1,32 @@
-# Keeping the operator out of users' data (proposal, not built)
+# Keeping the operator out of users' data
 
-Status: proposed 2026-11-06 for Kelvin's decision. Nothing here is built. The current-state statements in `docs/PRIVACY.md`
-and `about_norr` were corrected the same day; this document is only about changing the key.
+Status: **option A chosen 2026-11-10; step 1 of 4 is built and not yet proven live; steps 2 to 4 are not started.** The
+current-state statements in `docs/PRIVACY.md` and `about_norr` were corrected on 2026-11-06 and stay true until the last
+step is done; this document is about changing the key.
+
+## Progress
+
+| Step | State |
+|---|---|
+| 1. Prove the key is stable (no data change) | Built 2026-11-10: `GET /info` carries `dataKey: { path, fingerprint }` |
+| 2. Versioned envelope (`kid`) | Not started; waits for step 1 |
+| 3. Re-encrypt at boot, atomically, with a backup | Not started |
+| 4. Cut over (redeploy without `NORR_DATA_KEY`) | Not started |
+
+### Step 1: what it does, and the test that unlocks step 2
+
+The service asks the enclave for the key at path `norr/data-key/v1`, hashes it with a fixed label into a 16-character
+fingerprint, zeroes the key, and reports only the fingerprint on the public `/info`. Nothing is encrypted with this key
+yet; data is still encrypted under `NORR_DATA_KEY` exactly as before. The test, each time reading
+`curl -s https://api.norr.finance/info` and looking at `dataKey.fingerprint`:
+
+1. After this deploy: note the fingerprint, **F**. It must be 16 hex characters, not null.
+2. Restart the CVM (no new image): the fingerprint must still be **F**.
+3. Deploy a different image (any later commit; the compose hash changes, the app id does not): still **F**.
+
+All three equal: the key survives restarts and updates on this app, and step 2 may start. A different value, or a null,
+means the plan's central assumption is wrong for this CVM; nothing is lost, because no data depends on the key yet, and we
+stop and rethink. The fingerprint is reported, not attested (it sits beside the attested configuration, not inside the quote).
 
 ## Today
 

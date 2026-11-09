@@ -6,7 +6,7 @@ import { resolveBuildInfo, type BuildInfo } from "./build-info";
 import { vaultPnl } from "./vault-pnl";
 import { aboutNorr, approvalInfo } from "./about";
 import { assetCheck, contractReport } from "./asset-check";
-import { rateLimiter, type Attestor } from "./attestation";
+import { DATA_KEY_PATH, rateLimiter, type Attestor } from "./attestation";
 import type { SealKeyStore, SealingLedger } from "./seal";
 import { mountOwnerRoutes, type OwnerAuditEntry } from "./owner/routes";
 import type { OwnerAuth } from "./owner/auth";
@@ -78,10 +78,23 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
       return c.json({ attested: false, error: "The TEE did not produce a quote." }, 502);
     }
   });
+  // The fingerprint of the data key the enclave derives (docs/OPERATOR-PRIVACY.md, option A, step 1). Computed once per
+  // process; it changes only if the enclave derives a different key, which would make stored data unreadable.
+  let dataKey: { path: string; fingerprint: string | null; note?: string } | null = null;
+  const dataKeyReport = async () => {
+    if (dataKey?.fingerprint) return dataKey;
+    if (!attestor?.keyFingerprint) return { path: DATA_KEY_PATH, fingerprint: null, note: "This attestor cannot derive keys." };
+    try {
+      dataKey = { path: DATA_KEY_PATH, fingerprint: await attestor.keyFingerprint(DATA_KEY_PATH) };
+    } catch {
+      return { path: DATA_KEY_PATH, fingerprint: null, note: "The TEE did not derive the key." };
+    }
+    return dataKey;
+  };
   app.get("/info", async (c) => {
     if (!attestor) return c.json({ attested: false, error: "This service is not running in a TEE: there is no attestation device to ask." }, 503);
     try {
-      return c.json({ attested: true, ...(await attestor.info()), commit: build0.commit });
+      return c.json({ attested: true, ...(await attestor.info()), commit: build0.commit, dataKey: await dataKeyReport() });
     } catch {
       return c.json({ attested: false, error: "The TEE did not return its configuration." }, 502);
     }

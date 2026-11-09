@@ -496,6 +496,29 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "dataKey": {
+                      "type": "object",
+                      "description": "The key the enclave derives for Norr's data (docs/OPERATOR-PRIVACY.md): its derivation path and a short one-way fingerprint of it (never the key). The fingerprint must stay the same across restarts and code updates; fingerprint is null when the enclave could not derive the key.",
+                      "required": [
+                        "path",
+                        "fingerprint"
+                      ],
+                      "properties": {
+                        "path": {
+                          "type": "string"
+                        },
+                        "fingerprint": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[0-9a-f]{16}$"
+                        },
+                        "note": {
+                          "type": "string"
+                        }
+                      }
                     }
                   }
                 }

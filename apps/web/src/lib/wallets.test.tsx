@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Api } from "./api";
-import { disconnectWallet, walletSignIn, type SelectorKit } from "./signin";
+import { disconnectWallet, hasRememberedWallet, loadSelector, walletSignIn, type SelectorKit } from "./signin";
 import { missingWallets, walletFactories, WALLETS } from "./wallets";
 import { buildCsp } from "./csp";
 
@@ -110,6 +110,20 @@ describe("a remembered wallet never replaces the picker (seen live 2026-11-06: a
     await disconnectWallet(load);
     expect(signOut).toHaveBeenCalledTimes(1);
   });
+});
+
+describe("a remembered wallet that no longer answers must not break sign-in (found 2026-11-10 on the live site)", () => {
+  it("the wallet-selector's own setup crashes on it; sign-in forgets what was remembered, retries, and lists every wallet", async () => {
+    // HOT remembered, but none of its own stored account data: what an expired session or a half-cleared browser leaves.
+    localStorage.setItem("near-wallet-selector:recentlySignedInWallets", JSON.stringify(["hot-wallet"]));
+    localStorage.setItem("near-wallet-selector:selectedWalletId", JSON.stringify("hot-wallet"));
+    const { setupWalletSelector } = await import("@near-wallet-selector/core");
+    await expect(setupWalletSelector({ network: "mainnet", modules: walletFactories() })).rejects.toThrow(/reading 'length'/); // the library's bug
+    const kit = await loadSelector();
+    expect(kit.missing).toEqual([]);
+    expect(kit.selector.store.getState().modules).toHaveLength(WALLETS.length);
+    expect(hasRememberedWallet()).toBe(false);
+  }, HEAVY);
 });
 
 describe("CSP origins for the configured wallets", () => {

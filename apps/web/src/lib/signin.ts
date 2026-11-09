@@ -14,13 +14,25 @@ export async function demoSignIn(api: Api, owner: string): Promise<SessionInfo> 
 }
 
 /** The wallet selector with every wallet in lib/wallets.ts. Loaded on demand. */
-async function loadSelector() {
+export async function loadSelector() {
   (globalThis as { Buffer?: typeof Buffer }).Buffer ??= Buffer;
   const [{ setupWalletSelector }, { setupModal }] = await Promise.all([import("@near-wallet-selector/core"), import("@near-wallet-selector/modal-ui")]);
   await import("@near-wallet-selector/modal-ui/styles.css");
   // The selector drops a wallet that fails to start without a word; remember why, so the sign-in page can say it.
   const failures = new Map<string, unknown>();
-  const selector = await setupWalletSelector({ network: "mainnet", modules: walletFactories((id, e) => failures.set(id, e)) });
+  const start = () => setupWalletSelector({ network: "mainnet", modules: walletFactories((id, e) => failures.set(id, e)) });
+  let selector: Awaited<ReturnType<typeof start>>;
+  try {
+    selector = await start();
+  } catch (e) {
+    // A remembered wallet that can no longer answer (an expired session, a removed extension) crashes the selector's own
+    // setup (its validateWallet returns null and the next line reads .length), which would leave sign-in dead until the
+    // user clears site data. Forget what was remembered and start again, once.
+    if (!hasRememberedWallet()) throw e;
+    forgetRememberedWallets();
+    failures.clear();
+    selector = await start();
+  }
   const missing = missingWallets(selector.store.getState().modules.map((m) => m.id), failures);
   return { selector, setupModal, missing };
 }
@@ -35,6 +47,15 @@ export const hasRememberedWallet = (): boolean => {
     return false;
   }
 };
+
+/** Remove everything the wallet-selector remembers (its own keys all start with its package name). */
+export function forgetRememberedWallets(): void {
+  try {
+    for (const k of Object.keys(localStorage)) if (k.startsWith("near-wallet-selector:")) localStorage.removeItem(k);
+  } catch {
+    /* storage is blocked: nothing is remembered either */
+  }
+}
 
 async function disconnect(selector: SelectorKit["selector"]): Promise<void> {
   try {

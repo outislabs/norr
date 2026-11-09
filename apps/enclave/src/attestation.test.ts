@@ -1,7 +1,7 @@
 import { checkAttestation, allPass } from "@norr/shared";
 import { describe, expect, it } from "vitest";
 import { fixture } from "../../../packages/shared/src/attestation.fixture";
-import { rateLimiter, type Attestor } from "./attestation";
+import { DATA_KEY_PATH, keyFingerprint, rateLimiter, type Attestor } from "./attestation";
 import { createMockEnclave } from "./mock-enclave";
 
 const NONCE = "11".repeat(32);
@@ -80,5 +80,45 @@ describe("rateLimiter", () => {
     expect([ok(), ok(), ok()]).toEqual([true, true, false]);
     t = 1001;
     expect(ok()).toBe(true);
+  });
+});
+
+
+describe("the enclave-derived data key, step 1: only a fingerprint is reported (docs/OPERATOR-PRIVACY.md)", () => {
+  const key = (b: number) => Uint8Array.from({ length: 32 }, () => b);
+
+  it("a fingerprint is a short one-way hash with a fixed label: stable for a key, different for another, and not the key or its plain hash", () => {
+    const f = keyFingerprint(key(7));
+    expect(f).toMatch(/^[0-9a-f]{16}$/);
+    expect(keyFingerprint(key(7))).toBe(f);
+    expect(keyFingerprint(key(8))).not.toBe(f);
+    expect(f).not.toBe(Buffer.from(key(7)).toString("hex").slice(0, 16));
+    expect(f).not.toBe(require("node:crypto").createHash("sha256").update(key(7)).digest("hex").slice(0, 16)); // the label separates it from a plain hash
+  });
+
+  it("/info carries the derivation path and the fingerprint, the same on every call and after a restart with the same key", async () => {
+    let derived = 0;
+    const tee = (k: Uint8Array): Attestor => ({ ...fakeTee(), async keyFingerprint(path) { derived++; expect(path).toBe(DATA_KEY_PATH); return keyFingerprint(k); } });
+    const boot1 = createMockEnclave({ attestor: tee(key(7)) });
+    const a = await (await boot1.app.request("/info")).json();
+    const b = await (await boot1.app.request("/info")).json();
+    expect(a.dataKey).toEqual({ path: "norr/data-key/v1", fingerprint: keyFingerprint(key(7)) });
+    expect(b.dataKey).toEqual(a.dataKey);
+    expect(derived).toBe(1); // derived once per process, not on every public request
+    // A restart or a code update on the same app: a new process derives the same key, so the same fingerprint.
+    expect((await (await createMockEnclave({ attestor: tee(key(7)) }).app.request("/info")).json()).dataKey.fingerprint).toBe(a.dataKey.fingerprint);
+    // A different app would derive a different key, and the fingerprint would show it before any data depended on it.
+    expect((await (await createMockEnclave({ attestor: tee(key(9)) }).app.request("/info")).json()).dataKey.fingerprint).not.toBe(a.dataKey.fingerprint);
+  });
+
+  it("if the enclave cannot derive the key, /info still answers, with a null fingerprint and a plain note, and nothing about the error", async () => {
+    const failing: Attestor = { ...fakeTee(), async keyFingerprint() { throw new Error("socket exploded: secret detail"); } };
+    const r = await createMockEnclave({ attestor: failing }).app.request("/info");
+    expect(r.status).toBe(200);
+    const body = await r.json();
+    expect(body.dataKey).toEqual({ path: "norr/data-key/v1", fingerprint: null, note: "The TEE did not derive the key." });
+    expect(JSON.stringify(body)).not.toContain("secret detail");
+    // An attestor with no key derivation says so.
+    expect((await (await createMockEnclave({ attestor: fakeTee() }).app.request("/info")).json()).dataKey).toMatchObject({ fingerprint: null, note: "This attestor cannot derive keys." });
   });
 });
