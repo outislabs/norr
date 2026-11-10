@@ -67,7 +67,7 @@ describe("the wallet picker", () => {
 
 /** A selector kit with a remembered wallet, to see whether the picker still appears. */
 function rememberedKit(opts: { missing?: SelectorKit["missing"] } = {}) {
-  let accounts: { accountId: string }[] = [{ accountId: "legalalienx.near" }];
+  let accounts: { accountId: string }[] = [{ accountId: "refund-wallet.near" }];
   const subs: ((s: { accounts: unknown[] }) => void)[] = [];
   const signOut = vi.fn(async () => { accounts = []; });
   const signMessage = vi.fn(async () => ({ accountId: "owner.near", publicKey: "ed25519:K", signature: "sig" }));

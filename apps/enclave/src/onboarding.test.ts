@@ -279,13 +279,13 @@ describe("funding errors name the real cause (seen live 2026-11-05)", () => {
     const a = await activeVault(m, call, "alice.near", true);
     m.deps.vaultCapUsd = () => undefined;
     const funder = m.deps.funder!;
-    const fund = async () => (await call(`/owner/v1/vaults/${a.id}/funding`, { token: a.token, body: { amountUsd: 5, refundTo: "legalalienx.near" } })).json();
+    const fund = async () => (await call(`/owner/v1/vaults/${a.id}/funding`, { token: a.token, body: { amountUsd: 5, refundTo: "refund-wallet.near" } })).json();
 
     funder.requestDeposit = async () => { throw new IntentsApiError(400, "1Click deposit quote: Quoting for this pair is not available"); };
     expect((await fund()).error).toMatch(/1Click is not quoting deposits from USDC on NEAR into the vault right now \(it answered "Quoting for this pair is not available"\)\. This is on 1Click's side, not your vault or refund address/);
 
     funder.requestDeposit = async () => { throw new IntentsApiError(400, "1Click deposit quote: refundTo is not valid"); };
-    expect((await fund()).error).toBe('1Click did not accept "legalalienx.near" as a NEAR refund address. Check it and try again.');
+    expect((await fund()).error).toBe('1Click did not accept "refund-wallet.near" as a NEAR refund address. Check it and try again.');
 
     funder.requestDeposit = async () => { throw new IntentsApiError(503, "1Click deposit quote: upstream timeout"); };
     expect((await fund()).error).toBe('No deposit address: 1Click deposit quote failed on its side (HTTP 503: "upstream timeout"). Try again shortly.');
@@ -330,7 +330,7 @@ describe("direct NEAR deposit when 1Click cannot quote", () => {
     const usdc = m.deps.quoteAsset.id;
     const vault = m.vaults.get(a.id)!;
     m.deps.funder!.requestDeposit = async () => { throw new IntentsApiError(400, "1Click deposit quote: Quoting for this pair is not available"); };
-    const r = await (await call(`/owner/v1/vaults/${a.id}/funding`, { token: a.token, body: { amountUsd: 5, refundTo: "legalalienx.near" } })).json();
+    const r = await (await call(`/owner/v1/vaults/${a.id}/funding`, { token: a.token, body: { amountUsd: 5, refundTo: "refund-wallet.near" } })).json();
     expect(r.error).toMatch(/deposit directly on NEAR instead \(public until you move it into the confidential layer\)/);
     expect(r.directDeposit).toMatchObject({
       contractId: usdc.replace(/^nep141:/, ""),

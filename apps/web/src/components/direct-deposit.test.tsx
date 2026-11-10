@@ -32,10 +32,10 @@ describe("direct NEAR deposit", () => {
   });
 
   it("sends the exact call from the connected wallet and says from which account", async () => {
-    const send = vi.fn(async () => "legalalienx.near");
+    const send = vi.fn(async () => "refund-wallet.near");
     render(<DirectDepositPanel api={{} as Api} deposit={dd} send={send} />);
     fireEvent.click(screen.getByRole("button", { name: "Send with my NEAR wallet" }));
-    expect(await screen.findByText(/Sent from legalalienx\.near/)).toBeTruthy();
+    expect(await screen.findByText(/Sent from refund-wallet\.near/)).toBeTruthy();
     expect(send).toHaveBeenCalledWith({}, dd);
   });
 
