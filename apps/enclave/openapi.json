@@ -616,11 +616,11 @@
                         }
                       }
                     },
-                    "incidentFeed": {
-                      "$ref": "#/components/schemas/IncidentFeed"
-                    },
                     "docs": {
                       "type": "string"
+                    },
+                    "incidentFeed": {
+                      "$ref": "#/components/schemas/IncidentFeed"
                     }
                   }
                 }
@@ -804,9 +804,6 @@
             "items": {
               "type": "string"
             }
-          },
-          "incidentFeed": {
-            "$ref": "#/components/schemas/IncidentFeed"
           }
         }
       },
@@ -829,9 +826,6 @@
           },
           "suggestedUsd": {
             "type": "number"
-          },
-          "incidentFeed": {
-            "$ref": "#/components/schemas/IncidentFeed"
           }
         }
       },
@@ -851,9 +845,6 @@
           },
           "message": {
             "type": "string"
-          },
-          "incidentFeed": {
-            "$ref": "#/components/schemas/IncidentFeed"
           },
           "approval": {
             "type": "object",
@@ -892,9 +883,6 @@
           },
           "message": {
             "type": "string"
-          },
-          "incidentFeed": {
-            "$ref": "#/components/schemas/IncidentFeed"
           }
         }
       },
@@ -973,9 +961,6 @@
             "items": {
               "type": "string"
             }
-          },
-          "incidentFeed": {
-            "$ref": "#/components/schemas/IncidentFeed"
           },
           "approval": {
             "$ref": "#/components/schemas/ApprovalInfo"
@@ -1152,9 +1137,6 @@
           },
           "notice": {
             "type": "string"
-          },
-          "incidentFeed": {
-            "$ref": "#/components/schemas/IncidentFeed"
           }
         }
       },
@@ -1271,9 +1253,6 @@
                 }
               }
             }
-          },
-          "incidentFeed": {
-            "$ref": "#/components/schemas/IncidentFeed"
           }
         }
       },
@@ -1420,9 +1399,6 @@
           },
           "paused": {
             "type": "boolean"
-          },
-          "incidentFeed": {
-            "$ref": "#/components/schemas/IncidentFeed"
           }
         }
       },
@@ -1652,9 +1628,10 @@
       "IncidentFeed": {
         "type": "object",
         "required": [
-          "status"
+          "status",
+          "note"
         ],
-        "description": "Whether this deployment checks the NEAR Intents incident feed. A deployment setting: active when a partner key is configured. When not configured, note says so in plain words.",
+        "description": "Whether this deployment checks the NEAR Intents incident feed: an optional integration, enabled when a partner key is configured. Stated in about_norr (not attached to other answers); when enabled, an incident shows as a refused trade (SHIELD_INCIDENT).",
         "properties": {
           "status": {
             "type": "string",
@@ -1665,7 +1642,7 @@
           },
           "note": {
             "type": "string",
-            "description": "\"Incident feed: not configured (partner key pending)\""
+            "description": "The state in words, for example \"NEAR Intents incident feed: optional integration, not enabled yet.\" followed by what enabling it does."
           }
         }
       },

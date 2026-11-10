@@ -12,7 +12,7 @@
 - **The Claude app connector (OAuth)** is tested against Norr's own OAuth client, not yet from the Claude app itself.
 - **Funding from other chains is quoted, not yet proven.** USDC on NEAR is proven on mainnet; the other chains were quoted live but not run with real funds.
 - **Owning a vault needs a NEAR account.** EVM and Solana users can fund a vault but not sign in or approve swaps.
-- **The incident feed is not configured.** The NEAR Intents partner key for it has not been granted, so the hosted service does not check it; every answer says "Incident feed: not configured (partner key pending)". With a key it is checked and fails closed.
+- **NEAR Intents incident feed: optional integration, not enabled yet.** It needs a NEAR Intents partner key, which this deployment does not have, so the hosted service does not check it; every other check runs (your rules, Scam Shield, eligibility, price sanity, post-trade verification). With a key it is checked last and fails closed. Agents read this in `about_norr`; the dashboard shows it as one small item in the status bar.
 - **Limit orders are out of v1**: two test limit orders never filled.
 - **Stock minimums move** with the market and the time of day.
 - **Stock eligibility** follows third-party sources; this is not legal advice and has not been reviewed by counsel.

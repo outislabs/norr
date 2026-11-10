@@ -1,4 +1,4 @@
-import { checkShield, EQUITY_DISCLAIMER, incidentFeedInfo, type RiskResult } from "@norr/core";
+import { checkShield, EQUITY_DISCLAIMER, type RiskResult } from "@norr/core";
 import type { ContractRef, RegistryEntry } from "@norr/core";
 import type { TradeDeps } from "./trade";
 
@@ -25,8 +25,8 @@ export async function contractReport(deps: TradeDeps, ref: ContractRef) {
 export async function assetCheck(deps: TradeDeps, query: string, nonUsConfirmed: boolean) {
   const feedStatus = deps.incidentFeed ?? "active";
   const found = deps.registry.lookup(query);
-  if (found.kind === "not_routable") return { found: false as const, routable: false as const, ...(await contractReport(deps, found.ref)), incidentFeed: incidentFeedInfo(feedStatus) };
-  if (found.kind === "unknown") return { found: false as const, message: `"${query}" is not a tradable asset. Name it by chain and contract address (for example base:0x…) to check a specific token.`, incidentFeed: incidentFeedInfo(feedStatus) };
+  if (found.kind === "not_routable") return { found: false as const, routable: false as const, ...(await contractReport(deps, found.ref)) };
+  if (found.kind === "unknown") return { found: false as const, message: `"${query}" is not a tradable asset. Name it by chain and contract address (for example base:0x…) to check a specific token.` };
   const res = found.resolution;
   const active = feedStatus === "active";
   const feed = active ? await deps.shield().catch(() => null) : null;
@@ -45,6 +45,5 @@ export async function assetCheck(deps: TradeDeps, query: string, nonUsConfirmed:
     ...(res.ambiguous ? { ambiguous: true, message: `Several different tokens are called ${res.ticker}. Trades need the chain and contract address of the one you mean (each version below lists them).` } : {}),
     ...(res.byContract ? { byContract: true } : {}),
     ...(res.class === "equity" ? { eligible: nonUsConfirmed, notice: EQUITY_DISCLAIMER } : {}),
-    incidentFeed: incidentFeedInfo(feedStatus),
   };
 }

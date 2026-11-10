@@ -35,10 +35,11 @@ describe("statusPills", () => {
     expect(statusPills("offline", null)).toEqual([expect.objectContaining({ id: "enclave", label: "Offline", tone: "idle", href: "#/verify" })]);
   });
 
-  it("labels an incident feed that is not configured, without calling it a failure", () => {
+  it("shows an incident feed that is not enabled as one small neutral item, not a warning", () => {
     const p = byId(statusPills("pass", { ...ok, shield: "not_configured" }));
-    expect(p.shield).toMatchObject({ tone: "warn", label: "Incident feed: not configured" });
-    expect(p.shield!.title).toContain("partner key pending");
+    expect(p.shield).toMatchObject({ tone: "idle", label: "Incident feed: not enabled" });
+    expect(p.shield!.title).toContain("NEAR Intents incident feed: optional integration, not enabled yet.");
+    expect(p.shield!.title).not.toMatch(/pending|warning|failed/i);
   });
 
   it("explains pricing retrying and an unreadable Shield feed as the reason trades are blocked", () => {
@@ -160,11 +161,14 @@ describe("ConnectAgent", () => {
 });
 
 describe("VerifyPage", () => {
-  it("shows anyone, signed in or not, that the incident feed is not configured on this deployment", async () => {
-    const api = { health: vi.fn(async () => ({ ok: true, mock: false, incidentFeed: "not_configured" })) } as unknown as Api;
-    render(<VerifyPage api={api} signedIn={false} />);
-    const row = await screen.findByTestId("deployment-settings");
-    expect(row.textContent).toContain("Not configured (partner key pending)");
+  it("is only about the enclave: no incident feed, no deployment settings", async () => {
+    const health = vi.fn(async () => ({ ok: true, mock: false, incidentFeed: "not_configured" }));
+    const api = { health } as unknown as Api;
+    const { container } = render(<VerifyPage api={api} signedIn={false} />);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(container.textContent).not.toMatch(/incident feed|partner key|not configured/i);
+    expect(screen.queryByTestId("deployment-settings")).toBeNull();
+    expect(health).not.toHaveBeenCalled(); // the page no longer reads deployment settings at all
   });
 });
 
@@ -174,7 +178,6 @@ describe("AssetCheckPanel", () => {
       checkAsset: vi.fn(async () => ({
         found: true, class: "crypto", ticker: "RUGPULL",
         versions: [{ symbol: "RUGPULL", issuer: null, chain: "sol", shieldBlocked: null, risk: { score: 100, level: "high", reasons: ["Very low liquidity ($3,200).", "Mint authority is active: more tokens can be minted."], contract: { source: "goplus", status: "ok", trusted: false, findings: ["Mint authority is active: more tokens can be minted.", "Freeze authority is active: holders' accounts can be frozen."] } } }],
-        incidentFeed: { status: "not_configured", note: "Incident feed: not configured (partner key pending)" },
       })),
     } as unknown as Api;
     render(<AssetCheckPanel api={api} vaultId="demo" />);
@@ -184,7 +187,7 @@ describe("AssetCheckPanel", () => {
     expect(box.textContent).toContain("high risk · 100/100");
     expect(box.textContent).toContain("Checked by GoPlus");
     expect(box.textContent).toContain("Freeze authority is active");
-    expect(box.textContent).toContain("Incident feed: not configured (partner key pending)");
+    expect(box.textContent).not.toMatch(/incident feed|partner key/i);
     expect(api.checkAsset).toHaveBeenCalledWith("demo", "RUGPULL");
   });
 });

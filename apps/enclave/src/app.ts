@@ -1,4 +1,4 @@
-import { EQUITY_DISCLAIMER, equityMinimum, incidentFeedInfo, MINIMUMS_NOTE, sumToday, unitsToNumber, type IncidentFeedStatus } from "@norr/core";
+import { EQUITY_DISCLAIMER, equityMinimum, MINIMUMS_NOTE, sumToday, unitsToNumber, type IncidentFeedStatus } from "@norr/core";
 import { TradeInput, type Decision, type TradeRequest } from "@norr/shared";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -101,9 +101,9 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
   });
 
   // In mock mode the demo owner is public, so the dashboard can offer a one-click demo sign-in.
-  // The incident feed's status is a deployment setting (a partner key is configured or not), reported on every answer.
+  // The incident feed is a deployment setting (a partner key is configured or not). /health reports it as a plain status for
+  // the dashboard; agents read it once, in about_norr, not on every answer.
   const feedStatus = (): IncidentFeedStatus => deps.incidentFeed ?? "active";
-  const feedInfo = () => incidentFeedInfo(feedStatus());
   app.get("/health", (c) => c.json({ ok: true, mock, pricing: deps.pricingReady?.() === false ? "retrying" : "ready", incidentFeed: feedStatus(), ...(mock ? { mockOwner: deps.vaults.list()[0]?.owner } : {}) }));
 
   app.use("/v1/*", async (c, next) => {
@@ -173,7 +173,7 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
     const request = await parseTrade(c, vault.id);
     if (!request) return c.json({ error: "invalid request" }, 400);
     const planned = await planTrade(deps, vault, request);
-    if ("decision" in planned) return c.json({ ...planned.decision, incidentFeed: feedInfo() });
+    if ("decision" in planned) return c.json(planned.decision);
     const { plan } = planned;
     const out = plan.side === "buy" ? plan.candidate : deps.quoteAsset;
     return c.json({
@@ -190,7 +190,6 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
       ...(plan.warnings.length ? { warnings: plan.warnings } : {}),
       // Whether this swap would wait for the owner, read from the custody provider's own policy.
       approval: await approvalInfo(deps, vault),
-      incidentFeed: feedInfo(),
     });
   });
 
@@ -198,7 +197,7 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
     const request = await parseTrade(c, c.get("vaultId"));
     if (!request) return c.json({ error: "invalid request" }, 400);
     const decision: Decision = await executeTrade(deps, request);
-    return c.json({ ...decision, incidentFeed: feedInfo() });
+    return c.json(decision);
   });
 
   app.get("/v1/portfolio", async (c) => {
@@ -232,7 +231,6 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
       equitiesEnabled: p.nonUsConfirmed,
       privacy: p.privacy,
       paused: p.paused,
-      incidentFeed: feedInfo(),
     });
   });
 
@@ -249,7 +247,7 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
     const q = c.req.query("asset");
     if (!q) return c.json({ error: "asset is required" }, 400);
     const found = deps.registry.lookup(q);
-    if (found.kind === "not_routable") return c.json({ found: false, routable: false, ...(await contractReport(deps, found.ref)), incidentFeed: feedInfo() });
+    if (found.kind === "not_routable") return c.json({ found: false, routable: false, ...(await contractReport(deps, found.ref)) });
     if (found.kind === "unknown") return c.json({ found: false, message: `"${q}" is not a tradable asset. Name it by chain and contract address (for example base:0x…) to look up a specific token.` });
     const res = found.resolution;
     const versions = await Promise.all(
@@ -261,7 +259,7 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
         return { ...base, liquidityUsd: signals?.liquidityUsd ?? null, marketCapUsd: signals?.marketCapUsd ?? null, ageDays: signals?.ageDays ?? null, routable: signals?.routable ?? null, risk: risk ? { level: risk.level, score: risk.score } : null, contract: risk?.contract ?? null };
       }),
     );
-    return c.json({ found: true, class: res.class, ticker: res.ticker, versions, ...(res.ambiguous ? { ambiguous: true, message: `Several different tokens are called ${res.ticker}; name the one you mean by chain and contract address.` } : {}), incidentFeed: feedInfo(), source: res.class === "crypto" ? "Price: NEAR Intents token list. Liquidity, market cap and age: DexScreener (read-only). Contract checks: GoPlus Security (read-only). Both as scored by Scam Shield." : "Price: NEAR Intents token list." });
+    return c.json({ found: true, class: res.class, ticker: res.ticker, versions, ...(res.ambiguous ? { ambiguous: true, message: `Several different tokens are called ${res.ticker}; name the one you mean by chain and contract address.` } : {}), source: res.class === "crypto" ? "Price: NEAR Intents token list. Liquidity, market cap and age: DexScreener (read-only). Contract checks: GoPlus Security (read-only). Both as scored by Scam Shield." : "Price: NEAR Intents token list." });
   });
 
   app.get("/v1/activity", async (c) => {

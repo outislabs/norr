@@ -21,6 +21,6 @@ if (process.env.NORR_MOCK === "1") {
   console.log(`Norr (LIVE rails) listening on http://localhost:${port}`);
   console.log(`  vault: ${live.vaultId}`);
   console.log(live.agentToken ? `  agent token (shown once): ${live.agentToken}` : "  agent tokens: kept from before (issue new ones in the dashboard's Connect tab).");
-  if (!live.shieldConfigured) console.warn("  incident feed: not configured (no SHIELD_API_KEY). Trades that pass the rules run; every answer says the feed is not configured.");
+  if (!live.shieldConfigured) console.log("  NEAR Intents incident feed: optional integration, not enabled (no SHIELD_API_KEY).");
   if (live.shieldBypass) console.warn("  SHIELD BYPASS is ON (dev only). Every trade will log a warning.");
 }

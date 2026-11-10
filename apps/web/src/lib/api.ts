@@ -93,7 +93,6 @@ export interface AssetCheck {
   versions?: { symbol: string; issuer: string | null; chain: string; contract?: string | null; shieldBlocked: string | null; risk: { score: number; level: "low" | "medium" | "high"; reasons: string[]; contract?: ContractSummary } | null }[];
   eligible?: boolean;
   notice?: string;
-  incidentFeed?: { status: "active" | "not_configured"; note?: string };
 }
 /** A self-serve vault that is not active yet (its custody policy is not on chain, or not checked). */
 export interface SetupVault {

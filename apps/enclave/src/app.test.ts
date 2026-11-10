@@ -80,28 +80,40 @@ describe("check order with the incident feed unreadable (as on a deployment with
   });
 });
 
-describe("incident feed not configured (no partner key): a deployment setting, labelled on every answer", () => {
-  it("trades that pass the rules execute without asking the feed, and every answer says the feed is not configured", async () => {
+describe("incident feed not configured (no partner key): a deployment setting, stated once in about_norr and not on every answer", () => {
+  it("trades that pass the rules execute without asking the feed, and no agent answer carries a feed notice", async () => {
     const { m, call, clock } = boot();
     m.deps.incidentFeed = "not_configured";
     let asked = 0;
     m.deps.shield = async () => { asked++; return null; };
-    const label = { status: "not_configured", note: "Incident feed: not configured (partner key pending)" };
-    expect(await (await call("/health")).json()).toMatchObject({ incidentFeed: "not_configured" });
-    expect(await (await call("/v1/policy")).json()).toMatchObject({ incidentFeed: label });
-    expect(await (await call("/v1/assets/check?asset=SOL")).json()).toMatchObject({ incidentFeed: label });
-    expect(await (await call("/v1/market?asset=SOL")).json()).toMatchObject({ incidentFeed: label });
-    expect(await (await call("/v1/quote", { body: { side: "buy", asset: "SOL", amountUsd: 5 } })).json()).toMatchObject({ status: "quote", incidentFeed: label });
-    expect(await (await call("/v1/trade", { body: { side: "buy", asset: "SOL", amountUsd: 5 } })).json()).toMatchObject({ status: "executed", incidentFeed: label });
+    expect(await (await call("/health")).json()).toMatchObject({ incidentFeed: "not_configured" }); // a plain status for the dashboard
+    const answers = [
+      await (await call("/v1/policy")).json(),
+      await (await call("/v1/assets/check?asset=SOL")).json(),
+      await (await call("/v1/assets/check?asset=base:0x0000000000000000000000000000000000000bad")).json(),
+      await (await call("/v1/market?asset=SOL")).json(),
+      await (await call("/v1/quote", { body: { side: "buy", asset: "SOL", amountUsd: 5 } })).json(),
+      await (await call("/v1/trade", { body: { side: "buy", asset: "SOL", amountUsd: 5 } })).json(),
+    ];
     clock.t += 60_000;
-    expect(await (await call("/v1/trade", { body: { side: "buy", asset: "TSLA", amountUsd: 5000 } })).json()).toMatchObject({ status: "blocked", code: "OVER_TRADE_LIMIT", incidentFeed: label });
+    answers.push(await (await call("/v1/trade", { body: { side: "buy", asset: "TSLA", amountUsd: 5000 } })).json());
+    expect(answers.map((a) => a.status ?? a.found)).toEqual([undefined, true, false, true, "quote", "executed", "blocked"]);
+    for (const a of answers) {
+      expect(a).not.toHaveProperty("incidentFeed");
+      expect(JSON.stringify(a)).not.toMatch(/incident feed|partner key/i);
+    }
     expect(asked).toBe(0);
+    // The one place an agent reads it, stated neutrally.
+    const about = await (await call("/v1/about")).json();
+    expect(about.incidentFeed.status).toBe("not_configured");
+    expect(about.incidentFeed.note).toMatch(/^NEAR Intents incident feed: optional integration, not enabled yet\./);
+    expect(JSON.stringify(about.incidentFeed)).not.toMatch(/pending|warning/i);
   });
 
-  it("with the feed configured, answers say active and an unreachable feed still blocks", async () => {
+  it("with the feed configured, an unreachable feed still blocks", async () => {
     const { m, call } = boot();
     m.deps.shield = async () => null;
-    expect(await (await call("/v1/trade", { body: { side: "buy", asset: "SOL", amountUsd: 5 } })).json()).toMatchObject({ code: "SHIELD_INCIDENT", incidentFeed: { status: "active" } });
+    expect(await (await call("/v1/trade", { body: { side: "buy", asset: "SOL", amountUsd: 5 } })).json()).toMatchObject({ code: "SHIELD_INCIDENT" }); // a refused trade says everything an agent needs; no extra feed field
   });
 });
 

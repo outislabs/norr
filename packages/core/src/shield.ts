@@ -32,11 +32,16 @@ export function incidentAffects(i: ShieldIncident, asset: RegistryEntry, address
  */
 export type IncidentFeedStatus = "active" | "not_configured";
 
-export const INCIDENT_FEED_NOT_CONFIGURED = "Incident feed: not configured (partner key pending)";
+export const INCIDENT_FEED_NOT_CONFIGURED = "NEAR Intents incident feed: optional integration, not enabled yet.";
 
-/** What every answer carries about the feed: its status, and the plain label when it is not configured. */
-export const incidentFeedInfo = (s: IncidentFeedStatus): { status: IncidentFeedStatus; note?: string } =>
-  s === "active" ? { status: "active" } : { status: "not_configured", note: INCIDENT_FEED_NOT_CONFIGURED };
+/**
+ * What the feed's state says in words. Stated in about_norr, the dashboard's status bar and the docs, not attached to every
+ * answer: when it is enabled, an incident shows up as a refused trade (SHIELD_INCIDENT), which says everything an agent needs.
+ */
+export const incidentFeedInfo = (s: IncidentFeedStatus): { status: IncidentFeedStatus; note: string } =>
+  s === "active"
+    ? { status: "active", note: "NEAR Intents incident feed: enabled. An active incident touching an asset blocks trades in it, and so does a feed that cannot be read." }
+    : { status: "not_configured", note: `${INCIDENT_FEED_NOT_CONFIGURED} When enabled, an active incident touching an asset blocks trades in it. Every other check runs.` };
 
 /**
  * Pre-trade check against the incident feed. A null feed means the feed was unreachable:

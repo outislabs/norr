@@ -107,7 +107,6 @@ export function AssetCheckPanel({ api, vaultId }: { api: Api; vaultId: string })
               )}
             </div>
           ))}
-          {result.incidentFeed?.note && <p className="text-xs text-dim">{result.incidentFeed.note}</p>}
         </div>
       )}
     </section>

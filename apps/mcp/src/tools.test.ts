@@ -188,7 +188,22 @@ describe("what agents are told about Norr (from a new user's test on the Claude 
     expect(ins).toMatch(/sealed to the owner's key/);
     expect(ins).toMatch(/Request bodies, balances, positions and rules are not logged/);
     expect(ins).not.toMatch(/logs every request(?! in the clear: it does not)/);
+    expect(ins).toMatch(/NEAR Intents incident feed: optional integration, not enabled yet\. When enabled, an active incident touching an asset blocks trades in it \(SHIELD_INCIDENT\)\./);
+    const feedLine = ins.split("\n").find((l) => l.includes("incident feed")) ?? "";
+    expect(feedLine).not.toMatch(/pending|warning|failed|broken/i); // neutral wording (approvals legitimately say pending_approval elsewhere)
     expect(ins.length).toBeLessThan(2500); // short
+  });
+
+  it("the incident feed is mentioned in about_norr and the instructions only: not in the other tools' descriptions or answers", async () => {
+    const { mcp, call, m } = await connect();
+    m.deps.incidentFeed = "not_configured";
+    const tools = (await mcp.listTools()).tools;
+    for (const t of tools.filter((x) => x.name !== "about_norr")) expect(t.description ?? "", t.name).not.toMatch(/incident feed|incidentFeed/i);
+    for (const [name, args] of [["get_policy", {}], ["check_asset", { asset: "SOL" }], ["get_market_data", { asset: "SOL" }], ["get_quote", { side: "buy", asset: "SOL", amountUsd: 5 }], ["trade", { side: "buy", asset: "SOL", amountUsd: 5 }]] as const) {
+      const r = await call(name, args as Record<string, unknown>);
+      expect(r.text, name).not.toMatch(/incident feed|incidentFeed|partner key/i);
+    }
+    expect((await call("about_norr")).json().incidentFeed.note).toMatch(/^NEAR Intents incident feed: optional integration, not enabled yet\./);
   });
 
   it("about_norr answers from the running service", async () => {

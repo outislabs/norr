@@ -34,6 +34,7 @@ export const NORR_INSTRUCTIONS = [
   "Privacy: trades run in NEAR Intents' confidential layer when the vault's funds are there (see 'venue'), so amounts and pairs are not on the public chain. Not private from OutLayer, the NEAR Intents operator and solvers, or the Norr service. Funding and withdrawals are public.",
   "What Norr stores: each request and its outcome in a ledger encrypted at rest inside the service (it enforces the caps with it; get_activity shows it); your 'reason' sealed to the owner's key, readable only by the owner. Request bodies, balances, positions and rules are not logged. Do not say Norr logs every request in the clear: it does not.",
   "Integrity: the hosted service runs in an attested Intel TDX VM that anyone can verify (about_norr gives the status and a verify link).",
+  "NEAR Intents incident feed: optional integration, not enabled yet. When enabled, an active incident touching an asset blocks trades in it (SHIELD_INCIDENT).",
   "Norr's rules are authoritative. When unsure if a trade is allowed, use get_quote or trade and read the answer instead of refusing in advance. For questions about how Norr works, call about_norr rather than guessing.",
 ].join("\n");
 
@@ -127,7 +128,7 @@ export function createNorrServer(client: EnclaveClient): McpServer {
     {
       title: "Your rules",
       description:
-        "The rules you must stay within: the largest single trade, the daily spending cap and how much of it is left today, the daily loss cap, the share of the vault allowed in stocks, which assets are allowed, the cooldown between trades, whether stocks are enabled, whether the vault is paused, and whether this deployment checks the NEAR Intents incident feed (incidentFeed; every trade answer carries it too). Read this to plan trades that will not be blocked.",
+        "The rules you must stay within: the largest single trade, the daily spending cap and how much of it is left today, the daily loss cap, the share of the vault allowed in stocks, which assets are allowed, the cooldown between trades, whether stocks are enabled, and whether the vault is paused. Read this to plan trades that will not be blocked.",
       annotations: read,
     },
     () => run(() => client.get("/v1/policy")),

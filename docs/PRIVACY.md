@@ -84,9 +84,9 @@ What this shows: the vault never holds the money publicly, and the vault's accou
 ## Verification limits (observed)
 After a shield, 1Click's status endpoint returned 404 for the deposit address. The only independent evidence of a confidential step is on the public side (the public balance falls, the public transaction is visible); the confidential balance and the result of confidential swaps come from OutLayer.
 
-## Safety checks that are not running
+## Optional safety checks that are not enabled
 
-- **The NEAR Intents incident feed (Shield)** is not configured on the hosted service: the partner key has not been granted. It is a deployment setting, not a hidden bypass: `/health`, `get_policy`, every quote and trade result, and the dashboard (status bar and Verify) say "Incident feed: not configured (partner key pending)". All other checks run. When a key is set, the feed is checked for every trade that passes the rules and fails closed.
+- **NEAR Intents incident feed: optional integration, not enabled yet** It is a deployment setting, not a hidden bypass: `about_norr` and the dashboard's status bar state it. All other checks run. When a partner key is set, the feed is checked last, for every trade that passes the rules, and fails closed.
 
 ## Lookups to third parties
 
