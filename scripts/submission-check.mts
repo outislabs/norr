@@ -1,5 +1,5 @@
 // Validate the hackathon submission payload against the organizers' contract (https://nearhackathon.com/HACKATHON.md,
-// "Submission API") and print it. It NEVER sends anything: sending is a separate, deliberate step (docs/SUBMISSION.md).
+// "Submission API") and print it. It NEVER sends anything: sending is a separate, deliberate step (internal/SUBMISSION.md).
 //   pnpm exec tsx scripts/submission-check.mts [path]        default path: config/submission.local.json (gitignored)
 //   pnpm exec tsx scripts/submission-check.mts --online      also checks that the repository URL answers
 import { execFileSync } from "node:child_process";
@@ -55,7 +55,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   try {
     payload = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
   } catch (e) {
-    console.error(`Could not read ${path}: ${e instanceof Error ? e.message : e}\nCreate it with the fields in docs/SUBMISSION.md.`);
+    console.error(`Could not read ${path}: ${e instanceof Error ? e.message : e}\nCreate it with the fields in internal/SUBMISSION.md.`);
     process.exit(2);
   }
   // The payload holds personal data and must never be committed.

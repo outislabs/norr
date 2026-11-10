@@ -93,7 +93,7 @@ norr/
 ├─ docs/
 │  ├─ FINDINGS.md            # day-1 gating results
 │  ├─ ARCHITECTURE.md
-│  └─ DEMO.md                # exact demo script
+│  └─ (the demo script is local: internal/DEMO.md, gitignored)
 ├─ packages/
 │  ├─ core/                  # pure TS logic: registry, risk, policy, types (no I/O)
 │  ├─ intents/               # 1Click client + signing helpers (NEAR)
@@ -250,7 +250,7 @@ For the demo the agent must trade without a human signature per swap, while mone
 
 ## 12. Demo script (90 seconds)
 
-Full script and agent setup in `docs/DEMO.md`. Beats:
+Full script and agent setup in `internal/DEMO.md` (local, gitignored). Beats:
 
 1. The owner creates a vault, sets **Balanced** rules (max trade $50), confirms non-US status, and connects the agent (IronClaw on NEAR AI Cloud, or Claude) to the MCP server.
 2. "Use Norr's trade tool to buy $40 of NVDA." Executes privately via NEAR Intents; the vault shows the NVDA holding.

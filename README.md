@@ -73,7 +73,7 @@ curl -X POST localhost:8787/v1/trade -H "Authorization: Bearer $TOKEN" -H 'conte
      -d '{"side":"buy","asset":"RUGPULL","amountUsd":5}'                      # SCAM_RISK
 ```
 
-Mock mode stubs 1Click quotes, the custody provider and the TEE with fixed prices; nothing leaves your machine. Connect an agent (Claude Desktop, Claude Code, or any MCP client) with `docs/MCP.md`. The full demo script is `docs/DEMO.md`.
+Mock mode stubs 1Click quotes, the custody provider and the TEE with fixed prices; nothing leaves your machine. Connect an agent (Claude Desktop, Claude Code, or any MCP client) with `docs/MCP.md`.
 
 Owner dashboard, in a second terminal:
 
@@ -180,7 +180,7 @@ scripts/           live trade runner, verify-attestation, research probes (live 
 - **Public beta limits.** Up to $100 per self-serve vault and one vault per NEAR account. Creating a vault costs the owner about 0.02 to 0.04 NEAR of on-chain storage for the custody policy (refundable). The custody provider's free tier allows 100 operations per wallet per day.
 - **Self-serve vaults are new.** Tested in mock mode (including attempts to hijack a wallet's policy or store a weaker one) and created once live (2026-11-05, signups still closed to the public); funding and trading in a self-serve vault are not yet run live.
 - **Funding from other chains is quoted, not yet proven.** USDC on NEAR into the confidential balance is proven on mainnet (2026-10-31); routes from Ethereum, Base, Arbitrum, Optimism, Polygon, BNB Chain and Solana were quoted live on 2026-11-03 but not run with real funds.
-- **Owning a vault needs a NEAR account.** EVM and Solana users can fund a vault from their own chain (the Fund tab), but cannot sign in or approve swaps yet: NEAR's Ethereum-wallets module does not implement `signMessage`/NEP-413 (`docs/AURORA.md`). The sign-in page points them to HOT Wallet, which gives a NEAR account alongside EVM and Solana ones.
+- **Owning a vault needs a NEAR account.** EVM and Solana users can fund a vault from their own chain (the Fund tab), but cannot sign in or approve swaps yet: NEAR's Ethereum-wallets module does not implement `signMessage`/NEP-413 (`docs/FINDINGS.md`, "Aurora widget"). The sign-in page points them to HOT Wallet, which gives a NEAR account alongside EVM and Solana ones.
 - **Limit orders are out of v1**: two test limit orders never filled.
 - **Small orders**: the stock minimum is a quote-time floor that moves (about $5 on liquid tickers at US market open, higher at other times and for other tickers).
 - **Stock eligibility**: per third-party sources (NEAR Intents' docs are silent), Ondo's tokens are for non-US persons only. The owner confirms non-US status before equities are enabled, and the dashboard shows a disclaimer. This is not legal advice and has not been reviewed by counsel.
@@ -216,7 +216,7 @@ Organizers confirmed pre-window work is permitted. The hackathon rules count cod
 **Inside the window (Nov 1 to Nov 14):**
 - **Nov 1:** no commits.
 - **Nov 2:** first deployment on Phala Cloud (a smoke CVM, then the production CVM on a production OS image); attestation checked for the first time against our own hardware; a startup fix found by the smoke test (the service now starts and retries when 1Click is unreachable, and blocks trades with `PRICING_UNAVAILABLE` meanwhile); a check that fails debug OS images; dashboard status bar, onboarding, Connect-agent page, value history, clearer approvals, and a Verify screen that works without signing in; the landing page; MIT license; this README; the dashboard hosted at app.norr.finance.
-- **Nov 3:** landing page and dashboard redesigned (black and white, Geist), a strict Content-Security-Policy on the dashboard, the quote's signature chain verified in the browser (`dcap-qvl` WebAssembly), HOT sign-in tested on a phone against the live CVM, and funding from other chains (USDC on Ethereum, Base, Arbitrum, Optimism, Polygon, BNB Chain or Solana, or ETH, SOL) through Norr's own 1Click quote. Aurora's widget was evaluated and not used: it cannot pay into the vault's confidential balance (`docs/AURORA.md`).
+- **Nov 3:** landing page and dashboard redesigned (black and white, Geist), a strict Content-Security-Policy on the dashboard, the quote's signature chain verified in the browser (`dcap-qvl` WebAssembly), HOT sign-in tested on a phone against the live CVM, and funding from other chains (USDC on Ethereum, Base, Arbitrum, Optimism, Polygon, BNB Chain or Solana, or ETH, SOL) through Norr's own 1Click quote. Aurora's widget was evaluated and not used: it cannot pay into the vault's confidential balance (`docs/FINDINGS.md`, "Aurora widget").
 - **Nov 4:** GoPlus contract checks in Scam Shield; the incident feed became an optional integration; custom domains (api. and mcp.norr.finance, TLS inside the CVM, CAA pinned); `@norrfi/mcp` on npm; P&L and market data tools; the first trade on the hosted demo ($5.50 of NVDA, confidential); approvals inside Norr's dashboard (first live vote signed with HOT, $1.50 USDC to SOL); a ledger bug found live and fixed; and self-serve vaults with owner-signed custody policies, per-vault isolation, beta safeguards and OAuth for MCP connectors (`docs/MULTI-USER.md`).
 - **Planned:** the first live self-serve vault, the first mainnet funding from another chain, demo rehearsal, video and submission.
 

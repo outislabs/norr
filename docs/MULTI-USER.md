@@ -111,3 +111,7 @@ server.
 4. Safeguards: cap, rate limits, operator switch, `/v1/beta`.
 5. OAuth on the MCP host and the dashboard consent screen.
 6. Docs, README, llms.txt, Limitations; live test with a fresh vault (owner pays ~0.03 NEAR storage).
+
+## Operator view (aggregates only)
+
+`GET /admin/v1/overview` with the admin token (`x-admin-token`), or `NORR_ADMIN_TOKEN=… pnpm exec tsx scripts/operator.mts`. It returns counts, totals and rates across all vaults: signups today and over 7 days, vaults against the limit, the total value held against the per-vault cap (with how many vaults are near or over it), trades per hour by outcome and by refusing rule over the last 24 hours, server errors and rate limits per hour, whether 1Click and the OutLayer gateway answer, pricing and incident-feed state, and a list of alerts. It never returns an owner, a vault id, a token, a balance, a position, a trade or a reason: the operator can watch whether the service is healthy without reading anyone's strategy (`apps/enclave/src/operator.ts`; a test checks the answer holds none of those). Alerts: 1Click or OutLayer down, pricing not ready, incident feed unreachable, server errors, swaps failing or refunded, refusals piling up, beta full or nearly full, vaults over the cap, unreadable balances, signups closed. Error and rate-limit counts are kept in memory, so they restart from zero with the service.
