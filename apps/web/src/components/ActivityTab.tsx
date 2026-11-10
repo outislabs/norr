@@ -1,9 +1,10 @@
-import type { Api, ActivityItem } from "../lib/api";
+import type { Api, ActivityItem, Transfer } from "../lib/api";
+import { ago } from "../lib/format";
 import { useReasoning } from "../lib/useReasoning";
 import { ActivityList, describe } from "./ActivityList";
 
 /** The activity timeline plus the control that unlocks the agent's sealed reasoning with the owner's wallet. */
-export function ActivityTab({ api, account, vaultId, items, reload }: { api: Api; account: string; vaultId: string; items: ActivityItem[]; reload: () => void }) {
+export function ActivityTab({ api, account, vaultId, items, transfers = [], reload }: { api: Api; account: string; vaultId: string; items: ActivityItem[]; transfers?: Transfer[]; reload: () => void }) {
   const r = useReasoning(api, account, vaultId, items, reload);
   const sealed = items.some((i) => i.sealedReason);
   const counts = new Map<string, number>();
@@ -58,6 +59,23 @@ export function ActivityTab({ api, account, vaultId, items, reload }: { api: Api
       )}
       </aside>
       <div className="min-w-0 lg:order-1">
+        {transfers.length > 0 && (
+          <ol className="mb-6 flex flex-col" aria-label="Withdrawals">
+            {transfers.map((t) => (
+              <li key={t.id} className="border-t border-line py-4 first:border-t-0" data-testid={`transfer-${t.id}`}>
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <p className="text-fg">
+                    <span className={`font-medium ${t.state === "waiting" ? "text-mute" : "text-fg"}`}>{t.state === "done" ? "Withdrawn" : t.state === "failed" ? "Failed" : "Waiting for you"}</span>
+                    <span className="mx-2 text-mute">·</span>
+                    Withdraw {t.amount} {t.symbol} to {t.to}
+                  </p>
+                  <time className="text-sm text-mute" dateTime={t.at}>{ago(t.at)}</time>
+                </div>
+                <p className="mt-1 text-sm text-mute">{t.state === "waiting" ? "Approve it in the Approvals tab." : t.state === "done" ? "The arrival is public on NEAR." : (t.detail ?? "Nothing moved.")}</p>
+              </li>
+            ))}
+          </ol>
+        )}
         <ActivityList items={items} reasons={r.texts} />
       </div>
     </div>

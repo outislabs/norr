@@ -473,3 +473,23 @@ describe("autonomous mode: off by default, never a side effect, switchable by on
     }
   });
 });
+
+describe("withdraw from a self-serve vault", () => {
+  it("goes to the owner through approval, and is refused while the vault is autonomous", async () => {
+    const { m, call } = boot();
+    const a = await activeVault(m, call, "alice.near");
+    const w = await call(`/owner/v1/vaults/${a.id}/withdraw`, { token: a.token, body: { amount: "999999", dryRun: true } });
+    expect(w.status).toBe(400); // more than the vault holds is explained, not sent
+    expect((await w.json()).error).toMatch(/Insufficient balance/);
+    expect(await (await call(`/owner/v1/vaults/${a.id}/withdraw`, { token: a.token, body: { amount: "1", dryRun: true } })).json()).toMatchObject({ plan: { destination: "alice.near", amount: "1" } });
+    expect(await (await call(`/owner/v1/vaults/${a.id}/withdraw`, { token: a.token, body: { amount: "1" } })).json()).toMatchObject({ status: "pending_approval" });
+    // Another account cannot see or use this vault's withdraw route.
+    const bob = await signIn(m, call, "bob.near");
+    expect((await call(`/owner/v1/vaults/${a.id}/withdraw`, { token: bob.token, body: { amount: "1" } })).status).toBe(404);
+
+    const auto = await activeVault(m, call, "carol.near", true);
+    const r = await call(`/owner/v1/vaults/${auto.id}/withdraw`, { token: auto.token, body: { amount: "1" } });
+    expect(r.status).toBe(409);
+    expect((await r.json()).error).toMatch(/autonomous mode/);
+  });
+});

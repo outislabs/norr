@@ -26,13 +26,18 @@ export interface VaultSummary {
   paused: boolean;
   state: { spentTodayUsd: number; realizedLossTodayUsd: number; lastTradeAt: string | null };
 }
-export interface Holding { symbol: string; class: "crypto" | "equity"; amount: number; valueUsd: number; layer?: "public" | "confidential" }
+export interface Holding { assetId?: string; symbol: string; class: "crypto" | "equity"; amount: number; valueUsd: number; layer?: "public" | "confidential" }
 export interface Portfolio { holdings: Holding[]; totalUsd: number; byClass: { crypto: number; equity: number } }
 export interface ActivityItem { id: string; executed: { usd: number; realizedUsd: number | null } | null; at: string; side: "buy" | "sell"; asset: string; amountUsd: number; sealedReason: SealedReason | null; decision: Decision; note: string | null; pending: boolean }
+/** What a withdrawal would do, from the dry run. The destination is always the vault's owner. */
+export interface WithdrawPlan { asset: string; assetId: string; amount: string; balance: string; destination: string; chain: string; layer: "confidential"; approval: string; becomesPublic: string }
+export type WithdrawResult = { dryRun: true; plan: WithdrawPlan } | { status: "done"; plan: WithdrawPlan } | { status: "pending_approval" | "in_progress"; requestId: string; plan: WithdrawPlan; message: string };
+/** An owner-level movement of funds (a withdrawal), listed in Activity beside the agent's decisions. */
+export interface Transfer { id: string; at: string; kind: "withdraw"; symbol: string; amount: string; to: string; state: "waiting" | "done" | "failed"; detail: string | null }
 export interface PendingItem {
   ledgerId: string;
   /** A trade, or a move of public USDC into the confidential layer. */
-  kind?: "trade" | "shield";
+  kind?: "trade" | "shield" | "withdraw";
   requestId: string;
   requestHash: string | null;
   venue: "public" | "confidential";
@@ -41,7 +46,7 @@ export interface PendingItem {
   recipient: string;
   check: string;
   /** Norr's own record, in smallest units, for the browser's comparison with the provider's operation. */
-  intended?: { tokenIn: string; amountIn: string; tokenOut: string; minAmountOut: string };
+  intended?: { tokenIn: string; amountIn: string; tokenOut: string; minAmountOut: string; destination?: string };
   /** The custody provider's approval id for this request, when it lists one. */
   approvalId?: string | null;
 }
@@ -176,6 +181,7 @@ export function createApi(o: ApiOptions) {
     beta: () => call<BetaInfo>("/beta"),
     createVault: (b: { name?: string; acceptTerms: string; nonUsConfirmed?: boolean }) => call<SetupVault>("/owner/v1/vaults", { body: b }),
     shield: (id: string) => call<{ status: "done" | "pending_approval"; amountUsdc: number; requestId?: string; message?: string }>(`/owner/v1/vaults/${encodeURIComponent(id)}/shield`, { body: {} }),
+    withdraw: (id: string, b: { asset?: string; amount?: string; max?: boolean; dryRun?: boolean }) => call<WithdrawResult>(`/owner/v1/vaults/${encodeURIComponent(id)}/withdraw`, { body: b }),
     renameVault: (id: string, name: string) => call<{ id: string; name: string }>(`/owner/v1/vaults/${encodeURIComponent(id)}/name`, { method: "PUT", body: { name } }),
     setupVault: (id: string) => call<SetupVault>(`/owner/v1/vaults/${encodeURIComponent(id)}/setup`),
     prepareCustody: (id: string, autonomous: boolean) => call<PreparedPolicy>(`/owner/v1/vaults/${encodeURIComponent(id)}/custody-policy`, { body: { autonomous, ...(autonomous ? { confirmAutonomous: true } : {}) } }),
@@ -197,7 +203,7 @@ export function createApi(o: ApiOptions) {
     pause: (id: string) => call<{ paused: boolean }>(`/owner/v1/vaults/${encodeURIComponent(id)}/pause`, { body: {} }),
     resume: (id: string) => call<{ paused: boolean }>(`/owner/v1/vaults/${encodeURIComponent(id)}/resume`, { body: {} }),
     pauseAll: () => call<{ paused: string[] }>("/owner/v1/pause-all", { body: {} }),
-    activity: (id: string) => call<{ activity: ActivityItem[] }>(`/owner/v1/vaults/${encodeURIComponent(id)}/activity`),
+    activity: (id: string) => call<{ activity: ActivityItem[]; transfers?: Transfer[] }>(`/owner/v1/vaults/${encodeURIComponent(id)}/activity`),
     pending: (id: string) => call<PendingList>(`/owner/v1/vaults/${encodeURIComponent(id)}/pending`),
     issueToken: (id: string, label?: string) => call<{ token: string; note: string }>(`/owner/v1/vaults/${encodeURIComponent(id)}/tokens`, { body: label ? { label } : {} }),
     revokeTokens: (id: string) => call<{ revoked: boolean }>(`/owner/v1/vaults/${encodeURIComponent(id)}/tokens`, { method: "DELETE" }),

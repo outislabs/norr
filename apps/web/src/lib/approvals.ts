@@ -25,6 +25,8 @@ export interface Intended {
   amountIn: string;
   tokenOut: string;
   minAmountOut: string;
+  /** For a withdrawal: the account the funds go to. The operation must name it too. */
+  destination?: string;
 }
 
 export type VoteKind = "approve" | "reject";
@@ -85,6 +87,7 @@ export async function checkApproval(d: ApprovalDetail, intended: Intended | null
       has(intended.tokenIn) ? null : "the token sent",
       has(intended.amountIn) ? null : "the amount",
       has(intended.tokenOut) ? null : "the token received",
+      intended.destination === undefined || has(intended.destination) ? null : "the destination account",
     ].filter(Boolean);
     matchesNorr = missing.length === 0;
     if (!matchesNorr) problems.push(`The operation does not match what Norr asked for (${missing.join(", ")} differs). Do not approve.`);

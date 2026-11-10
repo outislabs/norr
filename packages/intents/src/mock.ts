@@ -47,6 +47,8 @@ interface Record_ {
   createdAt?: number;
   /** A shield (public into confidential, same token) rather than a swap. */
   shield?: boolean;
+  /** A withdrawal to a whitelisted account rather than a swap. */
+  withdraw?: WithdrawParams;
 }
 
 const toLayer = (m: Record<string, string> | undefined): Layer => Object.fromEntries(Object.entries(m ?? {}).map(([k, v]) => [k, BigInt(v)]));
@@ -154,6 +156,10 @@ export function createMockRails(entries: RegistryEntry[], vaultAccount: string, 
     async withdraw(w: WithdrawParams): Promise<SwapStatus> {
       const id = `mock-req-${++n}`;
       if ((held[w.venue][w.token] ?? 0n) < BigInt(w.amount)) return { state: "failed", requestId: id, detail: "insufficient balance" };
+      if (w.venue === "confidential" && needsApproval()) {
+        records.set(id, { venue: "confidential", withdraw: w, done: { tokenIn: w.token, tokenOut: w.token, amountIn: w.amount, amountOut: w.amount, recipient: w.to }, state: "pending_approval", approvalId: `${o.approvalPrefix ?? "00000000"}-0000-4000-8000-${String(n).padStart(12, "0")}`, createdAt: Date.now() });
+        return { state: "pending_approval", requestId: id };
+      }
       held[w.venue][w.token] = (held[w.venue][w.token] ?? 0n) - BigInt(w.amount);
       withdrawals.push(w);
       return { state: "success", requestId: id };
@@ -188,7 +194,10 @@ export function createMockRails(entries: RegistryEntry[], vaultAccount: string, 
       const r = records.get(requestId);
       if (!r || r.state !== "pending_approval") return;
       r.state = "success";
-      if (r.shield) {
+      if (r.withdraw) {
+        held[r.withdraw.venue][r.withdraw.token] = (held[r.withdraw.venue][r.withdraw.token] ?? 0n) - BigInt(r.withdraw.amount);
+        withdrawals.push(r.withdraw);
+      } else if (r.shield) {
         held.public[r.done.tokenIn] = (held.public[r.done.tokenIn] ?? 0n) - BigInt(r.done.amountIn);
         held.confidential[r.done.tokenIn] = (held.confidential[r.done.tokenIn] ?? 0n) + BigInt(r.done.amountIn);
       } else apply(r.venue, r.done);
@@ -206,7 +215,9 @@ export function createMockRails(entries: RegistryEntry[], vaultAccount: string, 
       const hit = [...records].find(([, r]) => r.approvalId === approvalId);
       if (!hit) return null;
       const [requestId, r] = hit;
-      const op = r.shield
+      const op = r.withdraw
+        ? { kind: "confidential", flow: "withdraw", token: r.withdraw.token, amount: r.withdraw.amount, to: r.withdraw.to, chain: r.withdraw.chain }
+        : r.shield
         ? { kind: "confidential", flow: "shield", token: r.done.tokenIn, amount: r.done.amountIn }
         : { type: r.venue === "confidential" ? "confidential_swap" : "swap", token_in: r.done.tokenIn, amount_in: r.done.amountIn, token_out: r.done.tokenOut, recipient: r.done.recipient };
       return { requestId, status: r.state === "pending_approval" ? "pending" : r.state === "success" ? "approved" : "rejected", opCanonical: JSON.stringify(op), requestType: r.venue === "confidential" ? "confidential" : "swap", expiresAt: new Date((r.createdAt ?? Date.now()) + 24 * 3600_000).toISOString() };

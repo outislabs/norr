@@ -61,6 +61,6 @@ Starting cash $1,000; Balanced preset limits are $50 per trade, $150 spend per U
 | 5 | Owner taps **Pause everything**; "Buy $5 of SOL." | `blocked: PAUSED` |
 | 6 | Open **Verify** | In mock mode there is no enclave, and it says so |
 
-To see the approval step, start the service with `NORR_MOCK_APPROVALS=1`: the swap waits in the Approvals tab and the owner signs with the demo key. The self-serve flow (create a vault, sign its custody policy, fund, connect an agent, OAuth consent) runs in mock mode too: `pnpm dev:mock`, `pnpm dev:web`, choose "Use the demo owner".
+Withdraw needs approvals on (a vault with no approval rule is refused), so use `NORR_MOCK_APPROVALS=1` for it. To see the approval step, start the service with `NORR_MOCK_APPROVALS=1`: the swap waits in the Approvals tab and the owner signs with the demo key. The self-serve flow (create a vault, sign its custody policy, fund, connect an agent, OAuth consent) runs in mock mode too: `pnpm dev:mock`, `pnpm dev:web`, choose "Use the demo owner".
 
 Rehearse the whole script three times in a row in mock mode before a live take.

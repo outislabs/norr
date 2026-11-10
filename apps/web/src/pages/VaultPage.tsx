@@ -8,6 +8,7 @@ import { Onboarding } from "../components/Onboarding";
 import { ValueChart } from "../components/ValueChart";
 import { ActivityTab } from "../components/ActivityTab";
 import { FundingPanel } from "../components/FundingPanel";
+import { WithdrawPanel } from "../components/WithdrawPanel";
 import { PendingChecks } from "../components/PendingChecks";
 import { PolicyForm } from "../components/PolicyForm";
 import { Portfolio } from "../components/Portfolio";
@@ -22,7 +23,7 @@ import { vaultHref, type Route } from "../lib/route";
 import { useAsync } from "../lib/useAsync";
 
 type Tab = Extract<Route, { name: "vault" }>["tab"];
-const TABS: [Tab, string][] = [["overview", "Overview"], ["fund", "Fund"], ["connect", "Connect"], ["rules", "Rules"], ["activity", "Activity"], ["approvals", "Approvals"]];
+const TABS: [Tab, string][] = [["overview", "Overview"], ["fund", "Fund"], ["connect", "Connect"], ["rules", "Rules"], ["withdraw", "Withdraw"], ["activity", "Activity"], ["approvals", "Approvals"]];
 
 function Meter({ label, value, max }: { label: string; value: number; max: number }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 100;
@@ -140,6 +141,7 @@ export function VaultPage({ api, account, id, tab, mcpUrl, apiUrl, onChanged }: 
         )}
         {tab === "connect" && <div className="max-w-2xl"><ConnectAgent api={api} vaultId={id} mcpUrl={mcpUrl} apiUrl={apiUrl} onIssued={() => tick((n) => n + 1)} /></div>}
         {tab === "fund" && <div className="max-w-2xl"><FundingPanel api={api} vaultId={id} account={account} onArrived={() => vault.reload()} /></div>}
+        {tab === "withdraw" && <div className="max-w-2xl"><WithdrawPanel api={api} vaultId={id} owner={account} holdings={(v.portfolio?.holdings ?? []).filter((h) => h.layer === "confidential" && h.assetId)} onRequested={() => (pending.reload(), activity.reload())} /></div>}
         {tab === "rules" && (
           <div className="flex max-w-2xl flex-col gap-12">
             {typeof v.autonomous === "boolean" && <AutonomyPanel key={String(v.autonomous)} api={api} vaultId={id} autonomous={v.autonomous} account={account} onChanged={() => (vault.reload(), onChanged())} />}
@@ -147,7 +149,7 @@ export function VaultPage({ api, account, id, tab, mcpUrl, apiUrl, onChanged }: 
             <AssetCheckPanel api={api} vaultId={id} />
           </div>
         )}
-        {tab === "activity" && (activity.error ? <p role="alert" className="text-alert">{activity.error}</p> : activity.data ? <ActivityTab api={api} account={account} vaultId={id} items={activity.data.activity} reload={activity.reload} /> : <p className="text-mute">Loading…</p>)}
+        {tab === "activity" && (activity.error ? <p role="alert" className="text-alert">{activity.error}</p> : activity.data ? <ActivityTab api={api} account={account} vaultId={id} items={activity.data.activity} transfers={activity.data.transfers ?? []} reload={activity.reload} /> : <p className="text-mute">Loading…</p>)}
         {tab === "approvals" && (
           <div className="max-w-2xl">
             <h2 className="font-display text-xl">Check before you sign</h2>

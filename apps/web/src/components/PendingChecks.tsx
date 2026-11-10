@@ -119,7 +119,11 @@ export function PendingChecks({ items, list, apiBase = "", owner = "", onChanged
     <ul className="flex flex-col gap-10">
       {items.map((p) => (
         <li key={p.requestId} className="border-l border-line-strong pl-4">
-          {p.kind === "shield" ? (
+          {p.kind === "withdraw" ? (
+            <p className="text-fg">
+              You asked to withdraw <b className="mono font-medium">{amount(p.sends.amount)} {p.sends.symbol}</b> from the vault to your account <b className="mono font-medium">{p.recipient}</b>. The arrival is public on NEAR.
+            </p>
+          ) : p.kind === "shield" ? (
             <p className="text-fg">
               You asked to move <b className="mono font-medium">{amount(p.sends.amount)} {p.sends.symbol}</b> from the vault's public balance into its confidential balance.
             </p>
@@ -130,7 +134,7 @@ export function PendingChecks({ items, list, apiBase = "", owner = "", onChanged
               {p.venue === "confidential" ? ", confidentially" : ", publicly"}.
             </p>
           )}
-          <p className="mt-1 text-sm text-mute">Paid to the vault's own account ({shortId(p.recipient, 10, 6)}).</p>
+          <p className="mt-1 text-sm text-mute">{p.kind === "withdraw" ? `Paid to your own account, ${p.recipient}: the only destination this vault's custody policy allows.` : `Paid to the vault's own account (${shortId(p.recipient, 10, 6)}).`}</p>
           {p.approvalId && base ? (
             <ApprovalCard approvalId={p.approvalId} item={p} base={base} recipient={recipient} owner={owner} onChanged={onChanged} sign={sign} fetchImpl={fetchImpl} />
           ) : (

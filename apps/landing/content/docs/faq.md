@@ -4,6 +4,10 @@
 
 It holds one token, scoped to one vault, that can read the vault, get prices and request trades. It cannot withdraw, change rules, or choose where money goes: trades stay in the vault, and withdrawals go only to your whitelisted address with your approval. The most a misbehaving agent can do is make trades within your rules until you pause the vault or revoke its token.
 
+## How do I get my money out?
+
+Open the vault, then **Withdraw**. You pick the asset and an amount (or Max). The destination is your own signed-in NEAR account, shown and not editable, and it is the only account the vault's custody policy allows. Check first (nothing moves), then request: it waits in **Approvals** until you approve, with the same hash and match checks as a swap. The arrival at your account is public on NEAR. The agent has no tool for this. If the vault is in autonomous mode, Norr refuses to start a withdrawal until you turn it off in Rules, because the custody provider would then let it run without your signature.
+
 ## Does Norr hold my keys?
 
 No. The vault's keys live in OutLayer's custody (in its enclave). The Norr service holds an API key for the vault's custody wallet, which is bounded by the limits you set in OutLayer. Custody is not trustless; see [Privacy model](/docs/privacy/).

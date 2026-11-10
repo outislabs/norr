@@ -1,4 +1,4 @@
-import { applyFill, fundingSources, lossToday, sumToday, unitsForUsd, unitsToNumber, usdToUnits, validRefundAddress, type Book, type FundingSource } from "@norr/core";
+import { applyFill, formatUnits, fundingSources, lossToday, parseUnits, sumToday, unitsForUsd, unitsToNumber, usdToUnits, validRefundAddress, type Book, type FundingSource } from "@norr/core";
 import type { BuildInfo } from "../build-info";
 import type { Attestor } from "../attestation";
 import type { SealKeyStore, SealingLedger } from "../seal";
@@ -84,6 +84,19 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
   /** Shields the owner asked for (public USDC into the confidential layer), until they settle. In memory: after a restart
    *  an unsettled one still waits at the custody provider and shows under Approvals as not asked for by Norr. */
   const shields = new Map<string, { vaultId: string; requestId: string; token: string; amount: string; at: number }>();
+  /** Withdrawals the owner asked for, newest last. The destination is always the vault's owner, set in the route. In memory:
+   *  after a restart a request still waiting shows under Approvals as not asked for by Norr, and finished ones leave Activity. */
+  interface Withdrawal { id: string; vaultId: string; at: number; requestId: string; token: string; symbol: string; units: string; amount: string; to: string; state: "pending_approval" | "in_progress" | "success" | "failed"; detail?: string }
+  const withdrawals = new Map<string, Withdrawal>();
+  /** Settles the withdrawals the custody provider has since approved, rejected or finished. */
+  const settleWithdrawals = async (v: { id: string; custody: { status(id: string): Promise<{ state: Withdrawal["state"]; detail?: string }> } }) => {
+    for (const w of [...withdrawals.values()].filter((x) => x.vaultId === v.id && (x.state === "pending_approval" || x.state === "in_progress"))) {
+      const st = await v.custody.status(w.requestId).catch(() => null);
+      if (!st || st.state === w.state) continue;
+      w.state = st.state;
+      if (st.state === "failed") w.detail = st.detail ?? "It was rejected, expired or refused by the custody provider. Nothing moved.";
+    }
+  };
   /** Paying the vault directly on NEAR: the owner's wallet calls ft_transfer_call on the token, crediting the vault's own
    *  NEAR Intents account (msg = that account). The destination is the vault, set here. It lands in the public layer. */
   const directDeposit = (v: { walletAccount: string }, units: string) => ({
@@ -515,7 +528,10 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
       executed.set(r.id, { usd, realizedUsd: r.request.side === "sell" ? fill.realizedUsd : null });
     }
     const rows = all.slice(-100).reverse();
+    await settleWithdrawals(v);
+    const transfers = [...withdrawals.values()].filter((w) => w.vaultId === v.id).reverse().map((w) => ({ id: w.id, at: new Date(w.at).toISOString(), kind: "withdraw" as const, symbol: w.symbol, amount: w.amount, to: w.to, state: w.state === "success" ? ("done" as const) : w.state === "failed" ? ("failed" as const) : ("waiting" as const), detail: w.detail ?? null }));
     return c.json({
+      transfers,
       activity: rows.map((r) => ({
         executed: executed.get(r.id) ?? null,
         id: r.id,
@@ -562,6 +578,78 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
     return c.json({ status: "pending_approval", requestId: st.requestId, amountUsdc, message: `Waiting for your approval: move ${amountUsdc} USDC into the confidential layer. Approve it in Approvals.` });
   });
 
+  // Withdraw to the owner. Owner-only (a session, never an agent token) and never takes a destination from the caller: it
+  // is the vault's owner, the one account the custody policy whitelists. Confidential layer first (the vault's working
+  // balance sits there). A dry run checks everything and moves nothing; a real request waits for the owner's approval in
+  // Approvals unless the vault's custody policy exempts confidential operations. Allowed while the vault is paused: the
+  // owner must always be able to take money out.
+  const WithdrawBody = z.object({ asset: z.string().max(200).optional(), amount: z.string().max(40).optional(), max: z.boolean().optional(), dryRun: z.boolean().optional() }).refine((b) => (b.amount !== undefined) !== (b.max === true), { message: "Give an amount, or ask for the maximum." });
+  app.post("/owner/v1/vaults/:id/withdraw", async (c) => {
+    const owner = c.get("owner") as string;
+    const v = mine(owner, c.req.param("id"));
+    if (!v) return c.json({ error: "not found" }, 404);
+    const parsed = WithdrawBody.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message ?? "Give an amount, or ask for the maximum." }, 400);
+    const b = parsed.data;
+    // Withdrawals share OutLayer's one "confidential" operation type with swaps, so in autonomous mode (confidential
+    // operations exempt from approval) a withdrawal would run without the owner's signature. Norr's rule is that a
+    // withdrawal always waits for the owner, so it refuses to start one until approvals are back on.
+    const mode = v.custody.approvalMode ? await v.custody.approvalMode().catch(() => "unknown" as const) : "unknown";
+    if (mode === "autonomous" || mode === "none") return c.json({ error: "This vault's custody policy lets confidential operations run without your signature (autonomous mode), and a withdrawal here always waits for your approval. Turn autonomous mode off in Rules (it needs your wallet), then withdraw." }, 409);
+    const assetId = b.asset ?? cash().id;
+    const entry = deps.registry.byId(assetId);
+    if (!entry) return c.json({ error: "Unknown asset." }, 400);
+    let holdings: Record<string, string>;
+    try {
+      holdings = await v.custody.confidentialHoldings();
+    } catch (e) {
+      return c.json({ error: `Could not read the vault's confidential balance. ${upstreamReason(e, "Custody provider balance")}` }, 503);
+    }
+    const balance = BigInt(holdings[assetId] ?? "0");
+    const balanceText = `${formatUnits(balance.toString(), entry.decimals)} ${entry.symbol}`;
+    if (balance <= 0n) return c.json({ error: `The vault holds no ${entry.symbol} in its confidential balance, so there is nothing to withdraw. Anything in its public balance has to be moved into the confidential layer first (Fund, then Move into the confidential layer).` }, 400);
+    let units: string;
+    if (b.max) units = balance.toString();
+    else {
+      const u = parseUnits(b.amount!, entry.decimals);
+      if (!u) return c.json({ error: `"${b.amount}" is not an amount: use plain digits, such as 1 or 1.25, above zero, with at most ${entry.decimals} decimals.` }, 400);
+      units = u;
+    }
+    if (BigInt(units) > balance) return c.json({ error: `Insufficient balance: you asked for ${formatUnits(units, entry.decimals)} ${entry.symbol} and the vault's confidential balance is ${balanceText}.` }, 400);
+    if ([...withdrawals.values()].some((w) => w.vaultId === v.id && (w.state === "pending_approval" || w.state === "in_progress"))) return c.json({ error: "A withdrawal is already waiting for your approval. Approve or reject it in Approvals first." }, 409);
+    const amount = formatUnits(units, entry.decimals);
+    const plan = {
+      asset: entry.symbol,
+      assetId,
+      amount,
+      balance: formatUnits(balance.toString(), entry.decimals),
+      destination: v.owner,
+      chain: "near",
+      layer: "confidential" as const,
+      approval: "Waits for your approval in the Approvals tab, unless this vault's custody policy lets confidential operations run without it.",
+      becomesPublic: `The arrival is public on NEAR: ${amount} ${entry.symbol} landing in ${v.owner}, with its time, visible to anyone. Do not assume the confidential layer hides the link between this vault and that arrival. What stays private is the vault's other holdings, trades and the agent's reasoning.`,
+    };
+    if (b.dryRun) return c.json({ dryRun: true, plan });
+    let st;
+    try {
+      st = await v.custody.withdraw({ to: v.owner, token: assetId, amount: units, chain: "near", venue: "confidential" });
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : String(e);
+      if (/minimum|too small|below|dust/i.test(raw)) return c.json({ error: `The amount is below the custody provider's minimum for this withdrawal (it answered: "${raw.slice(0, 200)}"). Try a larger amount.` }, 400);
+      return c.json({ error: `The withdrawal was not started. ${upstreamReason(e, "Custody provider withdraw")}` }, 502);
+    }
+    note(owner, `asked to withdraw ${amount} ${entry.symbol} to ${v.owner}`, v.id);
+    const rec: Withdrawal = { id: `wd-${st.requestId}`, vaultId: v.id, at: deps.now(), requestId: st.requestId, token: assetId, symbol: entry.symbol, units, amount, to: v.owner, state: st.state, ...(st.detail ? { detail: st.detail } : {}) };
+    withdrawals.set(rec.id, rec);
+    if (st.state === "failed") {
+      const why = st.detail ?? "";
+      const text = /insufficient/i.test(why) ? `Insufficient balance at the custody provider (${why}).` : /minimum|too small|below/i.test(why) ? `Below the custody provider's minimum (${why}).` : /policy|limit|whitelist|not allowed/i.test(why) ? `Outside the vault's custody limits: ${why}.` : `The custody provider refused the withdrawal${why ? `: ${why}` : ""}.`;
+      return c.json({ error: text }, 400);
+    }
+    if (st.state === "success") return c.json({ status: "done", plan });
+    return c.json({ status: st.state === "pending_approval" ? "pending_approval" : "in_progress", requestId: st.requestId, plan, message: `Waiting for your approval: withdraw ${amount} ${entry.symbol} to ${v.owner}. Approve it in Approvals.` });
+  });
+
   app.get("/owner/v1/vaults/:id/pending", async (c) => {
     const v = mine(c.get("owner") as string, c.req.param("id"));
     if (!v) return c.json({ error: "not found" }, 404);
@@ -575,7 +663,7 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
       const p = r.pending!;
       return {
         ledgerId: r.id,
-        kind: "trade" as "trade" | "shield",
+        kind: "trade" as "trade" | "shield" | "withdraw",
         requestId: p.requestId,
         requestHash: p.requestHash ?? null,
         venue: p.venue,
@@ -583,7 +671,7 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
         receivesAtLeast: { token: p.intended.tokenOut, ...human(p.intended.tokenOut, p.intended.minAmountOut) },
         recipient: p.intended.recipient,
         // Norr's own record, in the custody provider's units, for the browser's side-by-side check.
-        intended: { tokenIn: p.intended.tokenIn, amountIn: p.intended.amountIn, tokenOut: p.intended.tokenOut, minAmountOut: p.intended.minAmountOut },
+        intended: { tokenIn: p.intended.tokenIn, amountIn: p.intended.amountIn, tokenOut: p.intended.tokenOut, minAmountOut: p.intended.minAmountOut } as { tokenIn: string; amountIn: string; tokenOut: string; minAmountOut: string; destination?: string },
         approvalId: null as string | null,
         check: "Approve only if the approval screen shows the same tokens and amount, and the request hash above if it shows one.",
       };
@@ -608,6 +696,24 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
         intended: { tokenIn: sh.token, amountIn: sh.amount, tokenOut: sh.token, minAmountOut: sh.amount },
         approvalId: null,
         check: "Moves USDC from the vault's public balance into its confidential balance. It stays in the vault.",
+      });
+    }
+    // Withdrawals the owner asked for: settle the finished ones, list the waiting ones beside the trades.
+    await settleWithdrawals(v);
+    for (const w of [...withdrawals.values()].filter((x) => x.vaultId === v.id && (x.state === "pending_approval" || x.state === "in_progress"))) {
+      const amountNum = Number(w.amount);
+      pending.push({
+        ledgerId: w.id,
+        kind: "withdraw",
+        requestId: w.requestId,
+        requestHash: null,
+        venue: "confidential" as const,
+        sends: { token: w.token, amount: amountNum, symbol: w.symbol },
+        receivesAtLeast: { token: w.token, amount: amountNum, symbol: w.symbol },
+        recipient: w.to,
+        intended: { tokenIn: w.token, amountIn: w.units, tokenOut: w.token, minAmountOut: w.units, destination: w.to },
+        approvalId: null,
+        check: `Sends ${w.amount} ${w.symbol} out of the vault to ${w.to}. Approve only if the approval shows that account and amount.`,
       });
     }
     // The provider's approval ids, matched to Norr's records by request id. An approval Norr did not ask for is listed

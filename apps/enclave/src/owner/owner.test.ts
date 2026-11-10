@@ -623,4 +623,57 @@ describe("in-dashboard approvals (mock stand-in for the custody provider)", () =
     await req("/owner/v1/vaults/demo/pending", { token });
     expect(await m.rails.custody.confidentialHoldings()).toEqual(before);
   });
+
+  it("withdraw: the destination is the owner, a dry run moves nothing, and the owner's signed approval releases it", async () => {
+    const { req, token, vote, m } = await bootWithApprovals();
+    const usdc = m.deps.quoteAsset.id;
+    const held = async () => BigInt((await m.rails.custody.confidentialHoldings())[usdc]!);
+    const start = await held();
+    // A caller cannot name a destination: the field is not part of the request, and the plan shows the owner.
+    const dry = await (await req("/owner/v1/vaults/demo/withdraw", { token, body: { amount: "1", dryRun: true, to: "mallory.near" } })).json();
+    expect(dry).toMatchObject({ dryRun: true, plan: { asset: "USDC", amount: "1", destination: MOCK_OWNER, chain: "near", layer: "confidential" } });
+    expect(dry.plan.becomesPublic).toMatch(/public on NEAR/);
+    expect(await held()).toBe(start);
+    expect(m.rails.withdrawals).toHaveLength(0);
+    // The real request waits for approval.
+    const r = await (await req("/owner/v1/vaults/demo/withdraw", { token, body: { amount: "1.5" } })).json();
+    expect(r).toMatchObject({ status: "pending_approval", plan: { destination: MOCK_OWNER, amount: "1.5" } });
+    expect((await req("/owner/v1/vaults/demo/withdraw", { token, body: { amount: "1" } })).status).toBe(409); // one at a time
+    const list = await (await req("/owner/v1/vaults/demo/pending", { token })).json();
+    const item = list.pending.find((p: { kind: string }) => p.kind === "withdraw");
+    expect(item).toMatchObject({ kind: "withdraw", recipient: MOCK_OWNER, sends: { amount: 1.5, symbol: "USDC" }, intended: { tokenIn: usdc, amountIn: "1500000", destination: MOCK_OWNER } });
+    expect(list.unknown).toEqual([]);
+    const d = await (await req(`/mock-outlayer/wallet/v1/approval/${item.approvalId}`)).json();
+    expect(JSON.parse(d.op_canonical)).toMatchObject({ flow: "withdraw", token: usdc, amount: "1500000", to: MOCK_OWNER });
+    // Waiting shows in Activity; approving moves the money and settles it.
+    expect((await (await req("/owner/v1/vaults/demo/activity", { token })).json()).transfers[0]).toMatchObject({ state: "waiting", amount: "1.5", to: MOCK_OWNER });
+    expect((await vote("approve", item.approvalId, d)).status).toBe(200);
+    expect((await (await req("/owner/v1/vaults/demo/pending", { token })).json()).pending).toHaveLength(0);
+    expect((await (await req("/owner/v1/vaults/demo/activity", { token })).json()).transfers[0]).toMatchObject({ state: "done" });
+    expect(start - (await held())).toBe(1_500_000n);
+    expect(m.rails.withdrawals).toEqual([expect.objectContaining({ to: MOCK_OWNER, amount: "1500000", venue: "confidential", chain: "near" })]);
+  });
+
+  it("withdraw: max takes the whole balance, a reject moves nothing, and bad requests get plain errors", async () => {
+    const { req, token, vote, m } = await bootWithApprovals();
+    const usdc = m.deps.quoteAsset.id;
+    const total = BigInt((await m.rails.custody.confidentialHoldings())[usdc]!);
+    const post = (body: unknown) => req("/owner/v1/vaults/demo/withdraw", { token, body });
+    expect((await (await post({ max: true, dryRun: true })).json()).plan.amount).toBe((Number(total) / 1e6).toString());
+    for (const bad of [{}, { amount: "1", max: true }, { amount: "0" }, { amount: "-1" }, { amount: "1e3" }, { amount: "0.0000001" }]) expect((await post(bad)).status).toBe(400);
+    const tooMuch = await post({ amount: String(Number(total) / 1e6 + 1) });
+    expect(tooMuch.status).toBe(400);
+    expect((await tooMuch.json()).error).toMatch(/Insufficient balance/);
+    expect((await post({ amount: "1", asset: "nep141:nonsense" })).status).toBe(400);
+    expect((await req("/owner/v1/vaults/nope/withdraw", { token, body: { amount: "1" } })).status).toBe(404);
+    expect((await m.app.request("/owner/v1/vaults/demo/withdraw", { method: "POST", headers: { authorization: `Bearer ${m.agentToken}`, "content-type": "application/json" }, body: JSON.stringify({ amount: "1" }) })).status).toBe(401); // never an agent
+    const r = await (await post({ max: true })).json();
+    expect(r.status).toBe("pending_approval");
+    const item = (await (await req("/owner/v1/vaults/demo/pending", { token })).json()).pending[0];
+    const d = await (await req(`/mock-outlayer/wallet/v1/approval/${item.approvalId}`)).json();
+    expect((await vote("reject", item.approvalId, d)).status).toBe(200);
+    expect((await (await req("/owner/v1/vaults/demo/activity", { token })).json()).transfers[0]).toMatchObject({ state: "failed" });
+    expect(BigInt((await m.rails.custody.confidentialHoldings())[usdc]!)).toBe(total);
+    expect(m.rails.withdrawals).toHaveLength(0);
+  });
 });

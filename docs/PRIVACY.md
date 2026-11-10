@@ -49,6 +49,10 @@ Moving the data key into the enclave, so the operator cannot decrypt a copy, is 
   - The decisions themselves (assets, amounts, outcomes) are readable by the service and, through `get_activity`, by the agent that made them.
   - Losing the data key makes the files unreadable by design: the service refuses to start rather than start empty.
 
+## Withdrawing (owner-only, built 2026-11-10)
+
+The owner's Withdraw flow takes funds out of the vault's confidential balance to the owner's own account. What becomes public: the arrival on NEAR (the amount, the receiving account and the time). Do not assume the confidential layer hides the link between the vault and that arrival; what stays private is the vault's other holdings and trades and the agent's reasoning. The destination is never taken from a request: it is the vault's owner, the whitelist account. Norr refuses to start a withdrawal while the vault is autonomous, because OutLayer uses one `confidential` type for swaps and withdrawals and would run it without the owner's signature. A dry run moves nothing. The first live run is still to do.
+
 ## Planned design for the final demo vault: confidential in, confidential out
 The first confidential spike only proves the mechanics (shield, confidential swap) on an old wallet. The stronger design keeps the public chain from ever seeing the vault hold or move the money:
 

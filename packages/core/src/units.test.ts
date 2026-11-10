@@ -32,3 +32,18 @@ describe("units", () => {
     expect(unitsToNumber("0", 18)).toBe(0);
   });
 });
+
+describe("parseUnits and formatUnits", () => {
+  it("parses exact decimals and refuses everything else", async () => {
+    const { parseUnits, formatUnits } = await import("./units");
+    expect(parseUnits("1", 6)).toBe("1000000");
+    expect(parseUnits("1.25", 6)).toBe("1250000");
+    expect(parseUnits(" 0.000001 ", 6)).toBe("1");
+    expect(parseUnits("0.0000001", 6)).toBeNull(); // more places than the token has
+    for (const bad of ["0", "0.0", "-1", "1e3", "", "abc", "1,5", "1.", ".5"]) expect(parseUnits(bad, 6)).toBeNull();
+    expect(formatUnits("1250000", 6)).toBe("1.25");
+    expect(formatUnits("1", 6)).toBe("0.000001");
+    expect(formatUnits("5000000", 6)).toBe("5");
+    expect(formatUnits(parseUnits("123456.789012", 6)!, 6)).toBe("123456.789012");
+  });
+});
