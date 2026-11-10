@@ -7,6 +7,7 @@
 - **Every swap needs your approval** (in Norr's Approvals tab or OutLayer's dashboard), because swaps and withdrawals share one transaction type in OutLayer.
 - **Confidential swaps have no independent audit trail.** They are checked from balances and the provider's own report, and labelled `custody-reported`.
 - **Funding and withdrawals are public**, and the custody provider and NEAR Intents operator see confidential trades. A funding transfer and the next hop can be correlated by timing and amount.
+- **Hosted vault creation is by invitation for now.** The service is set to take new vaults only from invited accounts; mock mode runs the whole flow. The `npx @norrfi/mcp` bridge does not forward the connect-time instructions yet (direct HTTP does), so an agent connected that way should call `about_norr`.
 - **Public beta limits.** Up to $100 per vault and one vault per NEAR account. Creating a vault costs about 0.02 to 0.04 NEAR of on-chain storage for its custody policy (refundable). The custody provider's free tier allows 100 operations per wallet per day.
 - **Self-serve vaults are new.** The first live one was created on 2026-11-05; funding and trading in a self-serve vault are not yet run live.
 - **The Claude app connector (OAuth)** is tested against Norr's own OAuth client, not yet from the Claude app itself.

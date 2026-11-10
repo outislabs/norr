@@ -1,148 +1,128 @@
-# Final demo, video, X post and submission plan
+# Submission
 
 Built by Kelvin Alkorogie, with Claude Code as a coding assistant.
 
-Drafted 2026-11-02. Rules are from the organizers' `HACKATHON.md` (https://nearhackathon.com/HACKATHON.md), read the same day. Nothing here has been sent or posted. Personal values (name, email, wallet) are placeholders: they go in only when the owner submits, and the payload is never committed.
+Updated 2026-11-10 from the organizers' live rules, https://nearhackathon.com/HACKATHON.md (it has no date or version line, and it says to read it again before submitting). **Deadline: 2026-11-14 23:59 UTC.** Nothing here has been sent or posted. Personal values are not in this file and the payload is never committed: they live in `config/submission.local.json` (gitignored), and `scripts/submission-check.mts` validates them and prints the payload without sending anything.
 
-## What the rules require (checked against HACKATHON.md)
+## What the rules require, from the live file
 
-| Rule | Source | Where we stand |
+| Rule | Source in HACKATHON.md | Where we stand (2026-11-10) |
 |---|---|---|
-| Public repository by 2026-11-14 23:59 UTC | Procedure 1 | Public since 2026-11-02 |
-| Public X post that says it was built at NEAR HACKATHON, tags @NEARProtocol and #NEARHackathon, with the demo video (screenshots alone are not enough when judges cannot open the demo) | Procedure 2, Q-012 | Draft below; the owner posts it |
-| Submit once, after the repo is public and the post is up; **cannot be edited**; window 2026-11-01 00:00 to 2026-11-14 23:59 UTC | Procedure 3 | Plan: submit on Nov 13 |
-| Code counts from the 2026-10-19 announcement; list libraries and AI-written code in the README | Q-001, Q-005 | Done in the README ("Built with", "Timeline & disclosure") |
-| Hosted demo is a plus; keep it up to 2026-11-18, ideally 2026-11-25 | Q-012 | Needs the CVM running until at least Nov 18 (see cost) |
-| Claude Code and Codex screen first: "check that it runs and does what the README says" | Q-017 | Mock quickstart verified 2026-11-02 |
-| Judging 2026-11-16 to 2026-11-18; prizes paid in NEAR to a mainnet account | Dates | Wallet address needed from the owner |
+| The repository is public by 2026-11-14 23:59 UTC; judges cannot open a private one | Procedure 1 | Public. An anonymous clone with no credentials succeeded today |
+| A public X post that says it was built at NEAR HACKATHON, tags @NEARProtocol and #NEARHackathon, with the demo video or screenshots; "screenshots are not enough when judges cannot open the demo" | Procedure 2, Q-012 | Draft below. **Kelvin records and posts it** |
+| Submit once, after the repo is public and the post is up. The API answers 403 outside 2026-11-01 00:00 to 2026-11-14 23:59 UTC. A submission cannot be edited; mistakes go through https://nearhackathon.com/request-changes | Procedure 3 and 4 | Plan: submit Nov 13 |
+| Libraries and AI code are allowed and must be listed in the README | Q-005 (quoted below) | README "Built with" lists libraries and services; the credits line names Claude Code. See the note below |
+| Hosted demo is a plus: keep it up to 2026-11-18, ideally 2026-11-25 | Q-012 | The engine must stay running (cost below) |
+| Claude Code and Codex screen every project (reproducibility, feature check); humans decide | Q-017, Procedure 1 | `pnpm judge` passes on a clean clone; the README quickstart runs as written |
+| One submission per repository; at most 2 per email | Submission API (409) | Not yet submitted |
 
-**Tracks to enter** (ids for the API): `privacy` (Privacy & Private AI), `security` (AI Security & Defense: "Give AI money without giving it the keys to everything" is our tagline), `defi` (Unstoppable DeFi), `agents` (Agent Economy).
+**Q-005, word for word:**
+> **Q-005. Libraries, templates, boilerplate?** All allowed, including own pre-hackathon libs and AI code. List in README; own old libs count as baseline.
 
-## Dependencies and risks
+The file states no penalty and does not mark the listing optional. The README's credits line ("Built by Kelvin Alkorogie, with Claude Code as a coding assistant.") names Claude Code but does not say it wrote code. If you want the line to say that, the shortest wording is: "Built by Kelvin Alkorogie, with Claude Code (AI) writing much of the code, tests and docs." Your decision; not changed.
 
-| Risk | Effect | Plan |
-|---|---|---|
-| **Shield API key not here** | The deployed service blocks every trade (the Shield check runs before the policy, so even the guardrail demos show `SHIELD_INCIDENT`) | Ask NEAR Intents again on Nov 4; hard cut-off Nov 9. If it has not arrived: record the live part on a local service with the dev-only bypass, **say so on screen and in the post**, and show the deployed service only for Verify and the dashboard. Mock mode covers the full flow for judges |
-| 1Click outage (seen on 2026-11-02, hours long) | Quotes fail | The service now starts and retries; on the day check `curl -s -o /dev/null -w '%{http_code}' https://1click.chaindefuser.com/v0/tokens` before recording |
-| Stock minimums move with the market (about $5.05 at US open on Oct 30, $28 on a Saturday) | A $5.50 buy might not quote | Record and rehearse Wed Nov 11 to Fri Nov 13, 14:30 to 21:00 UTC (US market hours). **Do not plan anything on Sat Nov 14** |
-| Each swap waits for the owner's approval | Adds about a minute per swap | Show it once on camera (it is the point), cut the wait |
-| Claude Code to the remote MCP endpoint with a bearer header is untested | The agent step could fail | Test on Nov 4. The Norr agent (`apps/agent`, NEAR AI Cloud model) is the tested path and the default for the recording |
-| Rug-token example changes (GNEAR liquidity moves) | `SCAM_RISK` might not trigger | Re-run `scripts/rug-scan.mts` on the day |
-| HOT wallet sign-in on a phone is untested | Dashboard step could fail | Test on Nov 4 |
-| Phala balance is $5 | CVM stops | Top up (below) |
+**What the file says the agent must never do without the human's explicit confirmation:** send the submission (print the full JSON first and wait for a yes; one attempt per project), post on X, make the repository public or push, sign transactions or deploy to mainnet, commit secrets.
 
-## Schedule (UTC)
+## The fields (`POST https://nearhackathon.com/api/applications`, JSON, up to 12000 bytes)
 
-| Date | Work |
-|---|---|
-| Mon Nov 2 | Done: public repo, provenance signing, README, landing page built. Owner: `norr-landing` Pages project; Shield key chase; Aurora Studio key |
-| Tue Nov 3 | Landing live, README links it; Aurora funding integration (needs the key); Aurora $1 to $2 mainnet test (owner confirms each transaction) |
-| Wed Nov 4 | Test: Claude Code to the remote MCP endpoint, HOT sign-in on a phone, `pnpm test` on a clean clone. Ask NEAR Intents about Shield again |
-| Thu Nov 5 to Sun Nov 8 | Fixes from those tests; mock-mode rehearsal x3; dashboard phone review; demo vault funded |
-| **Mon Nov 9** | **Code freeze.** CI builds and signs the final image; pin its digest; redeploy the CVM; run `verify-attestation.mts`; update the README's observed values |
-| Tue Nov 10 | Mock rehearsal x3 on the deployed dashboard; Shield decision made (key or labelled bypass) |
-| Wed Nov 11 | Live rehearsal x3 during US market hours (each live trade needs the owner's confirmation in chat) |
-| Thu Nov 12 | Record the video (two takes), edit |
-| Fri Nov 13 | Post on X, check the post is public, **submit**. A day of buffer remains |
-| Sat Nov 14 | Buffer only. Deadline 23:59 UTC |
-| Nov 16 to 18 | Judging: keep the CVM running. Keep it through Nov 25 if the budget allows |
+Tracks entered, as you chose: `privacy`, `security`, `defi`, `agents`. Do not send any other field (`website` is a spam trap).
 
-## Cost of the hosted demo
+| Field | Rule | Value | Status |
+|---|---|---|---|
+| `requestId` | UUID, generated once and reused on retries | `uuidgen \| tr A-Z a-z` | Generate once; keep it in `config/submission.local.json` |
+| `projectName` | 2 to 80 characters | `Norr` | Filled from the repository; confirm |
+| `leadName` | 2 to 80 characters | | **Kelvin provides** (the credits line says Kelvin Alkorogie) |
+| `email` | valid, max 160, at most 2 submissions per email | | **Kelvin provides** |
+| `size` | exactly one of `1`, `2 - 4`, `4 - 6`, `6 - 8`, `8+` | `1` | Solo builder per the project notes; confirm |
+| `tracks` | one or more of `defi`, `thesis`, `privacy`, `business`, `swarms`, `security`, `agents`, `realworld`, `games`, `nfts`, `memecoins`, `social`, `open` | `["privacy","security","defi","agents"]` | Filled, as you chose |
+| `nearAddress` | 2 to 64 characters, lowercase, `^(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$`; a mainnet account the team controls | | **Kelvin provides** (the organizers say never to invent one) |
+| `projectUrl` | http(s) URL of the public repository, max 300, unique | `https://github.com/outislabs/norr` | Filled; public |
+| `demoUrl` | http(s) URL of the public demo post, max 300 | | **Kelvin provides** after posting |
+| `idea` | 20 to 2000 characters | below (1,832) | Drafted; confirm |
+| `consent` | `true`, only after the human agreed | | **Kelvin**: "I agree that the organizers may use these details to review our submission and contact us about this hackathon." |
 
-`tdx.small` is $0.0608 per hour all in (compute $0.058, 20 GB disk $0.0028). Running continuously from Nov 9 to Nov 18 is 10 days, about **$15**; to Nov 25 is 17 days, about **$25**. The CVM is stopped at the moment (storage still bills at about $0.07 a day). With $5 of balance, **top up to at least $30** before Nov 9. That stays under the $50 cap. After judging: `phala cvms delete --cvm-id norr-demo`.
+`idea`:
 
-Demo vault money: about $9 USDC is in it. Each live rehearsal round trip costs a few cents; three rehearsals and the recording fit.
+> Norr is a private trading layer for AI agents. An agent (the Claude app, Claude Code, ChatGPT or any MCP client) trades crypto and tokenized US stocks through NEAR Intents for one vault, inside rules the owner sets, without ever holding the keys. When the vault's funds are in the confidential layer, trades run there, so pair, size and price stay off the public chain.
+>
+> How NEAR is used: NEAR Intents (1Click) for quotes, cross-chain funding and execution; Confidential Intents for private trades; NEAR accounts for owner sign-in (NEP-413) and for approving every swap. A NEAR account is also each vault's on-chain controller: the owner's wallet stores the vault's custody policy on OutLayer's contract, so only the owner can change it. NEAR AI Cloud runs the reference agent's private model.
+>
+> Why it is safe to try: keys live in OutLayer's TEE custody, behind an owner whitelist, per-trade and daily limits and the owner's approval. Norr adds Scam Shield (market data plus GoPlus contract checks), refusal of look-alike tokens, per-vault rules, a kill switch and a check of every swap after it runs. The agent's token cannot withdraw, change rules or choose a destination. The Norr service runs in an Intel TDX VM on Phala, and anyone can verify its code from the browser: seven attestation checks, no sign-in.
+>
+> Live on mainnet with small amounts: confidential swaps, a tokenized Nvidia buy and sell-back, swaps approved in the dashboard with a NEAR wallet, a self-serve vault whose policy the owner stored on chain, and the Claude app connected through OAuth. Anyone can run the whole flow in mock mode.
+>
+> Honest limits are in the README: custody is not trustless (OutLayer's gateway builds swap routes), funding and withdrawals are public, and this is unaudited beta software. Try it with no funds: pnpm install && pnpm dev:mock.
 
-## Live demo run of show
+### Validate, print, then send (only after Kelvin says yes)
 
-Setup (the day before): Rules tab set to max trade $10, daily cap $30, loss cap $3, cooldown 10 s, NVDA and TSLA allowed, non-US status confirmed. Vault holds about $9 USDC, confidential. Agent token created and revoked-then-reissued so no startup token is in play. Public logs off.
+1. Put the values in `config/submission.local.json` (gitignored): the field names above, `consent` last.
+2. `pnpm exec tsx scripts/submission-check.mts` checks every rule above, prints the exact JSON and the character counts, and sends nothing.
+3. Send it yourself, or tell me to, after you have read the printed payload:
+   `curl -sS -X POST https://nearhackathon.com/api/applications -H 'Content-Type: application/json' -d @config/submission.local.json`
+4. A 201 means saved. 400 lists the fields to fix (resend with the same `requestId`); 403 means closed or cross-site (do not retry); 409 means the repository or email was already used (do not change the link to get around it; use request-changes); 503 means wait a minute and resend with the same `requestId`.
 
-Exact beats and prompts are in `docs/DEMO.md` (live version). Order: Verify, Rules, buy $5.50 NVDA (approval on camera), $20 TSLA (`OVER_TRADE_LIMIT`), $5 GNEAR (`SCAM_RISK`), $3 USDC to SOL, kill switch (`PAUSED`), Verify again. Sell the NVDA back between takes (sell all, not a dollar figure).
+## The demo post (Kelvin records and posts)
 
-## Video script (about 2 minutes)
-
-Screen recording with voice-over. No architecture slides. Captions on, since many people watch muted.
-
-| Time | On screen | Voice-over |
-|---|---|---|
-| 0:00 | Landing hero: "Your agent trades. Nobody watches." | "AI agents can trade now. Most of them leak their strategy, and hold the keys to your money. Norr is a private trading layer that fixes both." |
-| 0:12 | Dashboard, Verify screen, press "Check attestation": seven checks go green | "The engine that enforces your rules runs in an enclave on Phala. This is my browser asking it to prove which code it booted. Nobody has to take my word." |
-| 0:28 | Rules tab: max trade $10, daily caps | "I give the agent a token and a budget: ten dollars a trade, thirty a day. It cannot withdraw, change these rules, or pick where money goes." |
-| 0:40 | Terminal or Claude: "Buy $5.50 of NVDA." The answer says pending approval | "Buy a tokenized Nvidia share. Money moves only when I approve." |
-| 0:50 | OutLayer approval screen: compare with the dashboard's Approvals tab, approve (cut the wait) | "My custody provider asks me to sign, and the dashboard shows me what Norr actually asked for, so I can check before I do." |
-| 1:00 | Agent: executed, confidentially. Dashboard overview: NVDAon under "Confidential" | "Done, in the confidential layer of NEAR Intents: pair, size and price are not on the public chain." |
-| 1:12 | "Put $20 into TSLA" then `OVER_TRADE_LIMIT` | "Now the guardrails. Twenty dollars is over my limit, so it is refused, with a reason the agent can act on." |
-| 1:22 | "Buy $5 of GNEAR": `SCAM_RISK` with reasons | "A thin, brand-new token: blocked as a likely scam, and the reasons are listed." |
-| 1:34 | Kill switch, then "Buy $5 of SOL": `PAUSED` | "One tap pauses everything." |
-| 1:44 | Landing "What we don't hide" section | "I will tell you what this does not hide: funding is public, and my custody provider sees every trade. It is all on the page." |
-| 1:55 | Repo and `app.norr.finance/#/verify` | "Norr. Your agent trades. Nobody watches. The code is public, and so is the proof." |
-
-Recording notes: record in US market hours; show the approval once; cut waits; keep the Verify screen on screen long enough to read the checks; never show a startup token, an API key or the `.env` file; blur the wallet address if wanted.
-
-## X post drafts
-
-Rules: say it was built at NEAR HACKATHON, tag @NEARProtocol and #NEARHackathon, attach the video; lead with the problem; one complete moment; say concretely what NEAR does; link the demo and repo; end with a real question. Optional tags: @NearLegion, @NearBuilders. Replace the bracketed items. The owner posts.
+Required: says it was built at NEAR HACKATHON, tags @NEARProtocol and #NEARHackathon, attaches the demo video. Lead with the user problem; show one complete moment; say concretely what NEAR does; link the demo and the repo; end with a real question. Optional tags: @NearLegion, @NearBuilders. The script to record is [DEMO.md](DEMO.md) (2 minutes).
 
 **Main post**
-> Give an AI agent your money and it usually gets your keys and your strategy goes public.
+> Give an AI agent your money and it usually gets your keys, and your strategy goes public.
 >
-> I built Norr at NEAR HACKATHON: your agent trades crypto and tokenized stocks through NEAR Intents' confidential layer, holds one token and cannot withdraw. The enclave enforcing its limits can be verified from your browser.
+> I built Norr at NEAR HACKATHON: Claude trades crypto through NEAR Intents' confidential layer, holds one token, cannot withdraw, and every swap waits for my wallet's approval. The enclave enforcing its limits can be verified from your browser.
 >
 > [video]
 >
 > @NEARProtocol #NEARHackathon
 > Repo: https://github.com/outislabs/norr
-> Try the check: https://app.norr.finance/#/verify
+> Verify it yourself: https://app.norr.finance/#/verify
 >
 > What would you want an agent to be unable to do with your wallet?
 
-**Thread (replies, optional)**
-1. > How NEAR is used: NEAR Intents (1Click) for quotes and cross-chain funding, Confidential Intents for trades that stay off the public chain, NEAR accounts for owner sign-in and approvals, NEAR AI Cloud for a private model whose responses we verify.
-2. > What we don't hide: funding and withdrawals are public, and the custody provider and Intents operator can see confidential trades. Full table in the README.
+**Thread (optional replies)**
+1. > How NEAR is used: NEAR Intents (1Click) for quotes, cross-chain funding and execution; Confidential Intents for trades that stay off the public chain; NEAR accounts for sign-in, approvals and as each vault's on-chain controller; NEAR AI Cloud for a private model whose responses we verify.
+2. > What we don't hide: funding and withdrawals are public, and the custody provider and the Intents operator can see confidential trades. The full table is in the README.
 3. > Try it with no money: `pnpm install && pnpm dev:mock` runs the whole flow locally. [repo link]
 
-Short variant (265 characters, counting the link as 23):
+**Short variant** (265 characters, a link counted as 23):
 > Built at NEAR HACKATHON: Norr lets an AI agent trade crypto and tokenized stocks privately via NEAR Intents, without ever holding your keys. The enclave enforcing its limits is verifiable in your browser. [video] @NEARProtocol #NEARHackathon https://github.com/outislabs/norr
 
-Do not claim: "trustless", "cannot lose funds", that trades are hidden from custody or Intents operators, or that a live demo is up when the CVM is stopped.
+Do not claim: "trustless", "cannot lose funds", that trades are hidden from the custody provider or the Intents operator, or that a live demo is up when the engine is stopped.
 
-## Submission payload (fill the placeholders, send only after the owner confirms)
+## Keeping the hosted demo up
 
-Endpoint: `POST https://nearhackathon.com/api/applications` (or the form at https://nearhackathon.com/#apply). Generate `requestId` once (`uuidgen | tr A-Z a-z`) and reuse it on retries. Submit only when the repo is public and the X post is live; it cannot be edited; at most 2 submissions per email.
+Q-012: keep it to 2026-11-18, ideally 2026-11-25. At the `tdx.small` rate of $0.0608 an hour, the rate recorded on 2026-11-02, from Nov 10 that is about **$12 to Nov 18** and about **$22 to Nov 25**. Check the Phala balance covers it. The service is running now; if it is ever stopped, `phala cvms start norr-demo`. Delete the CVM after the window.
 
-```json
-{
-  "requestId": "<uuid, generated once>",
-  "projectName": "Norr",
-  "leadName": "<LEAD NAME>",
-  "email": "<EMAIL>",
-  "size": "1",
-  "tracks": ["privacy", "security", "defi", "agents"],
-  "nearAddress": "<MAINNET NEAR ACCOUNT FOR PRIZES>",
-  "projectUrl": "https://github.com/outislabs/norr",
-  "demoUrl": "<URL OF THE PUBLIC X POST>",
-  "idea": "<text below>"
-}
-```
+## Pre-submission checklist
 
-`idea` (20 to 2000 characters; 1,973 after the 2026-11-03 edit, so keep edits short):
+Verified on 2026-11-10 unless marked for Kelvin.
 
-> Norr is a private trading layer for AI agents. An agent (Claude, ChatGPT or your own bot) connects over MCP and trades crypto and tokenized US stocks and ETFs through NEAR Intents. When the vault holds its funds in the confidential layer, trades settle there, so pair, size and price stay off the public chain. The agent holds one token scoped to one vault: it cannot withdraw, change the rules or choose a destination.
->
-> What is live: the Norr service runs in an Intel TDX confidential VM on Phala. Its attestation endpoints are public, and the dashboard's Verify screen (no sign-in needed) checks the quote, freshness, configuration hash, boot event log, production OS image, image digests and Intel's signature chain, all in the browser. Custody is an OutLayer wallet per vault, with owner-set limits, a withdrawal whitelist and owner approval for every swap. Norr adds the asset registry with multi-issuer routing, Scam Shield, the NEAR Intents incident feed, equity eligibility, per-vault rules (trade size, daily spend and loss caps, cooldown, allowlists), a kill switch, post-trade verification of every swap, and an encrypted ledger where the agent's reasoning is sealed to the owner's wallet. The owner dashboard covers funding from any chain, rules, activity, approvals and agent setup. A reference agent runs its model on NEAR AI Cloud and verifies each response's hardware-backed signature.
->
-> Mainnet evidence, with tiny balances: confidential swaps, and a $6 tokenized Nvidia buy and sell back (cost about 1.2%).
->
-> NEAR's role: Intents and 1Click for quotes and cross-chain funding, Confidential Intents for private trades, NEAR accounts for sign-in and approvals, NEAR AI Cloud for the private model.
->
-> Honest limits are in the README: the custody provider sees every operation and builds swap routes its enclave does not re-check, funding is public, owning a vault needs a NEAR account, and it is unaudited. Run it with no funds: `pnpm install && pnpm dev:mock`.
+| Check | Result |
+|---|---|
+| Secret scan: no known secret value from `.env`, `deploy/.env.phala` or `config/*.local.*` appears in any of the 101 commits; none of the standard key patterns (OutLayer keys, agent and owner tokens, PEM blocks, JWTs, NEAR secret keys, cloud and API keys) appears anywhere in history; no `.env`, local config, data or key file is tracked | Pass. The only matches were two policy-limit numbers inside random TDX quote data and the demo vault's public account id |
+| A personal NEAR account name appeared in three test files; replaced. It remains in older commits (the repository's history is not rewritten) | Fixed in files; history is Kelvin's call |
+| Repository public | Pass: an anonymous clone with no credentials worked |
+| Clean clone: `pnpm install --frozen-lockfile`, typecheck, all 667 tests, `pnpm judge` | Pass, at the current HEAD |
+| README quickstart as written (policy, $40 NVDA executes confidentially, $150 TSLA `OVER_TRADE_LIMIT`, `RUGPULL` `SCAM_RISK`) | Pass |
+| Links in the README, AGENTS.md, docs and landing content: 44 external URLs | Every one a reader would click returns 200. The others are authenticated API endpoints (401), bare API or RPC roots, npmjs.com (403 to scripts) and CSP hostnames in the deploy docs |
+| Live attestation, `scripts/verify-attestation.mts https://api.norr.finance` | 7 of 7 pass; commit `eaad960` |
+| Verify page in a real browser, no sign-in, Check attestation | 7 passed, 0 failed, 0 skipped; no console errors |
+| TLS terminates inside the enclave, `scripts/verify-domain.mts` for api. and mcp.norr.finance | Both pass |
+| Enclave data key stable across a redeploy, a restart and a new image | Fingerprint `8fb402a5b50d2e8c` every time |
+| npm: `@norrfi/mcp@0.1.0` run from the registry through an MCP client | Lists all 10 tools; policy, `about_norr`, `SCAM_RISK` and `OVER_TRADE_LIMIT` work. It does not forward the connect-time instructions (documented) |
+| Docs site and `llms.txt` match the repository | Pass on every page checked; the credits line is in `llms-full.txt` |
+| Sign-in picker lists every wallet; Claude connector revoke refuses the agent | Confirmed by Kelvin |
+| Hosted signups | Closed (invited accounts only): `GET /beta` says `signupsOpen: false`. Kelvin decides whether to open them before submitting |
+| Demo video recorded, public post up, `demoUrl` known | **Kelvin** |
+| `leadName`, `email`, `nearAddress`, consent | **Kelvin** |
+| Payload checked with `scripts/submission-check.mts`, printed, confirmed | **Kelvin**, then send |
 
-## Pre-submit checklist
+## Schedule (UTC)
 
-- [ ] CVM running, `scripts/verify-attestation.mts` passes, README "observed" values match the deployed image
-- [ ] Shield key set (or the labelled-bypass fallback decided and stated)
-- [ ] `pnpm install && pnpm test && pnpm dev:mock` pass on a clean clone; the README curl examples work
-- [ ] README links norr.finance (once live), the video and the X post
-- [ ] Video public, under the post, with the required tags in the post text
-- [ ] Payload validated (`size` exactly `1`, tracks from the list, `nearAddress` lowercase, URLs under 300 characters), printed for the owner, sent only after their confirmation
-- [ ] CVM kept running to Nov 18 (ideally Nov 25), then deleted
+| Date | Work |
+|---|---|
+| Tue Nov 10 | Features frozen. This checklist; demo script |
+| Wed Nov 11 | Rehearse [DEMO.md](DEMO.md) three times in mock mode, then once live (each live trade needs Kelvin's confirmation) |
+| Thu Nov 12 | Record the video (two takes), edit |
+| Fri Nov 13 | Post on X, check the post is public, validate the payload, **submit**. A day of buffer remains |
+| Sat Nov 14 | Buffer only. Deadline 23:59 UTC |
+| Nov 16 to 18 | Judging: keep the engine running (ideally to Nov 25) |

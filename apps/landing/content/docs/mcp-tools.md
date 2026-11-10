@@ -1,6 +1,6 @@
 # MCP tools reference
 
-Ten tools. Nine only read; `trade` can move money, inside the vault only. No tool can withdraw, change rules, or accept a destination address. On connecting, the server also sends short instructions: how custody, approvals, privacy and storage work (call `about_norr` for the live details).
+Ten tools. Nine only read; `trade` can move money, inside the vault only. No tool can withdraw, change rules, or accept a destination address. On connecting over HTTP (as the Claude app connector does), the server also sends short instructions: how custody, approvals, privacy and storage work (call `about_norr` for the live details). The `npx @norrfi/mcp` bridge does not forward these instructions yet, so an agent connected that way should call `about_norr` first.
 
 **Naming a token.** Anywhere an `asset` is taken you can pass a symbol (`SOL`), a stock ticker (`NVDA`), an asset id from `list_assets`, or the exact token as `chain:contract` (`base:0x833589…`), or the separate `chain` and `contract` inputs. A contract NEAR Intents does not route gets a safety report and the answer that it can't be traded privately. If several different tokens share a symbol (look-alikes), Norr does not guess: the trade is refused with `AMBIGUOUS_ASSET` and the candidates' chain and contract.
 
