@@ -4,7 +4,7 @@
 # Pinned to the image CI built from commit eaad960 (NORR_COMMIT inside it says so; signed build provenance on GHCR). After any code change, take the new digest from the CI run summary.
 services:
   norr:
-    image: ghcr.io/outislabs/norr@sha256:8db78751a9e313a9881ed5dd2053b25efbf39923c0eb2a1f9db3ab0823fc5227
+    image: ghcr.io/outislabs/norr@sha256:69fa3917470df9b304d572d117f8ca069b1e1dedd839d2d85a20904a9ecd08bb
     restart: unless-stopped
     ports:
       - "8787:8787"
@@ -36,7 +36,7 @@ services:
   # The MCP endpoint remote agents connect to (https://<this CVM>/mcp). It holds no state and no tokens: each request
   # forwards the caller's own agent token to the service. It runs in the same CVM so what handles agent traffic is attested too.
   mcp:
-    image: ghcr.io/outislabs/norr@sha256:8db78751a9e313a9881ed5dd2053b25efbf39923c0eb2a1f9db3ab0823fc5227
+    image: ghcr.io/outislabs/norr@sha256:69fa3917470df9b304d572d117f8ca069b1e1dedd839d2d85a20904a9ecd08bb
     restart: unless-stopped
     working_dir: /app/apps/mcp
     command: ["../enclave/node_modules/.bin/tsx", "src/http.ts"]
