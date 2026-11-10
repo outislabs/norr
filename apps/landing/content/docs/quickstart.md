@@ -8,7 +8,7 @@ Open [app.norr.finance](https://app.norr.finance) and choose **Sign in with a NE
 
 **Vaults.** After signing in, **Vaults** lists the vaults that belong to your account.
 
-**No vault yet?** Create one (public beta: up to $100, one vault per account). For now the hosted service takes new vaults by invitation; the whole flow, create, sign, fund and connect, runs in mock mode (see the README quickstart):
+**No vault yet?** Create one (public beta: up to $100, one vault per account). The hosted service is in open beta, so any NEAR account can create a vault; the whole flow, create, sign, fund and connect, runs in mock mode (see the README quickstart):
 
 1. Accept the [beta terms and risk disclosure](/docs/terms/), and optionally confirm you are not a US person (needed for stocks). Norr opens a custody wallet for you and seals its key in its enclave.
 2. **Review the custody policy** Norr proposes: confidential operations only, money can only go to your own account, every operation waits for your approval, limits of about $10 per operation and $30 a day. **Autonomous mode** is off by default and shown as ON or OFF; turning it on takes two deliberate steps (tick it, then confirm that you understand). You can switch it later in **Rules** with one wallet signature.

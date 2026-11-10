@@ -111,7 +111,7 @@ Verified on 2026-11-10 unless marked for Kelvin.
 | npm: `@norrfi/mcp@0.1.0` run from the registry through an MCP client | Lists all 10 tools; policy, `about_norr`, `SCAM_RISK` and `OVER_TRADE_LIMIT` work. It does not forward the connect-time instructions (documented) |
 | Docs site and `llms.txt` match the repository | Pass on every page checked; the credits line is in `llms-full.txt` |
 | Sign-in picker lists every wallet; Claude connector revoke refuses the agent | Confirmed by Kelvin |
-| Hosted signups | Closed (invited accounts only): `GET /beta` says `signupsOpen: false`. Kelvin decides whether to open them before submitting |
+| Hosted signups | Open beta since 2026-11-10 (`GET /beta` says `signupsOpen: true`; $100 cap, one vault per account, operator switch to close) |
 | Demo video recorded, public post up, `demoUrl` known | **Kelvin** |
 | `leadName`, `email`, `nearAddress`, consent | **Kelvin** |
 | Payload checked with `scripts/submission-check.mts`, printed, confirmed | **Kelvin**, then send |
@@ -126,3 +126,7 @@ Verified on 2026-11-10 unless marked for Kelvin.
 | Fri Nov 13 | Post on X, check the post is public, validate the payload, **submit**. A day of buffer remains |
 | Sat Nov 14 | Buffer only. Deadline 23:59 UTC |
 | Nov 16 to 18 | Judging: keep the engine running (ideally to Nov 25) |
+
+## After submission (not before)
+
+Features are frozen until the hackathon closes. Then, in this order: persist the owner's withdrawals in Activity across restarts (today they are held in memory; `apps/enclave/src/owner/routes.ts`); operator-privacy key migration steps 2 to 4 (`docs/OPERATOR-PRIVACY.md`); the Curated/Open asset modes (`docs/ASSET-MODES.md`); forward the connect-time instructions through the npx bridge.
