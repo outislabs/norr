@@ -16,6 +16,7 @@ import { safeEqual, type AgentTokens } from "./tokens";
 import { RateLimiter, type BetaControl } from "./beta";
 import type { Onboarding } from "./onboarding";
 import { mountOAuth, type OAuthServer } from "./oauth";
+import { operatorOverview, RequestCounters, type UpstreamHealth } from "./operator";
 import { executeTrade, planTrade, reconcile, type TradeDeps } from "./trade";
 
 export interface AppOptions {
@@ -41,6 +42,8 @@ export interface AppOptions {
   beta?: BetaControl;
   /** OAuth for MCP clients (the Claude app's connectors). */
   oauth?: OAuthServer;
+  /** Upstream reachability for the operator overview (tests inject it; live mode probes 1Click and OutLayer). */
+  probes?: () => Promise<UpstreamHealth>;
 }
 
 type Env = { Variables: { vaultId: string } };
@@ -49,9 +52,15 @@ type Env = { Variables: { vaultId: string } };
  * The agent-facing API. There is deliberately no route that moves funds out, changes policy, or
  * accepts a destination. The vault always comes from the agent token. Request bodies are never logged.
  */
-export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, allowedOrigins, attestor, history, onboarding, beta, oauth }: AppOptions): Hono<Env> {
+export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, allowedOrigins, attestor, history, onboarding, beta, oauth, probes }: AppOptions): Hono<Env> {
   const app = new Hono<Env>();
   const limiter = new RateLimiter(deps.now);
+  // Counts the service's own failures (5xx) and rate limits (429) per hour for the operator overview. Status codes only.
+  const counters = new RequestCounters(deps.now);
+  app.use("*", async (c, next) => {
+    await next();
+    counters.record(c.res.status);
+  });
 
   // CORS for the separately hosted dashboard: the owner API answers browsers on exactly the configured origins and
   // nobody else. The agent API (/v1) is never opened to browsers. Sessions travel as a bearer header, not a cookie,
@@ -298,6 +307,12 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
       if (typeof body?.open !== "boolean") return c.json({ error: "send {\"open\": true|false}" }, 400);
       beta.setSignups(body.open);
       return c.json({ signupsOpen: beta.get().signupsOpen });
+    });
+    // The operator's aggregate view: counts, totals and rates, never an owner, vault, balance or trade (operator.ts).
+    app.get("/admin/v1/overview", async (c) => {
+      if (!admin(c)) return c.json({ error: "unauthorized" }, 401);
+      if (!beta) return c.json({ error: "self-serve is not enabled" }, 404);
+      return c.json(await operatorOverview({ deps, beta, onboarding, counters, mock, probes }));
     });
     app.post("/owner/vaults/:id/resume", (c) => {
       if (!admin(c)) return c.json({ error: "unauthorized" }, 401);

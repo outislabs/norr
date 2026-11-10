@@ -104,6 +104,11 @@ export class Onboarding {
     return this.d.tenants.ids();
   }
 
+  /** Status and creation time of every self-serve vault, with no owner or id: for the operator's aggregate overview. */
+  summaries(): { status: TenantRecord["status"]; createdAt: string }[] {
+    return this.d.tenants.list().map((r) => ({ status: r.status, createdAt: r.createdAt }));
+  }
+
   mine(owner: string): TenantRecord[] {
     return this.d.tenants.list().filter((r) => r.owner === owner);
   }
