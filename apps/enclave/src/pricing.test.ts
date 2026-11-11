@@ -1,5 +1,6 @@
 import type { OneClickToken } from "@norr/core";
-import { describe, expect, it } from "vitest";
+import { checkPriceSanity } from "@norr/core";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { harness, req } from "./fixtures";
 import { createMockEnclave } from "./mock-enclave";
 import { PricingFeed } from "./pricing";
@@ -64,6 +65,81 @@ describe("PricingFeed: 1Click down at boot, back later", () => {
     await feed.start();
     expect(feed.ready()).toBe(false);
     expect(f.calls.n).toBe(3);
+  });
+});
+
+describe("PricingFeed: reference prices stay fresh (stale-reference regression)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** A 1Click token list whose SOL price follows `market.sol`, like the live list does. */
+  function market(sol: number) {
+    const m = { sol, down: false, calls: 0 };
+    const source = async () => {
+      m.calls++;
+      if (m.down) throw new Error("1Click tokens: 503");
+      const list = [tok(USDC_ID, "USDC"), { ...tok("nep141:sol.test", "SOL"), decimals: 24, price: m.sol }];
+      return { plain: list, withOndo: list };
+    };
+    return { m, source };
+  }
+
+  it("reproduces the bug: a boot-time reference blocks every quote at a constant gap until the list is reloaded", async () => {
+    vi.useFakeTimers();
+    const { m, source } = market(150);
+    const feed = new PricingFeed(source, { cashAssetId: USDC_ID, sleep: async () => {}, refreshMs: 60_000, now: () => Date.now() });
+    await feed.start();
+    const solRef = () => feed.registry.byId("nep141:sol.test")!.priceUsd;
+    expect(solRef()).toBe(150);
+
+    // SOL moves 2.5% after boot. Live quotes now imply $153.75 at any size ($1.50, $4, ...).
+    m.sol = 153.75;
+    for (let i = 0; i < 3; i++) expect(checkPriceSanity(solRef(), 153.75)).toMatchObject({ code: "PRICE_SANITY" });
+    expect(checkPriceSanity(solRef(), 153.75)?.message).toMatch(/2\.5% away/);
+
+    // The old code never reloaded, so this held forever. Now the next tick picks up the live price.
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(m.calls).toBe(2);
+    expect(solRef()).toBe(153.75);
+    expect(checkPriceSanity(solRef(), 153.75)).toBeNull();
+    // The 2% limit itself is unchanged: a real 2.5% deviation from a fresh reference still blocks.
+    expect(checkPriceSanity(solRef(), 153.75 * 1.025)).toMatchObject({ code: "PRICE_SANITY" });
+    feed.stop();
+  });
+
+  it("keeps the last list through a short outage, then reports not ready once the reference is older than maxAgeMs", async () => {
+    vi.useFakeTimers();
+    const { m, source } = market(150);
+    const failures: string[] = [];
+    const feed = new PricingFeed(source, { cashAssetId: USDC_ID, sleep: async () => {}, refreshMs: 60_000, maxAgeMs: 5 * 60_000, now: () => Date.now(), onFailure: (_n, msg) => failures.push(msg) });
+    await feed.start();
+    const loadedAt = feed.lastLoadedAt();
+    m.down = true;
+    await vi.advanceTimersByTimeAsync(4 * 60_000);
+    expect(feed.ready()).toBe(true); // 4 min old: still usable
+    expect(feed.registry.byId("nep141:sol.test")?.priceUsd).toBe(150);
+    expect(feed.lastLoadedAt()).toBe(loadedAt);
+    await vi.advanceTimersByTimeAsync(2 * 60_000);
+    expect(feed.ready()).toBe(false); // 6 min old: trades block with PRICING_UNAVAILABLE, not a misleading PRICE_SANITY
+    expect(failures.length).toBeGreaterThanOrEqual(5);
+
+    m.down = false;
+    m.sol = 160;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(feed.ready()).toBe(true);
+    expect(feed.registry.byId("nep141:sol.test")?.priceUsd).toBe(160);
+    feed.stop();
+  });
+
+  it("stop() ends the periodic reload", async () => {
+    vi.useFakeTimers();
+    const { m, source } = market(150);
+    const feed = new PricingFeed(source, { cashAssetId: USDC_ID, sleep: async () => {}, refreshMs: 60_000 });
+    await feed.start();
+    feed.stop();
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(m.calls).toBe(1);
   });
 });
 

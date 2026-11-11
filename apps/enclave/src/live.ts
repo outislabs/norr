@@ -52,8 +52,10 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env, opts: 
     cashAssetId: USDC_NEAR,
     sleep,
     baseDelayMs: opts.pricingRetryBaseMs,
-    onFailure: (n, m) => console.warn(`  pricing: 1Click token list unavailable (attempt ${n}): ${m}. Trades are blocked until it loads; retrying.`),
-    onReady: (n) => console.log(`  pricing: token list loaded (attempt ${n}). Trades are allowed.`),
+    onFailure: (n, m) => console.warn(`  pricing: 1Click token list unavailable (attempt ${n}): ${m}. Retrying; trades block if no list is loaded or the last one is over 5 minutes old.`),
+    onReady: (n) => console.log(`  pricing: token list loaded (attempt ${n}). Trades are allowed; reference prices reload every minute.`),
+    refreshMs: 60_000,
+    maxAgeMs: 5 * 60_000,
   });
   const registry = pricing.registry;
   // Until the list loads, USDC is not in the registry; this placeholder keeps read paths working and trades are blocked by the gate.
