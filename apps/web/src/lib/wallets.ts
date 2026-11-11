@@ -1,4 +1,5 @@
-import type { WalletModuleFactory } from "@near-wallet-selector/core";
+import type { WalletModule, WalletModuleFactory } from "@near-wallet-selector/core";
+import { describeFailure, isNetworkError, SignInError, withRetry, type RetryOptions } from "./resilience";
 
 /**
  * The NEAR wallets the sign-in picker offers. One list, read by the picker, the CSP notes and the tests, so a wallet
@@ -22,7 +23,7 @@ export interface WalletEntry {
 }
 
 export const WALLETS: WalletEntry[] = [
-  { id: "hot-wallet", name: "HOT Wallet", tested: true, note: "Browser extension, Telegram mini app and mobile; connect widget from hot-labs.org.", load: async () => (await import("@near-wallet-selector/hot-wallet")).setupHotWallet() },
+  { id: "hot-wallet", name: "HOT Wallet", tested: true, note: "Browser extension, Telegram mini app and mobile; connect widget from hot-labs.org, relay at h4n.app. Network drops on its relay are retried (see resilientHot).", load: async () => resilientHot((await import("@near-wallet-selector/hot-wallet")).setupHotWallet()) },
   { id: "meteor-wallet", name: "Meteor Wallet", tested: false, note: "Meteor's web wallet, in its own window. The selector has no separate Meteor extension module; 'Meteor Wallet App' is for Meteor's in-app browser and signs in at page load, so it is not offered.", load: async () => (await import("@near-wallet-selector/meteor-wallet")).setupMeteorWallet() },
   { id: "my-near-wallet", name: "MyNearWallet", tested: false, note: "Web wallet, in its own window.", load: async () => (await import("@near-wallet-selector/my-near-wallet")).setupMyNearWallet() },
   { id: "intear-wallet", name: "Intear Wallet", tested: false, note: "Popup to wallet.intear.tech; its logout bridge (logout-bridge-service.intear.tech) is the one extra origin the CSP allows.", load: async () => (await import("@near-wallet-selector/intear-wallet")).setupIntearWallet() },
@@ -52,4 +53,40 @@ export function missingWallets(registeredIds: string[], failures: Map<string, un
     const e = failures.get(w.id);
     return { id: w.id, name: w.name, reason: e instanceof Error ? e.message.slice(0, 120) : e ? String(e).slice(0, 120) : "it did not start" };
   });
+}
+
+/**
+ * HOT Wallet with its relay calls retried. Each HOT request first POSTs to its relay (h4n.app/{id}/request), and only then
+ * shows the widget or switches to the HOT app; the reply is polled with errors already swallowed (@hot-wallet/sdk 1.0.8,
+ * hot.ts and helpers/proxy.ts). So a network failure out of signIn or signMessage means the POST was lost before the owner
+ * saw anything, and sending it again cannot produce a second prompt. That POST is what failed live on iPhone Safari
+ * ("Failed to sign in with HOT Wallet: Load failed", 2026-11-11): the wallet-selector modal shows that text only for the
+ * connect step, and Norr's own requests fail as "Norr is offline right now", not "Load failed".
+ */
+export function resilientHot(factory: WalletModuleFactory, retry: RetryOptions = {}): WalletModuleFactory {
+  return async (ctx) => {
+    const module = await factory(ctx);
+    if (!module) return module;
+    const init = module.init as (config: unknown) => Promise<Record<string, unknown>>;
+    return {
+      ...module,
+      init: async (config: unknown) => {
+        const wallet = await init(config);
+        const signIn = wallet.signIn as (...a: unknown[]) => Promise<unknown>;
+        const signMessage = wallet.signMessage as ((...a: unknown[]) => Promise<unknown>) | undefined;
+        return {
+          ...wallet,
+          signIn: async (...a: unknown[]) => {
+            let tries = 0;
+            try {
+              return await withRetry(() => (tries++, signIn(...a)), retry);
+            } catch (e) {
+              throw isNetworkError(e) ? new SignInError("connect", describeFailure(e, tries > 1), e) : e;
+            }
+          },
+          ...(signMessage ? { signMessage: (...a: unknown[]) => withRetry(() => signMessage(...a), retry) } : {}),
+        };
+      },
+    } as WalletModule;
+  };
 }

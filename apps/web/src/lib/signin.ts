@@ -2,6 +2,7 @@ import { Buffer } from "buffer";
 import type { Api, DirectDeposit, PolicyStoreCall, SessionInfo } from "./api";
 import { base64ToBytes, generateDemoKey, type DemoKey } from "./nep413";
 import { UNLOCK_MESSAGE, UNLOCK_NONCE, UNLOCK_RECIPIENT } from "./seal";
+import { describeFailure, isNetworkError, SignInError, watchCspViolations, withRetry, type RetryOptions, type SignInStep } from "./resilience";
 import { missingWallets, walletFactories } from "./wallets";
 
 /** Mock mode only: sign in as the demo owner with a throwaway browser key. The mock service accepts any key. */
@@ -83,7 +84,35 @@ export async function disconnectWallet(load: () => Promise<SelectorKit> = loadSe
  * connected wallet, and nothing ever disconnected it), so after one HOT sign-in HOT was the only choice, even after
  * signing out. Now a remembered wallet is disconnected first and the owner picks again.
  */
-export async function walletSignIn(api: Api, o: { onNotice?: (message: string) => void; load?: () => Promise<SelectorKit> } = {}): Promise<SessionInfo> {
+export async function walletSignIn(api: Api, o: { onNotice?: (message: string) => void; load?: () => Promise<SelectorKit>; retry?: RetryOptions } = {}): Promise<SessionInfo> {
+  const csp = watchCspViolations();
+  try {
+    return await signInSteps(api, o);
+  } catch (e) {
+    // A blocked origin is the one thing a retry never fixes: name it.
+    const blocked = csp.blocked();
+    if (blocked.length > 0) throw new Error(`${e instanceof Error ? e.message : String(e)} The browser blocked: ${blocked.join(", ")}.`);
+    throw e;
+  } finally {
+    csp.stop();
+  }
+}
+
+/**
+ * The steps, each named in its error. Norr's challenge is retried on a dropped connection (it is a fresh, harmless GET).
+ * Verify is retried too, after the page is visible again (on iOS the owner is coming back from the HOT app): the challenge
+ * is single-use, so if the dropped request had in fact reached Norr, the retry is refused and the message says to sign again.
+ */
+async function signInSteps(api: Api, o: { onNotice?: (message: string) => void; load?: () => Promise<SelectorKit>; retry?: RetryOptions }): Promise<SessionInfo> {
+  const step = async <T>(name: SignInStep, fn: () => Promise<T>, retryable = false): Promise<T> => {
+    let tries = 0;
+    try {
+      return retryable ? await withRetry(() => (tries++, fn()), o.retry) : await fn();
+    } catch (e) {
+      if (e instanceof SignInError) throw e;
+      throw new SignInError(name, describeFailure(e, tries > 1), e);
+    }
+  };
   const { selector, setupModal, missing } = await (o.load ?? loadSelector)();
   if (missing.length > 0) o.onNotice?.(`Not available in this browser: ${missing.map((m) => `${m.name} (${m.reason})`).join("; ")}.`);
   if (selector.store.getState().accounts.length > 0) await disconnect(selector);
@@ -107,10 +136,30 @@ export async function walletSignIn(api: Api, o: { onNotice?: (message: string) =
   }
   const wallet = await selector.wallet();
   if (!wallet.signMessage) throw new Error(`${wallet.metadata.name} cannot sign messages, which sign-in needs. Choose another wallet.`);
-  const c = await api.challenge();
-  const signed = await wallet.signMessage({ message: c.message, recipient: c.recipient, nonce: Buffer.from(c.nonce, "base64") });
-  if (!signed) throw new Error("The wallet did not return a signature.");
-  return api.login({ accountId: signed.accountId, publicKey: signed.publicKey, signature: signed.signature, nonce: c.nonce });
+  const c = await step("challenge", () => api.challenge(), true);
+  // Not retried here: HOT retries its own relay call (wallets.ts); other wallets open windows a retry would duplicate.
+  const signed = await step("sign", async () => {
+    const r = await wallet.signMessage!({ message: c.message, recipient: c.recipient, nonce: Buffer.from(c.nonce, "base64") });
+    if (!r) throw new Error("The wallet did not return a signature.");
+    return r;
+  });
+  let dropped = false;
+  try {
+    return await withRetry(
+      async () => {
+        try {
+          return await api.login({ accountId: signed.accountId, publicKey: signed.publicKey, signature: signed.signature, nonce: c.nonce });
+        } catch (e) {
+          if (isNetworkError(e)) dropped = true;
+          throw e;
+        }
+      },
+      o.retry,
+    );
+  } catch (e) {
+    if (dropped && !isNetworkError(e)) throw new SignInError("verify", "the connection dropped, and Norr had already used this sign-in challenge. Sign in again (one more signature).", e);
+    throw new SignInError("verify", describeFailure(e, dropped), e);
+  }
 }
 
 /**
