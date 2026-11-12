@@ -34,8 +34,8 @@ control, inside rules you set. It runs on mainnet with real money.
   gateway can cause losses up to your limits. Custody is not trustless.
 - **Autonomous mode.** If you turn it on, operations run without your signature within the limits. Withdrawals and
   transfers still go only to your own account.
-- **Privacy has limits.** Funding and withdrawals are public. The custody provider and the NEAR Intents operator see
-  confidential trades. See the [privacy model](/docs/privacy/).
+- **Privacy has limits.** Deposits and withdrawals are private: they never name your vault. The custody provider and the
+  NEAR Intents operator see confidential trades. See the [privacy model](/docs/privacy/) for what stays visible.
 - **Availability.** The service can be offline. Your funds stay in your custody wallet, which you control through
   OutLayer, whether or not Norr is running.
 

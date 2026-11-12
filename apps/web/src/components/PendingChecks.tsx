@@ -121,7 +121,7 @@ export function PendingChecks({ items, list, apiBase = "", owner = "", onChanged
         <li key={p.requestId} className="border-l border-line-strong pl-4">
           {p.kind === "withdraw" ? (
             <p className="text-fg">
-              You asked to withdraw <b className="mono font-medium">{amount(p.sends.amount)} {p.sends.symbol}</b> from the vault to your account <b className="mono font-medium">{p.recipient}</b>. The arrival is public on NEAR.
+              You asked to withdraw <b className="mono font-medium">{amount(p.sends.amount)} {p.sends.symbol}</b> from the vault to your account <b className="mono font-medium">{p.recipient}</b>. Withdrawals are private: they never name your vault.
             </p>
           ) : p.kind === "shield" ? (
             <p className="text-fg">

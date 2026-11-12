@@ -35,7 +35,7 @@ Last line on success: `PASS: 21/21 checks passed`. `pnpm judge --no-tests` skips
 | `POST /v1/trade {"side":"buy","asset":"TSLA","amountUsd":150}` | `blocked`, `OVER_TRADE_LIMIT`, with a plain-language message. |
 | `POST /v1/trade {"side":"buy","asset":"RUGPULL","amountUsd":5}` | `blocked`, `SCAM_RISK`, with the reasons. |
 | `pnpm dev:web`, open http://localhost:5173, "Use the demo owner" | The owner dashboard: balances by layer, rules, the agent's activity, Fund (pick a chain), Connect (MCP config), Pause everything, Verify. Below the demo vault, **Create your vault** walks the self-serve flow (terms, custody policy signed by the owner, activation); a new mock vault starts with $100 of pretend USDC. |
-| Connect Claude Desktop or Claude Code with `docs/MCP.md` | Ten tools; ask it to buy $150 of TSLA and it reports the block. |
+| Connect Claude Desktop or Claude Code with `docs/MCP.md` | Eleven tools; ask it to buy $150 of TSLA and it reports the block. |
 | `pnpm exec tsx scripts/verify-attestation.mts <service URL>` against the live CVM (URL in README) | Seven attestation checks, including Intel's signature chain. Only while the CVM is running. |
 
 ## Repository map

@@ -32,7 +32,7 @@ export interface ExitResult { status: "done" | "waiting" | "stopped"; steps: { s
 export interface Portfolio { holdings: Holding[]; totalUsd: number; byClass: { crypto: number; equity: number } }
 export interface ActivityItem { id: string; executed: { usd: number; realizedUsd: number | null } | null; at: string; side: "buy" | "sell"; asset: string; amountUsd: number; sealedReason: SealedReason | null; decision: Decision; note: string | null; pending: boolean }
 /** What a withdrawal would do, from the dry run. The destination is always the vault's owner. */
-export interface WithdrawPlan { asset: string; assetId: string; amount: string; balance: string; destination: string; chain: string; layer: "confidential"; approval: string; becomesPublic: string }
+export interface WithdrawPlan { asset: string; assetId: string; amount: string; balance: string; destination: string; chain: string; layer: "confidential"; approval: string; privacy: string }
 export type WithdrawResult = { dryRun: true; plan: WithdrawPlan } | { status: "done"; plan: WithdrawPlan } | { status: "pending_approval" | "in_progress"; requestId: string; plan: WithdrawPlan; message: string };
 /** An owner-level movement of funds (a withdrawal), listed in Activity beside the agent's decisions. */
 export interface Transfer { id: string; at: string; kind: "withdraw"; symbol: string; amount: string; to: string; state: "waiting" | "done" | "failed"; detail: string | null }

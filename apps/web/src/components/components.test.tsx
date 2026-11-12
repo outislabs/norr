@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { Policy } from "@norr/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ActivityItem, PendingItem } from "../lib/api";
@@ -225,7 +225,10 @@ describe("FundingPanel", () => {
     const text = document.body.textContent ?? "";
     expect(text).toContain("Send exactly 8 USDC on NEAR");
     expect(text).toContain("character by character");
-    expect(text).toContain("normal public transaction");
+    // The 1Click route never names the vault on chain (traced, docs/FINDINGS.md); the short line links to the detail.
+    expect(screen.getByTestId("deposit-privacy").textContent).toContain("Deposits are private: they never name your vault.");
+    expect(within(screen.getByTestId("deposit-privacy")).getByRole("link", { name: "Who sees what" }).getAttribute("href")).toBe("https://norr.finance/docs/privacy/");
+    expect(text).not.toContain("normal public transaction");
     expect(screen.getByRole("img", { name: /QR code/ })).toBeTruthy();
     expect(api.requestFunding).toHaveBeenCalledWith("demo", { amountUsd: 8, source: "nep141:usdc", refundTo: "me.near" });
 

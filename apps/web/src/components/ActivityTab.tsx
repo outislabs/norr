@@ -71,7 +71,7 @@ export function ActivityTab({ api, account, vaultId, items, transfers = [], relo
                   </p>
                   <time className="text-sm text-mute" dateTime={t.at}>{ago(t.at)}</time>
                 </div>
-                <p className="mt-1 text-sm text-mute">{t.state === "waiting" ? "Approve it in the Approvals tab." : t.state === "done" ? "The arrival is public on NEAR." : (t.detail ?? "Nothing moved.")}</p>
+                <p className="mt-1 text-sm text-mute">{t.state === "waiting" ? "Approve it in the Approvals tab." : t.state === "done" ? "Arrived. Withdrawals are private: they never name your vault." : (t.detail ?? "Nothing moved.")}</p>
               </li>
             ))}
           </ol>

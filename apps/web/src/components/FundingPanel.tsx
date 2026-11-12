@@ -1,4 +1,5 @@
 import { DirectDepositPanel, PublicBalance } from "./DirectDeposit";
+import { PRIVACY_URL } from "../lib/links";
 import { useEffect, useMemo, useState } from "react";
 import { ApiError, type Api, type DirectDeposit, type FundingOffer, type FundingSource, type FundingStatus } from "../lib/api";
 import { connectEvm, explorerTx, injectedWallet, payWithEvmWallet, qrPayload } from "../lib/funding";
@@ -241,7 +242,7 @@ export function FundingPanel({ api, vaultId, account = "", pollMs = 5000, onArri
                 </li>
                 {offer.minArrivingUsdc !== undefined && <li>At least {usd(offer.minArrivingUsdc)} USDC arrives; a refund, if the route cannot complete, goes to <span className="mono break-all text-xs">{offer.refundTo}</span>.</li>}
                 <li>Compare the address with your wallet character by character before you confirm. It is for this request only.</li>
-                <li>Your transfer is a normal public transaction on {send.chainName}: your address, this address and the amount are visible there. Once it lands, the vault&apos;s balance is confidential.</li>
+                <li data-testid="deposit-privacy">Deposits are private: they never name your vault. Once it lands, the vault&apos;s balance is confidential. <a className="underline" href={PRIVACY_URL} target="_blank" rel="noreferrer">Who sees what</a></li>
               </ul>
             </>
           )}

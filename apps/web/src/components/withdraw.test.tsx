@@ -9,7 +9,7 @@ import { WithdrawPanel } from "./WithdrawPanel";
 afterEach(cleanup);
 
 const holdings: Holding[] = [{ assetId: "nep141:usdc", symbol: "USDC", class: "crypto", amount: 12.5, valueUsd: 12.5, layer: "confidential" }];
-const plan: WithdrawPlan = { asset: "USDC", assetId: "nep141:usdc", amount: "1", balance: "12.5", destination: "norrfi.near", chain: "near", layer: "confidential", approval: "Waits for your approval in the Approvals tab.", becomesPublic: "The arrival is public on NEAR: 1 USDC landing in norrfi.near." };
+const plan: WithdrawPlan = { asset: "USDC", assetId: "nep141:usdc", amount: "1", balance: "12.5", destination: "norrfi.near", chain: "near", layer: "confidential", approval: "Waits for your approval in the Approvals tab.", privacy: "Withdrawals are private: they never name your vault. On NEAR, 1 USDC arrives in norrfi.near as a payment from NEAR Intents." };
 
 describe("withdraw panel", () => {
   it("shows the fixed destination, checks first without moving anything, then requests", async () => {
@@ -23,8 +23,8 @@ describe("withdraw panel", () => {
     fireEvent.click(screen.getByRole("button", { name: /Check first/ }));
     expect(await screen.findByTestId("withdraw-plan")).toBeTruthy();
     expect(withdraw).toHaveBeenLastCalledWith("v_1", { asset: "nep141:usdc", dryRun: true, amount: "1" });
-    expect(screen.getByText(/What becomes public/)).toBeTruthy();
-    expect(screen.getByText(/The arrival is public on NEAR/)).toBeTruthy();
+    expect(screen.getByTestId("withdraw-privacy").textContent).toBe("Privacy: Withdrawals are private: they never name your vault. On NEAR, 1 USDC arrives in norrfi.near as a payment from NEAR Intents.");
+    expect(screen.getByRole("link", { name: "Who sees what" }).getAttribute("href")).toBe("https://norr.finance/docs/privacy/");
     fireEvent.click(screen.getByRole("button", { name: /Request this withdrawal/ }));
     expect(await screen.findByText(/Waiting for your approval/)).toBeTruthy();
     expect(withdraw).toHaveBeenLastCalledWith("v_1", { asset: "nep141:usdc", dryRun: false, amount: "1" });

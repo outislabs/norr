@@ -93,7 +93,7 @@ export function dustExits(a: { ticker: string; symbol: string; heldUsd: number; 
     {
       kind: "withdraw",
       ownerOnly: true,
-      how: `Only the vault owner can do this: in the Norr dashboard, Withdraw, choose ${a.symbol}, Max. The tokens go to the owner's own NEAR account (the arrival is public on NEAR).`,
+      how: `Only the vault owner can do this: in the Norr dashboard, Withdraw, choose ${a.symbol}, Max. The tokens go to the owner's own NEAR account; withdrawals are private: they never name the vault.`,
     },
   ];
 }

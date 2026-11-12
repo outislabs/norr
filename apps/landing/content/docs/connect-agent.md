@@ -1,6 +1,6 @@
 # Connect your agent
 
-Works with any MCP-compatible agent, or any code that can call the REST API. The agent gets ten tools ([MCP tools](/docs/mcp-tools/)) and one credential, an **agent token** that works for one vault only.
+Works with any MCP-compatible agent, or any code that can call the REST API. The agent gets eleven tools ([MCP tools](/docs/mcp-tools/)) and one credential, an **agent token** that works for one vault only.
 
 Each section below says whether we have run that path end to end (**tested**) or only followed the client's documentation (**not yet tested**).
 

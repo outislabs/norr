@@ -388,3 +388,22 @@ Checked against the widget's source (`@aurora-is-near/intents-swap-widget` 7.27.
 ## Owner withdraw, live (2026-11-10)
 
 The dashboard's owner-only Withdraw flow (confidential layer to the owner's own account, dry run first, always through approval) was run once on mainnet with about 1 USDC to the owner's account, and the funds arrived. The owner approved it in Norr's own Approvals tab: the browser read the approval from OutLayer, the hash check and the match check (token, amount and the destination account) both passed, and the owner signed with HOT Wallet. So OutLayer's confidential withdraw operation names the destination and amount in a form the browser's check matches. One run only: other amounts, other assets and the provider's minimum for a confidential withdraw are untested. In autonomous mode Norr refuses to start a withdrawal, because OutLayer uses one `confidential` type for swaps and withdrawals and would run it without the owner's signature.
+
+## Deposits and withdrawals on chain: what an observer sees (traced 2026-11-12)
+
+Traced from the chain itself (NEAR RPC, read-only; transaction hashes below) for the Nov 10 activity of the project account `norrfi.near`, the owner of the vault whose Intents account is `882c084a…` (1Click's status names it as the deposit's recipient).
+
+**Funding through Norr's 1Click quote (USDC on NEAR, 3 USDC, 2026-11-10 18:46 UTC):**
+1. `53CKT1qN…`: `norrfi.near` calls `ft_transfer` on the USDC contract, 3 USDC to a one-time address `91bbebb9…` (it paid the address's storage registration first, `M75grpSz…`). Visible: sender, one-time address, amount, time.
+2. `3TvN7183…` (relayed by `bridge-mng.near`): the one-time address calls `ft_transfer_call` to `intents.near`, crediting an intermediate account `8d06964d…` (`mt_mint`, memo `deposit`).
+3. `HoZTAGp5…` (`execute_intents`): `8d06964d…` transfers the 3 USDC to `51e8f94d…`, with an opaque memo. The same `51e8f94d…` appears as the first hop of the 2026-10-30 confidential withdrawal, so it looks like the confidential layer's entry account.
+- **The vault's account `882c084a…` appears in none of the three.** 1Click's `/v0/status` for the one-time address answers 404 without an API key; with Norr's key it shows `SUCCESS`, recipient type `CONFIDENTIAL_INTENTS`, recipient the vault. So the recipient is not published by that route.
+
+**Confidential withdrawals to `norrfi.near` (2026-11-10):**
+- `3hQLPK4e…` (~18:17 UTC): `execute_intents` in which an intermediate account `cc50bf19…` signs an `ft_withdraw` of 0.995585 USDC to `norrfi.near` and a transfer of 0.004415 USDC to `609214…` (a fee); another account paid the storage registration in wNEAR. The ~1 USDC dashboard withdrawal of the same day matches this amount.
+- `AmjWCGQQ…` (~18:45 UTC): an `ft_withdraw` of 2.499706 USDC to `norrfi.near`, signed by another intermediate account `4ae10a5f…`. Which vault it came from cannot be told from the chain.
+- **The vault's account appears in neither.** An observer sees NEAR Intents paying `norrfi.near`, the amount and the time, as in the 2026-10-30 trace above.
+
+**Where the vault is linked to its owner: the custody policy.** `get_wallet_policies_by_owner({"owner":"norrfi.near"})` on `outlayer.near` (a free public view call) lists `wallet_pubkey: ed25519:882c084a…`, owner `norrfi.near`, and that key is the vault's Intents account; the owner's `store_wallet_policy` transactions name it too. So the existence of a vault, and which account it is, is tied to the owner's account on chain. Its confidential balance and trades are not.
+
+**Not traced:** funding from other chains through 1Click (quoted, not yet run with real funds); the direct NEAR deposit fallback, which by construction sends to the vault's account and is public, as is the move from the public into the confidential layer (the 2026-10-30 shield trace).

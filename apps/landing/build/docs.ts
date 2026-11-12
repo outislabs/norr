@@ -20,7 +20,7 @@ export const PAGES: DocPage[] = [
   { slug: "", nav: "Overview", description: "What Norr is and where to start." },
   { slug: "quickstart", nav: "Quickstart", description: "Sign in, fund the vault from any chain, connect an agent, watch, approve and stop it." },
   { slug: "connect-agent", nav: "Connect your agent", description: "MCP setup for Claude Code, Claude Desktop and any MCP client, with the agent token." },
-  { slug: "mcp-tools", nav: "MCP tools", description: "The ten tools, what trade answers, and every block code." },
+  { slug: "mcp-tools", nav: "MCP tools", description: "The eleven tools, what trade answers, and every block code." },
   { slug: "api", nav: "API reference", description: "The agent REST API behind the MCP tools, generated from the OpenAPI spec (openapi.json)." },
   { slug: "rules", nav: "Rules and limits", description: "The rules you set, the presets, Scam Shield, stock eligibility and the custody provider's limits." },
   { slug: "privacy", nav: "Privacy model", description: "Who sees what: the public, the custody provider, NEAR Intents, the Norr service and you." },
@@ -233,10 +233,10 @@ export function writePages(root: string): Record<string, string> {
 export function llmsTxt(): string {
   const intro = `# Norr
 
-> Norr is a private trading layer for AI agents. An agent connects over MCP with a token scoped to one vault and trades crypto and tokenized US stocks through NEAR Intents, in the Confidential Intents layer when the vault holds its funds there. Rules and a scam check are enforced by the Norr service, which runs in an attested Intel TDX enclave on Phala. Keys stay with OutLayer's custody: the agent's token cannot withdraw, change rules or choose a destination.
+> Norr is a private trading layer for AI agents. An agent connects over MCP with a token scoped to one vault and trades crypto and tokenized US stocks through NEAR Intents, in the Confidential Intents layer when the vault holds its funds there. Rules and a scam check are enforced by the Norr service, which runs in an attested Intel TDX enclave on Phala. Keys stay with OutLayer's custody: the agent's token cannot withdraw, change rules or choose a destination. Deposits (through 1Click) and withdrawals are private: they never name the vault (details and what stays visible: /docs/privacy/).
 
 - Dashboard: https://app.norr.finance (owners sign in with a NEAR wallet)
-- MCP: ten tools (about_norr, list_assets, check_asset, get_market_data, get_quote, trade, get_portfolio, get_pnl, get_policy, get_activity) at https://mcp.norr.finance/mcp (streamable HTTP, \`Authorization: Bearer <agent token>\`; TLS terminates inside the attested CVM), or stdio from the repository
+- MCP: eleven tools (about_norr, list_assets, check_asset, get_market_data, get_quote, trade, exit_position, get_portfolio, get_pnl, get_policy, get_activity) at https://mcp.norr.finance/mcp (streamable HTTP, \`Authorization: Bearer <agent token>\`; TLS terminates inside the attested CVM), or stdio from the repository
 - REST API: https://api.norr.finance (OpenAPI: https://norr.finance/openapi.json), same bearer token
 - Verify: https://app.norr.finance/#/verify runs seven attestation checks in the browser, no account needed; scripts/verify-domain.mts checks that api. and mcp.norr.finance serve certificates held inside the attested CVM
 - Source and evidence: https://github.com/outislabs/norr (start with AGENTS.md; \`pnpm judge\` checks every claim in mock mode)

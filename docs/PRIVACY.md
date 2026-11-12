@@ -1,6 +1,6 @@
 # What is private, from whom (honest draft)
 
-Status as of 2026-11-02 (first drafted 2026-10-30). "Built" means it exists in the repo and is tested; "Planned" means it does not exist yet. This table is the source for the README's privacy section; do not claim a row marked Planned or "Not private".
+Status as of 2026-11-12 (first drafted 2026-10-30). "Built" means it exists in the repo and is tested; "Planned" means it does not exist yet. This table is the source for the README's privacy section; do not claim a row marked Planned or "Not private".
 
 ## Trading privacy (NEAR Intents)
 
@@ -9,8 +9,21 @@ Status as of 2026-11-02 (first drafted 2026-10-30). "Built" means it exists in t
 | A normal (public-Intents) swap: pair, amount, vault account | Visible | Sees all | Sees all | Sees all | Built (public path) |
 | A **confidential** swap, inside the confidential layer: pair, amount, price, balance | **Hidden, confirmed on mainnet for a 1.5 USDC to SOL swap**: the public Intents balance did not move and no public transaction was listed (private "FAR" chain, no public RPC) | Sees all (it builds and signs the artifact) | **Sees plaintext intents**; the operator can read FAR state, as can auditors or law enforcement with a warrant | Sees all | Swap tested; hidden from the public side |
 | Shielding / unshielding between public and confidential | **Visible, confirmed on mainnet**: a public `execute_intents` call on `intents.near` showing the vault's account, the token, the amount and the time | Sees all | Sees all | Sees all | Shield tested (1.5 USDC); unshield pending |
-| Link between a deposit and a later withdrawal | **Withdrawal tested on mainnet**: the two public transactions show intermediate accounts paying the owner, and the vault's own account does not appear in either. Per NEAR Intents' docs a deposit and a later withdrawal cannot be tracked to each other, but can still be correlated by timing and amount. Not yet tested end to end with a confidential deposit | Sees both | Sees both | Sees both | Withdraw tested; confidential funding pending |
+| Deposits (through Norr's 1Click quote) and confidential withdrawals | **Private: they never name the vault.** Traced on mainnet (2026-10-30 and 2026-11-10): a deposit shows the owner's wallet paying a one-time address that forwards into NEAR Intents; a withdrawal shows NEAR Intents (through intermediate accounts) paying the owner's wallet. Amount and time are visible on the owner's wallet side | Sees both | Sees both | Sees both | Deposit (USDC on NEAR) and withdraw tested |
+| That a vault exists, and which account it is | **Tied to the owner's account on chain** by the custody policy the owner stores (`get_wallet_policies_by_owner` on `outlayer.near` lists the vault's key). Its confidential balance and trades are not | n/a | n/a | n/a | Observed 2026-11-12 |
+| Direct NEAR deposit (fallback when 1Click cannot quote) | **Public**: it sends straight to the vault's account; the later move into the confidential layer is also public | Sees all | Sees all | Sees all | Built, not run live |
 | That the traffic comes from Norr | n/a | Yes | Yes (the partner API key and `partner_id` identify Norr) | n/a | Not private |
+
+### Deposits and withdrawals: who sees what
+
+Deposits and withdrawals are private: they never name your vault. In detail:
+
+- **What an observer sees.** For a deposit, your own wallet sending an amount to a one-time address, which forwards it into NEAR Intents. For a withdrawal, NEAR Intents paying an amount to your own wallet. The amounts and times are visible on your wallet's side, so a deposit and a later withdrawal of similar size and timing can be matched to each other.
+- **What an observer does not see.** Which vault the money went into or came out of: the vault's account appears in none of these transactions (traced in `docs/FINDINGS.md`, "Deposits and withdrawals on chain"). 1Click's status for the one-time address is not public (404 without a key).
+- **The vault's existence is tied to your account.** The custody policy you store on chain from your NEAR account (it is what keeps Norr from changing your limits) lists the vault's key, which is the vault's account. So anyone looking up your account can learn that you have a vault and which one; they cannot see its confidential balance or trades.
+- **Who sees the trades.** The custody provider (OutLayer) and NEAR Intents' operator and solvers see trades in order to execute them, and the Norr service sees them to enforce your rules.
+- **The direct NEAR deposit fallback is public.** When 1Click cannot quote, the Fund tab can send USDC straight to the vault's account on NEAR Intents: sender, vault and amount are visible, and so is the move into the confidential layer.
+- **Tested so far:** deposits of USDC on NEAR and confidential withdrawals to the owner. Deposits from other chains go through 1Click the same way but have not been run with real funds.
 
 Notes from NEAR Intents' documentation (and OutLayer's): a vault's confidential identity is the custody wallet itself, so there is no separate unlinkable identity; the private layer is a permissioned chain run by a small validator set; its protection is against the public, not against the operator.
 
@@ -83,7 +96,7 @@ This is the "confidential in" design above, run on a fresh OutLayer wallet. What
 | Fund: 8 USDC to the per-request confidential deposit address | One plain NEP-141 `ft_transfer` from the owner's account to a hex deposit address (owner account, address and amount visible). The vault's account is not named in it. Afterwards the deposit address holds 0 USDC, so the funds were moved on; I did not trace that second movement |
 | Buy $6 NVDAon, then sell it all back (confidential) | None found where I looked: the vault's public Intents account held no tokens at any point I checked, so nothing was ever held publicly. I did not search the chain for other traces of the swaps (solver legs, relayer transactions), so "none found" means "not looked for beyond the vault's own balances" |
 
-What this shows: the vault never holds the money publicly, and the vault's account never appears in the funding transaction. What it does not show: that the owner and the vault cannot be linked. The funding transfer is a public transaction from the owner, with the amount, to an address Norr then routes into the vault's confidential balance, so a watcher who also sees the next hop could connect them. The design's advice for the exit (a different owner account, a time gap, no round amounts) applies to funding too.
+What this shows: the vault never holds the money publicly, and the vault's account never appears in the funding transaction. The 2026-11-10 trace (`docs/FINDINGS.md`) followed the next hops too: the one-time address forwards into NEAR Intents and on to the confidential layer's entry account, and the vault is not named there either. What it does not show: that the owner and the vault cannot be linked. They are, through the custody policy on chain (above), and the funding amount and time are visible on the owner's side. The design's advice for the exit (a different owner account, a time gap, no round amounts) applies to funding too.
 
 ## Verification limits (observed)
 After a shield, 1Click's status endpoint returned 404 for the deposit address. The only independent evidence of a confidential step is on the public side (the public balance falls, the public transaction is visible); the confidential balance and the result of confidential swaps come from OutLayer.
@@ -99,4 +112,5 @@ To score a token, the Norr service asks DexScreener and GoPlus Security about it
 ## What cannot honestly be claimed
 - That a trade is hidden from OutLayer, Defuse or the private-chain operator.
 - That confidential trades are independently verified: the audit trail for them rests on the custody provider's reports, because the independent check needs a user session that only the wallet's key can create.
-- That the owner's funds cannot be seen being deposited or withdrawn on the public chain.
+- That the owner's funds cannot be seen being deposited or withdrawn on the public chain: the owner's own transfers, their amounts and times are visible. What is private is which vault they belong to.
+- That nobody can tell the owner has a vault: the custody policy on chain ties the vault's account to the owner's.

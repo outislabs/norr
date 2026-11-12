@@ -628,7 +628,9 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
       chain: "near",
       layer: "confidential" as const,
       approval: "Waits for your approval in the Approvals tab, unless this vault's custody policy lets confidential operations run without it.",
-      becomesPublic: `The arrival is public on NEAR: ${amount} ${entry.symbol} landing in ${v.owner}, with its time, visible to anyone. Do not assume the confidential layer hides the link between this vault and that arrival. What stays private is the vault's other holdings, trades and the agent's reasoning.`,
+      // What an observer sees (traced on mainnet, docs/FINDINGS.md "Deposits and withdrawals on chain"): NEAR Intents
+      // paying the owner, through intermediate accounts; the vault's account is not named.
+      privacy: `Withdrawals are private: they never name your vault. On NEAR, ${amount} ${entry.symbol} arrives in ${v.owner} as a payment from NEAR Intents.`,
     };
     if (b.dryRun) return c.json({ dryRun: true, plan });
     let st;

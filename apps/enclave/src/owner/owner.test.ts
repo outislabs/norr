@@ -642,7 +642,8 @@ describe("in-dashboard approvals (mock stand-in for the custody provider)", () =
     // A caller cannot name a destination: the field is not part of the request, and the plan shows the owner.
     const dry = await (await req("/owner/v1/vaults/demo/withdraw", { token, body: { amount: "1", dryRun: true, to: "mallory.near" } })).json();
     expect(dry).toMatchObject({ dryRun: true, plan: { asset: "USDC", amount: "1", destination: MOCK_OWNER, chain: "near", layer: "confidential" } });
-    expect(dry.plan.becomesPublic).toMatch(/public on NEAR/);
+    expect(dry.plan.privacy).toBe(`Withdrawals are private: they never name your vault. On NEAR, 1 USDC arrives in ${MOCK_OWNER} as a payment from NEAR Intents.`);
+    expect(dry.plan.privacy).not.toContain(m.deps.vaults.get("demo")!.walletAccount); // the vault's account is not named
     expect(await held()).toBe(start);
     expect(m.rails.withdrawals).toHaveLength(0);
     // The real request waits for approval.

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Api, Holding, WithdrawPlan } from "../lib/api";
+import { PRIVACY_URL } from "../lib/links";
 import { vaultHref } from "../lib/route";
 
 /**
@@ -87,7 +88,7 @@ export function WithdrawPanel({ api, vaultId, owner, holdings, initialAsset, onR
           <p className="text-fg">
             Withdraw <b className="mono font-medium">{plan.amount} {plan.asset}</b> from the confidential balance ({plan.balance} {plan.asset} held) to <b className="mono font-medium">{plan.destination}</b> on NEAR.
           </p>
-          <p className="border-l border-line-strong pl-3 text-sm text-fg"><b className="font-medium">What becomes public: </b>{plan.becomesPublic}</p>
+          <p className="border-l border-line-strong pl-3 text-sm text-fg"><span data-testid="withdraw-privacy"><b className="font-medium">Privacy: </b>{plan.privacy}</span> <a className="underline" href={PRIVACY_URL} target="_blank" rel="noreferrer">Who sees what</a></p>
           <p className="text-sm text-mute">{plan.approval}</p>
           <div>
             <button type="button" className="btn btn-solid" disabled={busy !== null} onClick={() => void run(false)}>

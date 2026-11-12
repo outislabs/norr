@@ -77,7 +77,8 @@ export async function aboutNorr(deps: TradeDeps, vault: Vault, ctx: AboutContext
     },
     privacy: {
       confidential: "Trades run in NEAR Intents' confidential layer when the vault's funds are there (each answer's 'venue' says which): amounts, pairs and balances are not on the public chain.",
-      whoSees: "Not private from: OutLayer (it builds and signs each operation), the NEAR Intents operator and solvers (they see confidential intents in plaintext), and the Norr service (it must read trades to enforce the rules). Funding, withdrawals and moves between the public and confidential layers are public on chain.",
+      whoSees: "Not private from: OutLayer (it builds and signs each operation), the NEAR Intents operator and solvers (they see confidential intents in plaintext), and the Norr service (it must read trades to enforce the rules).",
+      depositsAndWithdrawals: "Deposits and withdrawals are private: they never name your vault. The exception is the direct NEAR deposit fallback (used when 1Click cannot quote), which is public, as is moving funds from the public into the confidential layer. Details: https://norr.finance/docs/privacy/",
     },
     operator: {
       insideTheEnclave: "Inside the enclave the Norr service handles your requests, balances, positions, rules and the ledger in plaintext. It sees the 'reason' you send only until it seals it to the owner's key.",
