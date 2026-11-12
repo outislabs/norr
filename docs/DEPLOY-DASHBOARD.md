@@ -49,7 +49,8 @@ Then:
    | `data:` | font-src | Meteor's embedded font |
 
    Ledger, MyNearWallet, OKX, Nightly and Hana caused no violation. **Not observed**: what a wallet asks for after the owner approves inside it, which a script cannot do; the sign-in error names any origin the browser blocked, so a gap shows up as a message. **Blocked on purpose**: font stylesheets and files (`fonts.cdnfonts.com`, `rsms.me`, Google Fonts), which would tell a font host who opens a wallet; wallet screens fall back to system fonts. NEAR Mobile's three "download the app" links use inline `onclick` handlers, which the CSP blocks, so they do nothing; the wallet itself still works. Windows that wallets open themselves (MyNearWallet, Meteor, Intear) are not restricted by this policy.
-6. **What NEAR Connect adds to trust, and what the dashboard does about it.** The library registers a wallet when any window posts it a message and lets the picker paste in a custom wallet manifest; the dashboard turns off custom wallets and auto-connect, ignores remembered custom wallets, and strips any wallet that talks to the parent window (`apps/web/src/lib/nearconnect.ts`, each claim tested against the real library in `nearconnect.test.ts`).
+6. **Live status (2026-11-12):** in production. HOT, Meteor and MyNearWallet were tried by the owner on a preview deployment (desktop and iPhone, plus an approval); the other seven wallets are offered but not yet run with Norr (`docs/FINDINGS.md`).
+7. **What NEAR Connect adds to trust, and what the dashboard does about it.** The library registers a wallet when any window posts it a message and lets the picker paste in a custom wallet manifest; the dashboard turns off custom wallets and auto-connect, ignores remembered custom wallets, and strips any wallet that talks to the parent window (`apps/web/src/lib/nearconnect.ts`, each claim tested against the real library in `nearconnect.test.ts`).
 
 ## The service side
 

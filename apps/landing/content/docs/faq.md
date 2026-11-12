@@ -22,7 +22,7 @@ USDC on NEAR, Ethereum, Base, Arbitrum, Optimism, Polygon, BNB Chain or Solana, 
 
 ## Which wallets can I sign in with?
 
-Any NEAR wallet in the sign-in picker that can sign a message: HOT Wallet, Meteor Wallet, MyNearWallet, Intear Wallet, Nightly, NEAR Mobile, OKX Wallet, Hana Wallet, Ledger and NEAR CLI. Sign-in and approvals are NEP-413 message signatures, which these wallets implement. The picker always shows every wallet, and signing out forgets the wallet you used. If the list does not load, the sign-in page says so. Wallet code is served from the dashboard's own address, pinned by hash, and runs in a sandboxed frame.
+Any NEAR wallet in the sign-in picker that can sign a message: HOT Wallet, Meteor Wallet, MyNearWallet, Intear Wallet, Nightly, NEAR Mobile, OKX Wallet, Hana Wallet, Ledger and NEAR CLI. **Tested with Norr** (sign-in on desktop and iPhone, and an approval, 2026-11-12): HOT Wallet, Meteor Wallet and MyNearWallet. The others are offered because they advertise message signing, and have not been run with Norr yet. Sign-in and approvals are NEP-413 message signatures, which these wallets implement. The picker always shows every wallet, and signing out forgets the wallet you used. If the list does not load, the sign-in page says so. Wallet code is served from the dashboard's own address, pinned by hash, and runs in a sandboxed frame.
 
 ## Do I need a NEAR wallet?
 
