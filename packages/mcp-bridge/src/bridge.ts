@@ -6,6 +6,9 @@ import { CallToolRequestSchema, ListToolsRequestSchema, type CallToolResult } fr
 /** Norr's hosted MCP endpoint (TLS terminates inside the attested CVM). */
 export const DEFAULT_MCP_URL = "https://mcp.norr.finance/mcp";
 
+/** This package's version (kept equal to package.json; a test checks it). */
+export const VERSION = "0.1.1";
+
 export interface BridgeOptions {
   /** The hosted endpoint, e.g. https://mcp.norr.finance/mcp. */
   url: string;
@@ -28,7 +31,7 @@ export function createBridge(o: BridgeOptions): { server: Server; close: () => P
   let remote: Promise<Client> | null = null;
   const connect = (): Promise<Client> =>
     (remote ??= (async () => {
-      const client = new Client({ name: "norr-mcp-bridge", version: "0.1.0" });
+      const client = new Client({ name: "norr-mcp-bridge", version: VERSION });
       const transport = new StreamableHTTPClientTransport(url, { requestInit: { headers: { authorization: `Bearer ${o.token}` } }, ...(o.fetch ? { fetch: o.fetch } : {}) });
       await client.connect(transport);
       return client;
@@ -37,7 +40,7 @@ export function createBridge(o: BridgeOptions): { server: Server; close: () => P
       throw e;
     }));
 
-  const server = new Server({ name: "norr", version: "0.1.0" }, { capabilities: { tools: {} } });
+  const server = new Server({ name: "norr", version: VERSION }, { capabilities: { tools: {} } });
   server.setRequestHandler(ListToolsRequestSchema, async () => (await connect()).listTools());
   server.setRequestHandler(CallToolRequestSchema, async (req): Promise<CallToolResult> => {
     try {

@@ -10,6 +10,10 @@ The bridge forwards your agent's tool calls to Norr's hosted MCP endpoint (`http
 
 Get an agent token in the Norr dashboard: [app.norr.finance](https://app.norr.finance), your vault, **Connect**. A token works for one vault and cannot withdraw, change rules or choose a destination.
 
+This is not something you run on its own: your AI app starts it. Run by hand without a token, it explains this and exits; run by hand with a token, it prints one line saying it is waiting for an MCP client.
+
+**Using the Claude app or claude.ai?** Add `https://mcp.norr.finance/mcp` as a connector instead (Settings, Connectors). No token or npx needed: you approve the connection in the Norr dashboard.
+
 ## Claude Desktop
 
 In `claude_desktop_config.json`, under `mcpServers`:
@@ -26,7 +30,7 @@ In `claude_desktop_config.json`, under `mcpServers`:
 }
 ```
 
-Quit and reopen Claude. Nine Norr tools appear: `list_assets`, `check_asset`, `get_market_data`, `get_quote`, `trade`, `get_portfolio`, `get_pnl`, `get_policy`, `get_activity`.
+Quit and reopen Claude. Eleven Norr tools appear: `about_norr`, `list_assets`, `check_asset`, `get_market_data`, `get_quote`, `trade`, `exit_position`, `get_portfolio`, `get_pnl`, `get_policy`, `get_activity`.
 
 ## Claude Code
 

@@ -29,7 +29,7 @@ URL:     <MCP URL>
 Header:  Authorization: Bearer <agent token>
 ```
 
-Clients that only start local commands can use the [@norrfi/mcp](https://www.npmjs.com/package/@norrfi/mcp) bridge (needs Node). It connects to `mcp.norr.finance` with your token, keeps no state and adds no tools of its own:
+Clients that only start local commands can use the [@norrfi/mcp](https://www.npmjs.com/package/@norrfi/mcp) bridge (needs Node). It connects to `mcp.norr.finance` with your token, keeps no state and adds no tools of its own. Your app starts it; it is not run on its own (run by hand without a token, it says so and exits; with a token, it waits for an MCP client). Add it with this config:
 
 ```json
 {
