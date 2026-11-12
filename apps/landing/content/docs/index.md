@@ -1,7 +1,5 @@
 # Norr documentation
 
-Built by Kelvin Alkorogie, with Claude Code as a coding assistant.
-
 Norr lets an AI agent trade crypto and tokenized US stocks for you, inside rules you set, without ever holding your keys, and without showing the public chain your strategy.
 
 - **Your agent** connects over MCP with a token that works for one vault only. It can read the vault, ask for prices and request trades. It cannot withdraw, change your rules, or choose where money goes.

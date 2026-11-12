@@ -6,7 +6,7 @@ Norr is a private trading layer for AI agents. An agent (Claude, ChatGPT, your o
 
 **Site:** [norr.finance](https://norr.finance) · **Docs:** [norr.finance/docs](https://norr.finance/docs/) · **Dashboard:** [app.norr.finance](https://app.norr.finance) · **X:** [@norrfi](https://x.com/norrfi)
 
-Built for the NEAR hackathon (Nov 1 to Nov 14, 2026). Tracks: Privacy & Private AI, Unstoppable DeFi, AI Security, Agent Economy. Built by Kelvin Alkorogie, with Claude Code as a coding assistant. Read [Timeline & disclosure](#timeline--disclosure) for exactly what was built when.
+Built for the NEAR hackathon (Nov 1 to Nov 14, 2026). Tracks: Privacy & Private AI, Unstoppable DeFi, AI Security, Agent Economy. Read [Timeline & disclosure](#timeline--disclosure) for exactly what was built when.
 
 > Not audited software. Hackathon build, tiny balances. Do not put in money you cannot lose.
 
