@@ -55,13 +55,13 @@ describe("Withdraw to my wallet opens the existing withdraw flow for that token"
   });
 
   it("the withdraw panel starts on that token, all of it", () => {
-    render(<WithdrawPanel api={{} as Api} vaultId="v_1" owner="norrfi.near" holdings={[usdc, dust]} initialAsset="nep141:nvdaon" />);
+    render(<WithdrawPanel api={{ withdrawDestinations: () => new Promise(() => undefined) } as unknown as Api} vaultId="v_1" holdings={[usdc, dust]} initialAsset="nep141:nvdaon" />);
     expect((screen.getByRole("combobox") as HTMLSelectElement).value).toBe("nep141:nvdaon");
     expect((screen.getByLabelText(/Amount/) as HTMLInputElement).value).toBe("Everything the vault holds");
   });
 
   it("an unknown token falls back to the first holding", () => {
-    render(<WithdrawPanel api={{} as Api} vaultId="v_1" owner="norrfi.near" holdings={[usdc]} initialAsset="nep141:gone" />);
+    render(<WithdrawPanel api={{ withdrawDestinations: () => new Promise(() => undefined) } as unknown as Api} vaultId="v_1" holdings={[usdc]} initialAsset="nep141:gone" />);
     expect((screen.getByRole("combobox") as HTMLSelectElement).value).toBe("nep141:usdc");
   });
 });

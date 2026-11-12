@@ -111,6 +111,11 @@ export interface Custody {
   /** Whether swaps wait for the owner, from the custody provider's own policy: "owner" (approval needed), "autonomous"
    *  (confidential operations exempt), or "none" (no approval configured). */
   approvalMode?(): Promise<"owner" | "autonomous" | "none">;
+  /**
+   * The address rule of the wallet's own custody policy, read from the provider: where money may be sent. "none" means
+   * the policy holds no address rule. Throws when the policy cannot be read, so callers never guess a destination.
+   */
+  addressPolicy?(): Promise<{ mode: "whitelist" | "blacklist" | "none"; list: string[] }>;
 }
 
 /** One operation waiting for the owner's approval at the custody provider. */

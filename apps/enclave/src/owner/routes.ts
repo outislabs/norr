@@ -592,12 +592,48 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
     return c.json({ status: "pending_approval", requestId: st.requestId, amountUsdc, message: `Waiting for your approval: move ${amountUsdc} USDC into the confidential layer. Approve it in Approvals.` });
   });
 
-  // Withdraw to the owner. Owner-only (a session, never an agent token) and never takes a destination from the caller: it
-  // is the vault's owner, the one account the custody policy whitelists. Confidential layer first (the vault's working
+  // Where this vault may send money, read from its actual custody policy at the provider (never assumed to be the signed-in
+  // owner: a vault's policy can whitelist a different account). Only NEAR accounts the policy lists, other than the vault
+  // itself. If the policy cannot be read, say so rather than guess.
+  async function withdrawDestinations(v: { owner: string; walletAccount: string; custody: { addressPolicy?: () => Promise<{ mode: "whitelist" | "blacklist" | "none"; list: string[] }> } }): Promise<{ ok: true; restriction: "whitelist" | "none"; addresses: string[] } | { ok: false; status: 409 | 503; error: string }> {
+    if (!v.custody.addressPolicy) return { ok: false, status: 503, error: "This vault's custody provider cannot tell Norr where the vault may send money, so Norr will not guess a destination." };
+    let rule;
+    try {
+      rule = await v.custody.addressPolicy();
+    } catch (e) {
+      return { ok: false, status: 503, error: `Could not read the vault's custody policy, so Norr cannot tell where it may send money, and will not guess. ${upstreamReason(e, "OutLayer policy")}` };
+    }
+    if (rule.mode === "whitelist") {
+      const near = /^([a-z\d]+[-_.])*[a-z\d]+$|^[0-9a-f]{64}$/;
+      const addresses = [...new Set(rule.list.filter((a) => a !== v.walletAccount && a.length >= 2 && a.length <= 64 && near.test(a)))];
+      if (addresses.length === 0) return { ok: false, status: 409, error: "This vault's custody policy whitelists no NEAR account other than the vault itself, so there is nowhere it may send a withdrawal. The owner can change that in the policy (it needs your wallet)." };
+      return { ok: true, restriction: "whitelist", addresses };
+    }
+    if (rule.mode === "blacklist" && rule.list.includes(v.owner)) return { ok: false, status: 409, error: `This vault's custody policy blocks ${v.owner}, so a withdrawal to it would be refused.` };
+    // No whitelist: the policy does not restrict destinations; Norr offers only the owner's own account.
+    return { ok: true, restriction: "none", addresses: [v.owner] };
+  }
+
+  app.get("/owner/v1/vaults/:id/withdraw-destinations", async (c) => {
+    const v = mine(c.get("owner") as string, c.req.param("id"));
+    if (!v) return c.json({ error: "not found" }, 404);
+    const d = await withdrawDestinations(v);
+    if (!d.ok) return c.json({ error: d.error }, d.status);
+    return c.json({
+      restriction: d.restriction,
+      destinations: d.addresses.map((address) => ({ address, isOwner: address === v.owner })),
+      default: d.addresses.includes(v.owner) ? v.owner : d.addresses[0],
+      source: d.restriction === "whitelist" ? "The address whitelist in this vault's custody policy, read from the provider now." : "This vault's custody policy has no address whitelist; Norr offers only your own account.",
+    });
+  });
+
+  // Withdraw. Owner-only (a session, never an agent token). The destination is one of the NEAR accounts the vault's custody
+  // policy whitelists (read from the provider on every request); the caller may only choose among those, never name another.
+  // Confidential layer first (the vault's working
   // balance sits there). A dry run checks everything and moves nothing; a real request waits for the owner's approval in
   // Approvals unless the vault's custody policy exempts confidential operations. Allowed while the vault is paused: the
   // owner must always be able to take money out.
-  const WithdrawBody = z.object({ asset: z.string().max(200).optional(), amount: z.string().max(40).optional(), max: z.boolean().optional(), dryRun: z.boolean().optional() }).refine((b) => (b.amount !== undefined) !== (b.max === true), { message: "Give an amount, or ask for the maximum." });
+  const WithdrawBody = z.object({ to: z.string().max(64).optional(), asset: z.string().max(200).optional(), amount: z.string().max(40).optional(), max: z.boolean().optional(), dryRun: z.boolean().optional() }).refine((b) => (b.amount !== undefined) !== (b.max === true), { message: "Give an amount, or ask for the maximum." });
   app.post("/owner/v1/vaults/:id/withdraw", async (c) => {
     const owner = c.get("owner") as string;
     const v = mine(owner, c.req.param("id"));
@@ -610,6 +646,11 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
     // withdrawal always waits for the owner, so it refuses to start one until approvals are back on.
     const mode = v.custody.approvalMode ? await v.custody.approvalMode().catch(() => "unknown" as const) : "unknown";
     if (mode === "autonomous" || mode === "none") return c.json({ error: "This vault's custody policy lets confidential operations run without your signature (autonomous mode), and a withdrawal here always waits for your approval. Turn autonomous mode off in Rules (it needs your wallet), then withdraw." }, 409);
+    const dest = await withdrawDestinations(v);
+    if (!dest.ok) return c.json({ error: dest.error }, dest.status);
+    if (b.to !== undefined && !dest.addresses.includes(b.to)) return c.json({ error: `${b.to} is not an address this vault's custody policy allows. Allowed: ${dest.addresses.join(", ")}.` }, 400);
+    const to = b.to ?? (dest.addresses.includes(v.owner) ? v.owner : dest.addresses.length === 1 ? dest.addresses[0]! : undefined);
+    if (to === undefined) return c.json({ error: `This vault's policy allows several addresses (${dest.addresses.join(", ")}). Choose which one to withdraw to.` }, 400);
     const assetId = b.asset ?? cash().id;
     const entry = deps.registry.byId(assetId);
     if (!entry) return c.json({ error: "Unknown asset." }, 400);
@@ -637,25 +678,25 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
       assetId,
       amount,
       balance: formatUnits(balance.toString(), entry.decimals),
-      destination: v.owner,
+      destination: to,
       chain: "near",
       layer: "confidential" as const,
       approval: "Waits for your approval in the Approvals tab, unless this vault's custody policy lets confidential operations run without it.",
       // What an observer sees (traced on mainnet, docs/FINDINGS.md "Deposits and withdrawals on chain"): NEAR Intents
       // paying the owner, through intermediate accounts; the vault's account is not named.
-      privacy: `Withdrawals are private: they never name your vault. On NEAR, ${amount} ${entry.symbol} arrives in ${v.owner} as a payment from NEAR Intents.`,
+      privacy: `Withdrawals are private: they never name your vault. On NEAR, ${amount} ${entry.symbol} arrives in ${to} as a payment from NEAR Intents.`,
     };
     if (b.dryRun) return c.json({ dryRun: true, plan });
     let st;
     try {
-      st = await v.custody.withdraw({ to: v.owner, token: assetId, amount: units, chain: "near", venue: "confidential" });
+      st = await v.custody.withdraw({ to, token: assetId, amount: units, chain: "near", venue: "confidential" });
     } catch (e) {
       const raw = e instanceof Error ? e.message : String(e);
       if (/minimum|too small|below|dust/i.test(raw)) return c.json({ error: `The amount is below the custody provider's minimum for this withdrawal (it answered: "${raw.slice(0, 200)}"). Try a larger amount.` }, 400);
       return c.json({ error: `The withdrawal was not started. ${upstreamReason(e, "Custody provider withdraw")}` }, 502);
     }
-    note(owner, `asked to withdraw ${amount} ${entry.symbol} to ${v.owner}`, v.id);
-    const rec: Withdrawal = { id: `wd-${st.requestId}`, vaultId: v.id, at: deps.now(), requestId: st.requestId, token: assetId, symbol: entry.symbol, units, amount, to: v.owner, state: st.state, ...(st.detail ? { detail: st.detail } : {}) };
+    note(owner, `asked to withdraw ${amount} ${entry.symbol} to ${to}`, v.id);
+    const rec: Withdrawal = { id: `wd-${st.requestId}`, vaultId: v.id, at: deps.now(), requestId: st.requestId, token: assetId, symbol: entry.symbol, units, amount, to, state: st.state, ...(st.detail ? { detail: st.detail } : {}) };
     withdrawals.set(rec.id, rec);
     if (st.state === "failed") {
       const why = st.detail ?? "";
@@ -663,7 +704,7 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
       return c.json({ error: text }, 400);
     }
     if (st.state === "success") return c.json({ status: "done", plan });
-    return c.json({ status: st.state === "pending_approval" ? "pending_approval" : "in_progress", requestId: st.requestId, plan, message: `Waiting for your approval: withdraw ${amount} ${entry.symbol} to ${v.owner}. Approve it in Approvals.` });
+    return c.json({ status: st.state === "pending_approval" ? "pending_approval" : "in_progress", requestId: st.requestId, plan, message: `Waiting for your approval: withdraw ${amount} ${entry.symbol} to ${to}. Approve it in Approvals.` });
   });
 
   // Top up and sell all, started by the owner from the dashboard for a stock position too small to sell (exit.ts). The

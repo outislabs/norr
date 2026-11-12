@@ -8,6 +8,10 @@ import type { Custody, DepositOffer, DepositParams, DepositQuoter, DepositReques
  * every outcome: no liquidity, price skew, approvals, a tampering gateway, an unreadable audit trail.
  */
 export interface MockOptions {
+  /** The custody policy's address whitelist (default: the mock policy has no address rule). */
+  addressList?: string[];
+  /** Make reading the custody policy fail with this message. */
+  addressPolicyError?: string;
   feeBps?: number;
   /** Return false to simulate no liquidity for an asset (both layers). */
   liquidity?: (assetId: string) => boolean;
@@ -116,6 +120,11 @@ export function createMockRails(entries: RegistryEntry[], vaultAccount: string, 
       records.set(id, rec);
       if (rec.state === "success") apply(venue, done);
       return view(id, rec);
+    },
+
+    async addressPolicy() {
+      if (o.addressPolicyError) throw new Error(o.addressPolicyError);
+      return o.addressList ? { mode: "whitelist" as const, list: o.addressList } : { mode: "none" as const, list: [] };
     },
 
     async approvalMode() {

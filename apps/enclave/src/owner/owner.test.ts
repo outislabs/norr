@@ -639,8 +639,11 @@ describe("in-dashboard approvals (mock stand-in for the custody provider)", () =
     const usdc = m.deps.quoteAsset.id;
     const held = async () => BigInt((await m.rails.custody.confidentialHoldings())[usdc]!);
     const start = await held();
-    // A caller cannot name a destination: the field is not part of the request, and the plan shows the owner.
-    const dry = await (await req("/owner/v1/vaults/demo/withdraw", { token, body: { amount: "1", dryRun: true, to: "mallory.near" } })).json();
+    // A caller cannot name a destination outside the policy: an account the policy does not list is refused.
+    const refused = await req("/owner/v1/vaults/demo/withdraw", { token, body: { amount: "1", dryRun: true, to: "mallory.near" } });
+    expect(refused.status).toBe(400);
+    expect((await refused.json()).error).toMatch(/mallory\.near is not an address this vault's custody policy allows/);
+    const dry = await (await req("/owner/v1/vaults/demo/withdraw", { token, body: { amount: "1", dryRun: true } })).json();
     expect(dry).toMatchObject({ dryRun: true, plan: { asset: "USDC", amount: "1", destination: MOCK_OWNER, chain: "near", layer: "confidential" } });
     expect(dry.plan.privacy).toBe(`Withdrawals are private: they never name your vault. On NEAR, 1 USDC arrives in ${MOCK_OWNER} as a payment from NEAR Intents.`);
     expect(dry.plan.privacy).not.toContain(m.deps.vaults.get("demo")!.walletAccount); // the vault's account is not named
@@ -663,6 +666,68 @@ describe("in-dashboard approvals (mock stand-in for the custody provider)", () =
     expect((await (await req("/owner/v1/vaults/demo/activity", { token })).json()).transfers[0]).toMatchObject({ state: "done" });
     expect(start - (await held())).toBe(1_500_000n);
     expect(m.rails.withdrawals).toEqual([expect.objectContaining({ to: MOCK_OWNER, amount: "1500000", venue: "confidential", chain: "near" })]);
+  });
+
+  it("withdraw destinations come from the vault's actual custody policy, not the signed-in owner", async () => {
+    const { req, token, m } = await bootWithApprovals();
+    const wallet = m.deps.vaults.get("demo")!.walletAccount;
+    const dests = () => req("/owner/v1/vaults/demo/withdraw-destinations", { token });
+    const post = (body: unknown) => req("/owner/v1/vaults/demo/withdraw", { token, body });
+    expect(await (await req("/owner/v1/vaults/demo/withdraw-destinations")).status).toBe(401);
+    // The policy whitelists a different account than the one signed in (the demo vault's case): exactly that one is shown and used.
+    m.rails.custody.addressPolicy = async () => ({ mode: "whitelist", list: ["legalalienx.near", wallet] });
+    expect(await (await dests()).json()).toMatchObject({ restriction: "whitelist", destinations: [{ address: "legalalienx.near", isOwner: false }], default: "legalalienx.near" });
+    const dry = await (await post({ amount: "1", dryRun: true })).json();
+    expect(dry.plan.destination).toBe("legalalienx.near");
+    expect(dry.plan.privacy).toContain("arrives in legalalienx.near");
+    expect((await post({ amount: "1", dryRun: true, to: MOCK_OWNER })).status).toBe(400); // the signed-in owner is not listed, so it is refused
+    const real = await (await post({ amount: "1" })).json();
+    expect(real.message).toContain("to legalalienx.near");
+    // It waits for the owner's approval; the pending item names the whitelisted account as the recipient the browser checks.
+    const pending = (await (await req("/owner/v1/vaults/demo/pending", { token })).json()).pending.find((p: { kind: string }) => p.kind === "withdraw");
+    expect(pending).toMatchObject({ recipient: "legalalienx.near", intended: { destination: "legalalienx.near" } });
+  });
+
+  it("with several whitelisted accounts the owner chooses one; the owner's own is the default when listed; the vault itself is never offered", async () => {
+    const { req, token, m } = await bootWithApprovals();
+    const wallet = m.deps.vaults.get("demo")!.walletAccount;
+    m.rails.custody.addressPolicy = async () => ({ mode: "whitelist", list: ["cold.near", MOCK_OWNER, wallet, "cold.near", "sol:abc", "Bad Name"] });
+    const d = await (await req("/owner/v1/vaults/demo/withdraw-destinations", { token })).json();
+    expect(d.destinations.map((x: { address: string }) => x.address)).toEqual(["cold.near", MOCK_OWNER]);
+    expect(d.default).toBe(MOCK_OWNER);
+    const dry = await (await req("/owner/v1/vaults/demo/withdraw", { token, body: { amount: "1", dryRun: true, to: "cold.near" } })).json();
+    expect(dry.plan.destination).toBe("cold.near");
+    // Several, none of them the owner, no choice made: Norr asks rather than picks.
+    m.rails.custody.addressPolicy = async () => ({ mode: "whitelist", list: ["a.near", "b.near"] });
+    const ask = await req("/owner/v1/vaults/demo/withdraw", { token, body: { amount: "1", dryRun: true } });
+    expect(ask.status).toBe(400);
+    expect((await ask.json()).error).toMatch(/several addresses \(a\.near, b\.near\)\. Choose/);
+  });
+
+  it("when the policy cannot be read, or allows nowhere, Norr says so and moves nothing (no guess)", async () => {
+    const { req, token, m } = await bootWithApprovals();
+    const wallet = m.deps.vaults.get("demo")!.walletAccount;
+    m.rails.custody.addressPolicy = async () => { throw new Error("OutLayer policy: the answer did not say what the policy is (the chain could not be read)"); };
+    const d = await req("/owner/v1/vaults/demo/withdraw-destinations", { token });
+    expect(d.status).toBe(503);
+    expect((await d.json()).error).toMatch(/Could not read the vault's custody policy, so Norr cannot tell where it may send money, and will not guess/);
+    const w = await req("/owner/v1/vaults/demo/withdraw", { token, body: { amount: "1" } });
+    expect(w.status).toBe(503);
+    expect(m.rails.withdrawals).toHaveLength(0);
+    m.rails.custody.addressPolicy = async () => ({ mode: "whitelist", list: [wallet] });
+    const none = await req("/owner/v1/vaults/demo/withdraw-destinations", { token });
+    expect(none.status).toBe(409);
+    expect((await none.json()).error).toMatch(/whitelists no NEAR account other than the vault itself/);
+    m.rails.custody.addressPolicy = async () => ({ mode: "blacklist", list: [MOCK_OWNER] });
+    expect((await req("/owner/v1/vaults/demo/withdraw-destinations", { token })).status).toBe(409);
+    expect(m.rails.withdrawals).toHaveLength(0);
+  });
+
+  it("with no address rule in the policy, only the owner's own account is offered, and it says there is no whitelist", async () => {
+    const { req, token } = await bootWithApprovals();
+    const d = await (await req("/owner/v1/vaults/demo/withdraw-destinations", { token })).json();
+    expect(d).toMatchObject({ restriction: "none", destinations: [{ address: MOCK_OWNER, isOwner: true }] });
+    expect(d.source).toContain("no address whitelist");
   });
 
   it("withdraw: max takes the whole balance, a reject moves nothing, and bad requests get plain errors", async () => {

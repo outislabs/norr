@@ -9,36 +9,38 @@ import { WithdrawPanel } from "./WithdrawPanel";
 afterEach(cleanup);
 
 const holdings: Holding[] = [{ assetId: "nep141:usdc", symbol: "USDC", class: "crypto", amount: 12.5, valueUsd: 12.5, layer: "confidential" }];
+const destinations = vi.fn(async () => ({ restriction: "whitelist" as const, destinations: [{ address: "norrfi.near", isOwner: true }], default: "norrfi.near", source: "The address whitelist in this vault's custody policy, read from the provider now." }));
 const plan: WithdrawPlan = { asset: "USDC", assetId: "nep141:usdc", amount: "1", balance: "12.5", destination: "norrfi.near", chain: "near", layer: "confidential", approval: "Waits for your approval in the Approvals tab.", privacy: "Withdrawals are private: they never name your vault. On NEAR, 1 USDC arrives in norrfi.near as a payment from NEAR Intents." };
 
 describe("withdraw panel", () => {
   it("shows the fixed destination, checks first without moving anything, then requests", async () => {
     const withdraw = vi.fn(async (_id: string, b: { dryRun?: boolean }) => (b.dryRun ? { dryRun: true as const, plan } : { status: "pending_approval" as const, requestId: "r1", plan, message: "Waiting for your approval: withdraw 1 USDC to norrfi.near. Approve it in Approvals." }));
     const onRequested = vi.fn();
-    render(<WithdrawPanel api={{ withdraw } as unknown as Api} vaultId="v_1" owner="norrfi.near" holdings={holdings} onRequested={onRequested} />);
-    expect(screen.getByTestId("withdraw-destination").textContent).toBe("norrfi.near");
+    render(<WithdrawPanel api={{ withdraw, withdrawDestinations: destinations } as unknown as Api} vaultId="v_1" holdings={holdings} onRequested={onRequested} />);
+    expect((await screen.findByTestId("withdraw-destination")).textContent).toBe("norrfi.near");
     expect(screen.queryByRole("textbox", { name: /destination/i })).toBeNull(); // not editable
     expect(screen.queryByRole("button", { name: /Request this withdrawal/ })).toBeNull(); // nothing to send before the check
     fireEvent.change(screen.getByLabelText(/Amount/), { target: { value: "1" } });
     fireEvent.click(screen.getByRole("button", { name: /Check first/ }));
     expect(await screen.findByTestId("withdraw-plan")).toBeTruthy();
-    expect(withdraw).toHaveBeenLastCalledWith("v_1", { asset: "nep141:usdc", dryRun: true, amount: "1" });
+    expect(withdraw).toHaveBeenLastCalledWith("v_1", { to: "norrfi.near", asset: "nep141:usdc", dryRun: true, amount: "1" });
     expect(screen.getByTestId("withdraw-privacy").textContent).toBe("Privacy: Withdrawals are private: they never name your vault. On NEAR, 1 USDC arrives in norrfi.near as a payment from NEAR Intents.");
     expect(screen.getByRole("link", { name: "Who sees what" }).getAttribute("href")).toBe("https://norr.finance/docs/privacy/");
     fireEvent.click(screen.getByRole("button", { name: /Request this withdrawal/ }));
     expect(await screen.findByText(/Waiting for your approval/)).toBeTruthy();
-    expect(withdraw).toHaveBeenLastCalledWith("v_1", { asset: "nep141:usdc", dryRun: false, amount: "1" });
+    expect(withdraw).toHaveBeenLastCalledWith("v_1", { to: "norrfi.near", asset: "nep141:usdc", dryRun: false, amount: "1" });
     expect(onRequested).toHaveBeenCalled();
     expect(screen.getByRole("link", { name: "Open Approvals" }).getAttribute("href")).toBe("#/vault/v_1/approvals");
   });
 
   it("Max asks for everything held, and changing the amount drops a stale check", async () => {
     const withdraw = vi.fn(async () => ({ dryRun: true as const, plan }));
-    render(<WithdrawPanel api={{ withdraw } as unknown as Api} vaultId="v_1" owner="norrfi.near" holdings={holdings} />);
+    render(<WithdrawPanel api={{ withdraw, withdrawDestinations: destinations } as unknown as Api} vaultId="v_1" holdings={holdings} />);
+    await screen.findByTestId("withdraw-destination");
     fireEvent.click(screen.getByRole("button", { name: "Max" }));
     fireEvent.click(screen.getByRole("button", { name: /Check first/ }));
     await screen.findByTestId("withdraw-plan");
-    expect(withdraw).toHaveBeenCalledWith("v_1", { asset: "nep141:usdc", dryRun: true, max: true });
+    expect(withdraw).toHaveBeenCalledWith("v_1", { to: "norrfi.near", asset: "nep141:usdc", dryRun: true, max: true });
     fireEvent.click(screen.getByRole("button", { name: "Enter an amount" }));
     expect(screen.queryByTestId("withdraw-plan")).toBeNull();
   });
@@ -47,14 +49,53 @@ describe("withdraw panel", () => {
     const withdraw = vi.fn(async () => {
       throw new ApiError(400, "Insufficient balance: you asked for 99 USDC and the vault's confidential balance is 12.5 USDC.", { error: "x" });
     });
-    render(<WithdrawPanel api={{ withdraw } as unknown as Api} vaultId="v_1" owner="norrfi.near" holdings={holdings} />);
+    render(<WithdrawPanel api={{ withdraw, withdrawDestinations: destinations } as unknown as Api} vaultId="v_1" holdings={holdings} />);
+    await screen.findByTestId("withdraw-destination");
     fireEvent.change(screen.getByLabelText(/Amount/), { target: { value: "99" } });
     fireEvent.click(screen.getByRole("button", { name: /Check first/ }));
     expect((await screen.findByRole("alert")).textContent).toMatch(/Insufficient balance/);
     cleanup();
-    render(<WithdrawPanel api={{} as Api} vaultId="v_1" owner="norrfi.near" holdings={[]} />);
+    render(<WithdrawPanel api={{ withdrawDestinations: destinations } as unknown as Api} vaultId="v_1" holdings={[]} />);
     expect(screen.getByText(/holds nothing in its confidential balance/)).toBeTruthy();
     expect(screen.queryByTestId("withdraw-destination")).toBeNull();
+  });
+});
+
+describe("withdraw destination comes from the vault's policy", () => {
+  const dests = (list: string[], def = list[0]!) => vi.fn(async () => ({ restriction: "whitelist" as const, destinations: list.map((address) => ({ address, isOwner: address === "norrfi.near" })), default: def, source: "The address whitelist in this vault's custody policy, read from the provider now." }));
+
+  it("shows the whitelisted address even when it is not the signed-in account, and sends exactly that", async () => {
+    const withdraw = vi.fn(async () => ({ dryRun: true as const, plan: { ...plan, destination: "legalalienx.near" } }));
+    render(<WithdrawPanel api={{ withdraw, withdrawDestinations: dests(["legalalienx.near"]) } as unknown as Api} vaultId="v_1" holdings={holdings} />);
+    expect((await screen.findByTestId("withdraw-destination")).textContent).toBe("legalalienx.near");
+    expect(screen.queryByText("norrfi.near")).toBeNull(); // never labelled allowed unless the policy says so
+    fireEvent.change(screen.getByLabelText(/Amount/), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: /Check first/ }));
+    await screen.findByTestId("withdraw-plan");
+    expect(withdraw).toHaveBeenCalledWith("v_1", { to: "legalalienx.near", asset: "nep141:usdc", dryRun: true, amount: "1" });
+  });
+
+  it("offers a choice when the policy lists several, and sends the chosen one", async () => {
+    const withdraw = vi.fn(async () => ({ dryRun: true as const, plan }));
+    render(<WithdrawPanel api={{ withdraw, withdrawDestinations: dests(["cold.near", "norrfi.near"], "norrfi.near") } as unknown as Api} vaultId="v_1" holdings={holdings} />);
+    const cold = (await screen.findByRole("radio", { name: /cold\.near/ })) as HTMLInputElement;
+    expect((screen.getByRole("radio", { name: /norrfi\.near/ }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(cold);
+    fireEvent.change(screen.getByLabelText(/Amount/), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: /Check first/ }));
+    await screen.findByTestId("withdraw-plan");
+    expect(withdraw).toHaveBeenCalledWith("v_1", expect.objectContaining({ to: "cold.near" }));
+  });
+
+  it("says so, and offers nothing, when the policy cannot be read", async () => {
+    const withdraw = vi.fn();
+    const withdrawDestinations = vi.fn(async () => { throw new ApiError(503, "Could not read the vault's custody policy, so Norr cannot tell where it may send money, and will not guess.", { error: "x" }); });
+    render(<WithdrawPanel api={{ withdraw, withdrawDestinations } as unknown as Api} vaultId="v_1" holdings={holdings} />);
+    expect((await screen.findByTestId("withdraw-destination-error")).textContent).toMatch(/will not guess/);
+    expect(screen.queryByTestId("withdraw-destination")).toBeNull();
+    fireEvent.change(screen.getByLabelText(/Amount/), { target: { value: "1" } });
+    expect((screen.getByRole("button", { name: /Check first/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(withdraw).not.toHaveBeenCalled();
   });
 });
 

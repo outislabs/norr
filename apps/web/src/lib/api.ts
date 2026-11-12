@@ -31,7 +31,9 @@ export interface Holding { assetId?: string; symbol: string; class: "crypto" | "
 export interface ExitResult { status: "done" | "waiting" | "stopped"; steps: { step: "top_up" | "sell_all"; usd: number; decision: Decision }[]; message: string }
 export interface Portfolio { holdings: Holding[]; totalUsd: number; byClass: { crypto: number; equity: number } }
 export interface ActivityItem { id: string; executed: { usd: number; realizedUsd: number | null } | null; at: string; side: "buy" | "sell"; asset: string; amountUsd: number; sealedReason: SealedReason | null; decision: Decision; note: string | null; pending: boolean }
-/** What a withdrawal would do, from the dry run. The destination is always the vault's owner. */
+/** Where this vault may send money, read from its custody policy at the provider. */
+export interface WithdrawDestinations { restriction: "whitelist" | "none"; destinations: { address: string; isOwner: boolean }[]; default: string; source: string }
+/** What a withdrawal would do, from the dry run. The destination is one the vault's custody policy allows. */
 export interface WithdrawPlan { asset: string; assetId: string; amount: string; balance: string; destination: string; chain: string; layer: "confidential"; approval: string; privacy: string }
 export type WithdrawResult = { dryRun: true; plan: WithdrawPlan } | { status: "done"; plan: WithdrawPlan } | { status: "pending_approval" | "in_progress"; requestId: string; plan: WithdrawPlan; message: string };
 /** An owner-level movement of funds (a withdrawal), listed in Activity beside the agent's decisions. */
@@ -183,7 +185,8 @@ export function createApi(o: ApiOptions) {
     beta: () => call<BetaInfo>("/beta"),
     createVault: (b: { name?: string; acceptTerms: string; nonUsConfirmed?: boolean }) => call<SetupVault>("/owner/v1/vaults", { body: b }),
     shield: (id: string) => call<{ status: "done" | "pending_approval"; amountUsdc: number; requestId?: string; message?: string }>(`/owner/v1/vaults/${encodeURIComponent(id)}/shield`, { body: {} }),
-    withdraw: (id: string, b: { asset?: string; amount?: string; max?: boolean; dryRun?: boolean }) => call<WithdrawResult>(`/owner/v1/vaults/${encodeURIComponent(id)}/withdraw`, { body: b }),
+    withdrawDestinations: (id: string) => call<WithdrawDestinations>(`/owner/v1/vaults/${encodeURIComponent(id)}/withdraw-destinations`),
+    withdraw: (id: string, b: { to?: string; asset?: string; amount?: string; max?: boolean; dryRun?: boolean }) => call<WithdrawResult>(`/owner/v1/vaults/${encodeURIComponent(id)}/withdraw`, { body: b }),
     exitPosition: (id: string, asset: string) => call<ExitResult>(`/owner/v1/vaults/${encodeURIComponent(id)}/exit`, { body: { asset } }),
     renameVault: (id: string, name: string) => call<{ id: string; name: string }>(`/owner/v1/vaults/${encodeURIComponent(id)}/name`, { method: "PUT", body: { name } }),
     setupVault: (id: string) => call<SetupVault>(`/owner/v1/vaults/${encodeURIComponent(id)}/setup`),

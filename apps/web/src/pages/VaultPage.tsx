@@ -143,7 +143,7 @@ export function VaultPage({ api, account, id, tab, asset, mcpUrl, apiUrl, onChan
         )}
         {tab === "connect" && <div className="max-w-2xl"><ConnectAgent api={api} vaultId={id} mcpUrl={mcpUrl} apiUrl={apiUrl} onIssued={() => tick((n) => n + 1)} /></div>}
         {tab === "fund" && <div className="max-w-2xl"><FundingPanel api={api} vaultId={id} account={account} onArrived={() => vault.reload()} /></div>}
-        {tab === "withdraw" && <div className="max-w-2xl"><WithdrawPanel api={api} vaultId={id} owner={account} initialAsset={asset} holdings={(v.portfolio?.holdings ?? []).filter((h) => h.layer === "confidential" && h.assetId)} onRequested={() => (pending.reload(), activity.reload())} /></div>}
+        {tab === "withdraw" && <div className="max-w-2xl"><WithdrawPanel api={api} vaultId={id} initialAsset={asset} holdings={(v.portfolio?.holdings ?? []).filter((h) => h.layer === "confidential" && h.assetId)} onRequested={() => (pending.reload(), activity.reload())} /></div>}
         {tab === "rules" && (
           <div className="flex max-w-2xl flex-col gap-12">
             {typeof v.autonomous === "boolean" && <AutonomyPanel key={String(v.autonomous)} api={api} vaultId={id} autonomous={v.autonomous} account={account} onChanged={() => (vault.reload(), onChanged())} />}

@@ -82,6 +82,17 @@ export class OutLayerCustody implements Custody {
     return excluded.includes("confidential") ? "autonomous" : "owner";
   }
 
+  /** GET /wallet/v1/policy: the address rule as stored. A response that does not say (`policy` missing) is an error, not "no rule". */
+  async addressPolicy(): Promise<{ mode: "whitelist" | "blacklist" | "none"; list: string[] }> {
+    const r = obj(await requestJson(this.f, `${this.baseUrl}/wallet/v1/policy`, { headers: this.headers }, "OutLayer policy"));
+    if (r.policy === "none") return { mode: "none", list: [] };
+    if (r.policy !== "stored") throw new Error("OutLayer policy: the answer did not say what the policy is (the chain could not be read)");
+    const addresses = obj(obj(r.rules).addresses);
+    if (addresses.mode !== "whitelist" && addresses.mode !== "blacklist") return { mode: "none", list: [] };
+    const list = Array.isArray(addresses.list) ? addresses.list.filter((a): a is string => typeof a === "string") : [];
+    return { mode: addresses.mode, list };
+  }
+
   async status(requestId: string): Promise<SwapStatus> {
     const res = obj(
       await requestJson(this.f, `${this.baseUrl}/wallet/v1/requests/${encodeURIComponent(requestId)}`, { headers: this.headers }, "OutLayer request"),

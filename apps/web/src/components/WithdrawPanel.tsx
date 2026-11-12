@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
-import type { Api, Holding, WithdrawPlan } from "../lib/api";
+import type { Api, Holding, WithdrawDestinations, WithdrawPlan } from "../lib/api";
 import { PRIVACY_URL } from "../lib/links";
 import { vaultHref } from "../lib/route";
 
 /**
- * Owner-only withdrawal from the vault's confidential balance to the owner's own account. The destination is the signed-in
- * owner, shown and never editable here (the server sets it too, and the vault's custody policy whitelists only it).
+ * Owner-only withdrawal from the vault's confidential balance. The destination comes from the vault's actual custody
+ * policy, read from the provider: exactly the address it whitelists, or a choice among several. It is never assumed to be
+ * the signed-in account, and never typed in here (the server re-checks it against the policy). If the policy cannot be
+ * read, the panel says so and offers nothing.
  * Two steps: a dry run that moves nothing and states what becomes public, then the request, which waits for the owner's
  * approval in the Approvals tab, where the browser checks the provider's hash and operation.
  */
-export function WithdrawPanel({ api, vaultId, owner, holdings, initialAsset, onRequested }: { api: Api; vaultId: string; owner: string; holdings: Holding[]; initialAsset?: string; onRequested?: () => void }) {
+export function WithdrawPanel({ api, vaultId, holdings, initialAsset, onRequested }: { api: Api; vaultId: string; holdings: Holding[]; initialAsset?: string; onRequested?: () => void }) {
   // Opened from "Withdraw to my wallet" on a position too small to sell: that token, all of it.
   const preset = initialAsset !== undefined && holdings.some((h) => h.assetId === initialAsset) ? initialAsset : undefined;
   const [assetId, setAssetId] = useState(preset ?? holdings[0]?.assetId ?? "");
@@ -23,8 +25,22 @@ export function WithdrawPanel({ api, vaultId, owner, holdings, initialAsset, onR
     if (!assetId && holdings[0]?.assetId) setAssetId(holdings[0].assetId);
   }, [holdings, assetId]);
 
+  // Where the policy lets this vault send money. null = still reading; a string = it could not be read.
+  const [dest, setDest] = useState<WithdrawDestinations | string | null>(null);
+  const [to, setTo] = useState("");
+  useEffect(() => {
+    let live = true;
+    setDest(null);
+    api.withdrawDestinations(vaultId).then(
+      (d) => live && (setDest(d), setTo(d.default)),
+      (e) => live && setDest(e instanceof Error ? e.message : "Could not read where this vault may send money."),
+    );
+    return () => { live = false; };
+  }, [api, vaultId]);
+  const ready = typeof dest === "object" && dest !== null && to !== "";
+
   const held = holdings.find((h) => h.assetId === assetId);
-  const body = (dryRun: boolean) => ({ asset: assetId, dryRun, ...(max ? { max: true } : { amount: amount.trim() }) });
+  const body = (dryRun: boolean) => ({ to, asset: assetId, dryRun, ...(max ? { max: true } : { amount: amount.trim() }) });
   const reset = () => (setPlan(null), setDone(null), setError(null));
 
   async function run(dryRun: boolean) {
@@ -56,10 +72,23 @@ export function WithdrawPanel({ api, vaultId, owner, holdings, initialAsset, onR
         <p className="text-mute">The vault holds nothing in its confidential balance yet. Fund it first; anything in its public balance has to be moved into the confidential layer before it can be withdrawn.</p>
       ) : (
         <>
-          <div className="flex flex-col gap-1">
-            <p className="eyebrow">Destination (fixed)</p>
-            <p className="mono text-fg" data-testid="withdraw-destination">{owner}</p>
-            <p className="text-xs text-dim">The one account this vault's custody policy allows. It is not editable.</p>
+          <div className="flex flex-col gap-1" data-testid="withdraw-destination-box">
+            <p className="eyebrow">Destination (from the vault's custody policy)</p>
+            {dest === null && <p className="text-sm text-mute">Reading the vault's custody policy…</p>}
+            {typeof dest === "string" && <p role="alert" className="border-l border-line-strong pl-3 text-sm text-fg" data-testid="withdraw-destination-error">{dest}</p>}
+            {typeof dest === "object" && dest !== null && dest.destinations.length === 1 && <p className="mono text-fg" data-testid="withdraw-destination">{dest.destinations[0]!.address}</p>}
+            {typeof dest === "object" && dest !== null && dest.destinations.length > 1 && (
+              <fieldset className="flex flex-col gap-1" data-testid="withdraw-destination-choice">
+                <legend className="sr-only">Destination</legend>
+                {dest.destinations.map((d) => (
+                  <label key={d.address} className="flex items-center gap-2 text-sm">
+                    <input type="radio" name="withdraw-to" value={d.address} checked={to === d.address} onChange={() => (setTo(d.address), reset())} />
+                    <span className="mono text-fg">{d.address}</span>{d.isOwner && <span className="text-dim">(your signed-in account)</span>}
+                  </label>
+                ))}
+              </fieldset>
+            )}
+            {typeof dest === "object" && dest !== null && <p className="text-xs text-dim">{dest.source} Not editable here.</p>}
           </div>
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-mute">Asset</span>
@@ -77,7 +106,7 @@ export function WithdrawPanel({ api, vaultId, owner, holdings, initialAsset, onR
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn btn-quiet" disabled={busy !== null || !assetId || (!max && amount.trim() === "")} onClick={() => void run(true)}>
+            <button type="button" className="btn btn-quiet" disabled={busy !== null || !ready || !assetId || (!max && amount.trim() === "")} onClick={() => void run(true)}>
               {busy === "check" ? "Checking…" : "Check first (moves nothing)"}
             </button>
           </div>

@@ -211,3 +211,13 @@ describe("requestJson keeps what an error answer says besides its message", () =
     expect(((await requestJson(f3, "https://x", {}, "OutLayer").catch((e: unknown) => e)) as IntentsApiError).detail).toEqual({});
   });
 });
+
+describe("OutLayerCustody.addressPolicy reads the wallet's own address rule", () => {
+  const read = (body: unknown) => new OutLayerCustody({ apiKey: "k", accountId: "a", fetch: async () => new Response(JSON.stringify(body)) }).addressPolicy();
+  it("returns the whitelist as stored, 'none' when there is no policy or no address rule, and refuses to guess when the answer does not say", async () => {
+    expect(await read({ policy: "stored", rules: { addresses: { mode: "whitelist", list: ["legalalienx.near", "w.near"] } } })).toEqual({ mode: "whitelist", list: ["legalalienx.near", "w.near"] });
+    expect(await read({ policy: "none" })).toEqual({ mode: "none", list: [] });
+    expect(await read({ policy: "stored", rules: {} })).toEqual({ mode: "none", list: [] });
+    await expect(read({ version: 1 })).rejects.toThrow(/did not say what the policy is/);
+  });
+});
