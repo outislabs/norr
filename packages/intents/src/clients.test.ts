@@ -196,3 +196,18 @@ describe("confidential layer", () => {
     expect((await ol(none).status("r1")).reported).toBeUndefined();
   });
 });
+
+describe("requestJson keeps what an error answer says besides its message", () => {
+  it("code, retry seconds (body first, else Retry-After), limit and window; never headers", async () => {
+    const { requestJson } = await import("./http");
+    const body = { error: "operation_limit_reached", message: "limit reached: 1000 per day for custody:*", limit: 1000, window: "day", retry_after_seconds: 5400 };
+    const f1 = async () => new Response(JSON.stringify(body), { status: 429, headers: { "retry-after": "10", authorization: "secret" } });
+    const e1 = (await requestJson(f1, "https://x", {}, "OutLayer").catch((e: unknown) => e)) as IntentsApiError;
+    expect(e1.detail).toEqual({ code: "operation_limit_reached", retryAfterSeconds: 5400, limit: 1000, window: "day" });
+    expect(e1.message).not.toContain("secret");
+    const f2 = async () => new Response(JSON.stringify({ error: "chain_unavailable", message: "m" }), { status: 503, headers: { "retry-after": "7" } });
+    expect(((await requestJson(f2, "https://x", {}, "OutLayer").catch((e: unknown) => e)) as IntentsApiError).detail).toEqual({ code: "chain_unavailable", retryAfterSeconds: 7 });
+    const f3 = async () => new Response("oops", { status: 500 });
+    expect(((await requestJson(f3, "https://x", {}, "OutLayer").catch((e: unknown) => e)) as IntentsApiError).detail).toEqual({});
+  });
+});

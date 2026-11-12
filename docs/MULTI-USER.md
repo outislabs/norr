@@ -20,7 +20,7 @@ From the API spec (`api.outlayer.ai/openapi.json`) and the contract source (`out
 | Approvals | Approvers by NEAR account; NEP-413 votes from any full-access key; `role: admin` may also modify policy and freeze. | Each vault's owner is its single admin approver; the in-dashboard Approve/Reject already works for any owner. |
 | Autonomy | `approval.excluded_types` per request type; `confidential` covers swap, transfer, withdraw, unshield. The whitelist still binds transfers (tested: 403 for a non-whitelisted account). | Autonomous mode is a per-vault owner choice, off by default, with tight limits. |
 | Before a policy exists | A wallet with no policy is unrestricted. | A vault cannot be funded or traded until its policy is on chain and checked (status `setup` until then). |
-| Usage | Free tier: 100 custody operations per wallet per day. | Per wallet, so it scales with vaults; shown in Limitations. |
+| Usage | Free tier: custody operations per wallet over a rolling 24 hours (1000 per OutLayer's spec of 2026-11-12; 100 in earlier docs). Reads are not counted. | Per wallet, so it scales with vaults; shown in Limitations. |
 
 Trust note, unchanged: OutLayer's gateway builds swap routes and its TEE does not re-check token or amount; Norr checks
 every swap afterwards. During the short window between registration and the owner's policy, Norr's service holds a key to

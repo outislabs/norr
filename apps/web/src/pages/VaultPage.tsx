@@ -114,7 +114,7 @@ export function VaultPage({ api, account, id, tab, asset, mcpUrl, apiUrl, onChan
             {/* Wide screens: holdings and history on the left; today's limits and the agent on the right. */}
             <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-16">
             <div className="flex min-w-0 flex-col gap-10">
-            <Portfolio portfolio={v.portfolio} fundHref={vaultHref(id, "fund")} />
+            <Portfolio portfolio={v.portfolio} reason={v.portfolioError?.reason} fundHref={vaultHref(id, "fund")} />
             {v.portfolio && <StuckPositions holdings={v.portfolio.holdings} onExit={async (assetId) => { const r = await api.exitPosition(id, assetId); vault.reload(); return r; }} withdrawHref={(assetId) => withdrawHref(id, assetId)} />}
             <div>
               <h2 className="font-display text-xl">Value over time</h2>

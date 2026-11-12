@@ -32,8 +32,15 @@ export function SplitBar({ title, slices }: { title: string; slices: Slice[] }) 
   );
 }
 
-export function Portfolio({ portfolio, fundHref }: { portfolio: P | null; fundHref?: string }) {
-  if (!portfolio) return <p className="text-mute">Balances are not available right now. Try again in a minute.</p>;
+export function Portfolio({ portfolio, fundHref, reason }: { portfolio: P | null; fundHref?: string; reason?: string }) {
+  if (!portfolio)
+    return (
+      <div className="text-mute">
+        <p>Balances are not available right now.</p>
+        {/* The real reason, when the service gave one (a custody limit, an outage...); the money itself is untouched. */}
+        <p className="mt-1">{reason ?? "Try again in a minute."}</p>
+      </div>
+    );
   if (portfolio.holdings.length === 0) {
     return (
       <div className="border-l border-line-strong pl-4">

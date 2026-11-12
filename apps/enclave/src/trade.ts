@@ -1,3 +1,4 @@
+import type { BalanceHealth } from "./errors";
 import { APPROVAL_TTL_HOURS, approvalInfo } from "./about";
 import {
   checkBoughtPosition,
@@ -58,6 +59,8 @@ export interface TradeDeps {
   ledger: Ledger;
   /** Reads the vault's public-layer Intents balances. Without it, portfolio values in the vault state are used as is. */
   balances?: BalanceReader;
+  /** Remembers the latest balance-read failure (in memory) so the operator view can say why balances are unreadable. */
+  balanceHealth?: BalanceHealth;
   /** The asset vault cash is held in (USDC). Buys spend it, sells return it. */
   quoteAsset: RegistryEntry;
   /** Live service only: false while the asset list has not loaded yet (1Click was unreachable at boot). Absent means ready. */

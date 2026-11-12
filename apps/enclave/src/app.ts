@@ -1,4 +1,5 @@
 import { dustExits, EQUITY_DISCLAIMER, equityMinimum, MINIMUMS_NOTE, sumToday, unitsToNumber, type IncidentFeedStatus } from "@norr/core";
+import { balanceFailure } from "./errors";
 import { exitPosition } from "./exit";
 import { TradeInput, type Decision, type TradeRequest } from "@norr/shared";
 import { Hono } from "hono";
@@ -218,11 +219,15 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
         confidential: await vault.custody.confidentialHoldings(),
       };
       const p = valueLayers(layers, deps.registry, [deps.quoteAsset.id]);
+      deps.balanceHealth?.ok(deps.now());
       // A stock position too small to sell says so, with the ways out, so the agent can offer them before trying.
       const holdings = p.holdings.map((h) => (h.belowMinSell && h.ticker && h.minSellUsd ? { ...h, exits: dustExits({ ticker: h.ticker, symbol: h.symbol, heldUsd: h.valueUsd, minUsd: h.minSellUsd, maxTradeUsd: vault.policy.maxTradeUsd }) } : h));
       return c.json({ ...p, holdings });
-    } catch {
-      return c.json({ error: "balances unavailable" }, 503);
+    } catch (e) {
+      // Say why (OutLayer's operation limit, an outage, a rejected key, a Norr fault), not just that it failed.
+      const f = balanceFailure(e, deps.now());
+      deps.balanceHealth?.failed(f, deps.now());
+      return c.json({ error: `balances unavailable: ${f.reason}`, code: f.code, source: f.source, ...(f.retryAfterSeconds !== undefined ? { retryAfterSeconds: f.retryAfterSeconds, retryAt: f.retryAt } : {}) }, 503);
     }
   });
 

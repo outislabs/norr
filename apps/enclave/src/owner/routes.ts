@@ -1,3 +1,4 @@
+import { balanceFailure } from "../errors";
 import { applyFill, formatUnits, fundingSources, lossToday, parseUnits, sumToday, unitsForUsd, unitsToNumber, usdToUnits, validRefundAddress, type Book, type FundingSource } from "@norr/core";
 import type { BuildInfo } from "../build-info";
 import type { Attestor } from "../attestation";
@@ -51,10 +52,22 @@ export interface OwnerRouteContext {
 
 /** The vault's holdings across both layers, valued at registry prices. Null when balances cannot be read right now. */
 export async function readPortfolio(deps: TradeDeps, v: { walletAccount: string; custody: { confidentialHoldings(): Promise<Record<string, string>> } }) {
+  return (await tryPortfolio(deps, v)).portfolio;
+}
+
+/**
+ * Like readPortfolio, but a failure comes back with its real reason (OutLayer's operation limit, an outage, a rejected
+ * key, a Norr fault) and is remembered for the operator view. `portfolio` is null when balances cannot be read.
+ */
+export async function tryPortfolio(deps: TradeDeps, v: { walletAccount: string; custody: { confidentialHoldings(): Promise<Record<string, string>> } }) {
   try {
-    return valueLayers({ public: deps.balances ? await deps.balances.holdings(v.walletAccount) : undefined, confidential: await v.custody.confidentialHoldings() }, deps.registry);
-  } catch {
-    return null; // balances unavailable: the rest of the page still works
+    const portfolio = valueLayers({ public: deps.balances ? await deps.balances.holdings(v.walletAccount) : undefined, confidential: await v.custody.confidentialHoldings() }, deps.registry);
+    deps.balanceHealth?.ok(deps.now());
+    return { portfolio, failure: null };
+  } catch (e) {
+    const failure = balanceFailure(e, deps.now());
+    deps.balanceHealth?.failed(failure, deps.now());
+    return { portfolio: null, failure }; // balances unavailable: the rest of the page still works
   }
 }
 
@@ -311,9 +324,9 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
   app.get("/owner/v1/vaults/:id", async (c) => {
     const v = mine(c.get("owner") as string, c.req.param("id"));
     if (!v) return c.json({ error: "not found" }, 404);
-    const portfolio = await readPortfolio(deps, v);
+    const { portfolio, failure } = await tryPortfolio(deps, v);
     sampleValue(deps, ctx.history, v.id, portfolio);
-    return c.json({ ...summary(v), portfolio });
+    return c.json({ ...summary(v), portfolio, ...(failure ? { portfolioError: failure } : {}) });
   });
 
   // Funding: the owner picks what they hold and on which chain (USDC on NEAR, Base, Solana..., or ETH, SOL), asks for a

@@ -201,7 +201,7 @@ export function createApi(o: ApiOptions) {
     oauthDeny: (rid: string) => call<{ redirect: string }>(`/owner/v1/oauth/requests/${encodeURIComponent(rid)}/deny`, { body: {} }),
     tokens: (id: string) => call<{ tokens: TokenInfo[] }>(`/owner/v1/vaults/${encodeURIComponent(id)}/tokens`),
     revokeToken: (id: string, tid: string) => call<{ revoked: boolean }>(`/owner/v1/vaults/${encodeURIComponent(id)}/tokens/${encodeURIComponent(tid)}`, { method: "DELETE" }),
-    vault: (id: string) => call<VaultSummary & { portfolio: Portfolio | null }>(`/owner/v1/vaults/${encodeURIComponent(id)}`),
+    vault: (id: string) => call<VaultSummary & { portfolio: Portfolio | null; portfolioError?: { code: string; reason: string } }>(`/owner/v1/vaults/${encodeURIComponent(id)}`),
     setPolicy: (id: string, p: Policy) => call<{ policy: Policy }>(`/owner/v1/vaults/${encodeURIComponent(id)}/policy`, { method: "PUT", body: p }),
     pause: (id: string) => call<{ paused: boolean }>(`/owner/v1/vaults/${encodeURIComponent(id)}/pause`, { body: {} }),
     resume: (id: string) => call<{ paused: boolean }>(`/owner/v1/vaults/${encodeURIComponent(id)}/resume`, { body: {} }),

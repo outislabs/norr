@@ -1,3 +1,4 @@
+import { BalanceHealth } from "./errors";
 import { HeuristicRiskProvider, type RegistryEntry } from "@norr/core";
 import { DexScreenerSignals, GoPlusClient, NearIntentsBalances, OneClick, OutLayerCustody, OutLayerProvisioner, ShieldClient } from "@norr/intents";
 import { FileValueHistory } from "./history";
@@ -115,6 +116,7 @@ export async function buildLiveDeps(env: NodeJS.ProcessEnv = process.env, opts: 
     auditor: oneclick,
     funder: oneclick,
     balances: new NearIntentsBalances(),
+    balanceHealth: new BalanceHealth(),
     vaults,
     ledger,
     quoteAsset,

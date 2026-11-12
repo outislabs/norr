@@ -139,10 +139,22 @@ export interface ExecutionAuditor {
   audit(depositAddress: string): Promise<ExecutedSwap | null>;
 }
 
+/** What an upstream's error body said besides its message, when it said it (OutLayer sends a machine code and, for a reached limit, how long it lasts). */
+export interface UpstreamErrorDetail {
+  /** The upstream's machine code, e.g. OutLayer's `operation_limit_reached` or `chain_unavailable`. */
+  code?: string;
+  /** Seconds until the same request is worth repeating: the body's `retry_after_seconds`, else the `Retry-After` header. */
+  retryAfterSeconds?: number;
+  /** For a reached limit: the ceiling and the window it is counted over (`day`, ...). */
+  limit?: number;
+  window?: string;
+}
+
 export class IntentsApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    readonly detail: UpstreamErrorDetail = {},
   ) {
     super(message);
     this.name = "IntentsApiError";

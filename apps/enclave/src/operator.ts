@@ -155,7 +155,11 @@ export async function operatorOverview(d: OperatorDeps) {
   if (used >= b.maxVaults) alerts.push({ level: "alert", code: "BETA_FULL", message: `The beta is full (${used} of ${b.maxVaults} vaults): new signups are refused.` });
   else if (used >= b.maxVaults * 0.8) alerts.push({ level: "warn", code: "BETA_NEARLY_FULL", message: `${used} of ${b.maxVaults} vaults are used.` });
   if (funds.overCap > 0) alerts.push({ level: "warn", code: "OVER_CAP", message: `${funds.overCap} vault${funds.overCap === 1 ? " holds" : "s hold"} more than the $${b.depositCapUsd} beta cap (buys pause above it).` });
-  if (funds.unreadable > 0) alerts.push({ level: "warn", code: "BALANCES_UNREADABLE", message: `${funds.unreadable} vault balance${funds.unreadable === 1 ? "" : "s"} could not be read; totals are partial.` });
+  if (funds.unreadable > 0) {
+    // The latest reason (the custody provider's operation limit, an outage, a Norr fault), with when it was seen.
+    const why = d.deps.balanceHealth?.current();
+    alerts.push({ level: "warn", code: "BALANCES_UNREADABLE", message: `${funds.unreadable} vault balance${funds.unreadable === 1 ? "" : "s"} could not be read; totals are partial.${why ? ` Latest reason (${new Date(why.at).toISOString().slice(11, 16)} UTC, ${why.failure.source}, ${why.failure.code}): ${why.failure.reason}` : ""}` });
+  }
   if (!b.signupsOpen) alerts.push({ level: "warn", code: "SIGNUPS_CLOSED", message: "New signups are closed." });
 
   return {
