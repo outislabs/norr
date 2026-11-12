@@ -236,6 +236,58 @@
         }
       }
     },
+    "/v1/exit": {
+      "post": {
+        "tags": [
+          "Trading"
+        ],
+        "operationId": "exitPosition",
+        "summary": "Top up and sell all",
+        "description": "The way out of a tokenized-stock position too small to sell (solvers do not quote below the ticker's minimum, about $5.10 or $26). Buys just enough of the same token to pass the minimum, then sells the whole position. Both are ordinary trades: the vault's rules and the owner's approvals apply. Safe to call again. MCP tool: exit_position.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "asset"
+                ],
+                "properties": {
+                  "asset": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 2000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "What happened, step by step.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExitResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
     "/v1/portfolio": {
       "get": {
         "tags": [
@@ -727,6 +779,10 @@
             "type": "string",
             "maxLength": 2000,
             "description": "The agent's reasoning, sealed to the owner's key; the service cannot read it back."
+          },
+          "sellAll": {
+            "type": "boolean",
+            "description": "Sell only: sell the whole position, leaving nothing behind. amountUsd is then a ceiling (a little above what the position is worth); a position worth more is refused."
           }
         }
       },
@@ -749,7 +805,8 @@
           "PRIVACY_UNAVAILABLE",
           "PRICING_UNAVAILABLE",
           "VAULT_CAP",
-          "AMBIGUOUS_ASSET"
+          "AMBIGUOUS_ASSET",
+          "BELOW_MIN_SELL"
         ]
       },
       "Executed": {
@@ -826,6 +883,13 @@
           },
           "suggestedUsd": {
             "type": "number"
+          },
+          "exits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExitOption"
+            },
+            "description": "For BELOW_MIN_SELL: the ways out of a position too small to sell."
           }
         }
       },
@@ -1301,6 +1365,25 @@
                     "public",
                     "confidential"
                   ]
+                },
+                "ticker": {
+                  "type": "string",
+                  "description": "Stocks: the ticker, for exit_position."
+                },
+                "minSellUsd": {
+                  "type": "number",
+                  "description": "Stocks: the smallest size solvers quote, so the smallest position that can be sold."
+                },
+                "belowMinSell": {
+                  "type": "boolean",
+                  "description": "Stocks: worth less than minSellUsd, so it cannot be sold as it is."
+                },
+                "exits": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ExitOption"
+                  },
+                  "description": "With belowMinSell: the ways out."
                 }
               }
             }
@@ -1719,6 +1802,83 @@
             "type": "number"
           },
           "note": {
+            "type": "string"
+          }
+        }
+      },
+      "ExitOption": {
+        "type": "object",
+        "required": [
+          "kind",
+          "how"
+        ],
+        "description": "A way out of (or around) a stock position below its minimum sell size.",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "sell_all",
+              "top_up_and_sell_all",
+              "withdraw"
+            ]
+          },
+          "usd": {
+            "type": "number",
+            "description": "sell_all: what the position is worth; top_up_and_sell_all: the buy needed first."
+          },
+          "ownerOnly": {
+            "type": "boolean",
+            "description": "Only the vault's owner can do it (agents have no withdraw tool)."
+          },
+          "how": {
+            "type": "string"
+          }
+        }
+      },
+      "ExitResult": {
+        "type": "object",
+        "required": [
+          "status",
+          "steps",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "done",
+              "waiting",
+              "stopped"
+            ],
+            "description": "done: sold; waiting: a step waits for the owner's approval or the cooldown (call again once it has run); stopped: a step did not run."
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "step",
+                "usd",
+                "decision"
+              ],
+              "properties": {
+                "step": {
+                  "type": "string",
+                  "enum": [
+                    "top_up",
+                    "sell_all"
+                  ]
+                },
+                "usd": {
+                  "type": "number"
+                },
+                "decision": {
+                  "$ref": "#/components/schemas/Decision"
+                }
+              }
+            }
+          },
+          "message": {
             "type": "string"
           }
         }

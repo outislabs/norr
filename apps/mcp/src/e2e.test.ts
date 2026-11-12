@@ -36,7 +36,7 @@ describe("real stdio process", () => {
     const client = new Client({ name: "claude-desktop-sim", version: "1" });
     await client.connect(transport);
     try {
-      expect((await client.listTools()).tools).toHaveLength(10);
+      expect((await client.listTools()).tools).toHaveLength(11);
       expect(parse(await client.callTool({ name: "get_policy", arguments: {} })).maxTradeUsd).toBe(50);
       const t = parse(await client.callTool({ name: "trade", arguments: { side: "buy", asset: "NVDA", amountUsd: 40, reason: "e2e" } }));
       expect(t.status).toBe("executed");

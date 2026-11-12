@@ -12,6 +12,7 @@ import { WithdrawPanel } from "../components/WithdrawPanel";
 import { PendingChecks } from "../components/PendingChecks";
 import { PolicyForm } from "../components/PolicyForm";
 import { Portfolio } from "../components/Portfolio";
+import { StuckPositions } from "../components/StuckPositions";
 import { PnlPanel } from "../components/PnlPanel";
 import { AssetCheckPanel } from "../components/AssetCheckPanel";
 import type { Api } from "../lib/api";
@@ -19,7 +20,7 @@ import { ago, shortId, usd } from "../lib/format";
 import { getFlag, setFlag } from "../lib/flags";
 import { onboardingSteps } from "../lib/onboarding";
 import { useEffect } from "react";
-import { vaultHref, type Route } from "../lib/route";
+import { vaultHref, withdrawHref, type Route } from "../lib/route";
 import { useAsync } from "../lib/useAsync";
 
 type Tab = Extract<Route, { name: "vault" }>["tab"];
@@ -40,7 +41,7 @@ function Meter({ label, value, max }: { label: string; value: number; max: numbe
   );
 }
 
-export function VaultPage({ api, account, id, tab, mcpUrl, apiUrl, onChanged }: { api: Api; account: string; id: string; tab: Tab; mcpUrl: string; apiUrl?: string; onChanged: () => void }) {
+export function VaultPage({ api, account, id, tab, asset, mcpUrl, apiUrl, onChanged }: { api: Api; account: string; id: string; tab: Tab; asset?: string; mcpUrl: string; apiUrl?: string; onChanged: () => void }) {
   const vault = useAsync(() => api.vault(id), `vault-${id}`);
   const activity = useAsync(() => (tab === "activity" ? api.activity(id) : Promise.resolve(null)), `act-${id}-${tab}`);
   const pending = useAsync(() => api.pending(id), `pend-${id}-${tab}`);
@@ -114,6 +115,7 @@ export function VaultPage({ api, account, id, tab, mcpUrl, apiUrl, onChanged }: 
             <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-16">
             <div className="flex min-w-0 flex-col gap-10">
             <Portfolio portfolio={v.portfolio} fundHref={vaultHref(id, "fund")} />
+            {v.portfolio && <StuckPositions holdings={v.portfolio.holdings} onExit={async (assetId) => { const r = await api.exitPosition(id, assetId); vault.reload(); return r; }} withdrawHref={(assetId) => withdrawHref(id, assetId)} />}
             <div>
               <h2 className="font-display text-xl">Value over time</h2>
               <div className="mt-3">{history.data ? <ValueChart points={history.data.points} /> : <p className="text-sm text-mute">Loading…</p>}</div>
@@ -141,7 +143,7 @@ export function VaultPage({ api, account, id, tab, mcpUrl, apiUrl, onChanged }: 
         )}
         {tab === "connect" && <div className="max-w-2xl"><ConnectAgent api={api} vaultId={id} mcpUrl={mcpUrl} apiUrl={apiUrl} onIssued={() => tick((n) => n + 1)} /></div>}
         {tab === "fund" && <div className="max-w-2xl"><FundingPanel api={api} vaultId={id} account={account} onArrived={() => vault.reload()} /></div>}
-        {tab === "withdraw" && <div className="max-w-2xl"><WithdrawPanel api={api} vaultId={id} owner={account} holdings={(v.portfolio?.holdings ?? []).filter((h) => h.layer === "confidential" && h.assetId)} onRequested={() => (pending.reload(), activity.reload())} /></div>}
+        {tab === "withdraw" && <div className="max-w-2xl"><WithdrawPanel api={api} vaultId={id} owner={account} initialAsset={asset} holdings={(v.portfolio?.holdings ?? []).filter((h) => h.layer === "confidential" && h.assetId)} onRequested={() => (pending.reload(), activity.reload())} /></div>}
         {tab === "rules" && (
           <div className="flex max-w-2xl flex-col gap-12">
             {typeof v.autonomous === "boolean" && <AutonomyPanel key={String(v.autonomous)} api={api} vaultId={id} autonomous={v.autonomous} account={account} onChanged={() => (vault.reload(), onChanged())} />}

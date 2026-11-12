@@ -14,6 +14,7 @@ import type { OwnerAuth } from "./auth";
 import type { ValueHistory } from "../history";
 import { vaultPnl } from "../vault-pnl";
 import { assetCheck } from "../asset-check";
+import { exitPosition } from "../exit";
 import { upstreamReason } from "../errors";
 import { RateLimiter, type BetaControl } from "../beta";
 import { cleanVaultName, OnboardingError, type Onboarding } from "../onboarding";
@@ -648,6 +649,19 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
     }
     if (st.state === "success") return c.json({ status: "done", plan });
     return c.json({ status: st.state === "pending_approval" ? "pending_approval" : "in_progress", requestId: st.requestId, plan, message: `Waiting for your approval: withdraw ${amount} ${entry.symbol} to ${v.owner}. Approve it in Approvals.` });
+  });
+
+  // Top up and sell all, started by the owner from the dashboard for a stock position too small to sell (exit.ts). The
+  // same trades an agent would make, through the same pipeline: the vault's rules and the custody approvals apply.
+  const ExitBody = z.object({ asset: z.string().min(1).max(200) });
+  app.post("/owner/v1/vaults/:id/exit", async (c) => {
+    const owner = c.get("owner") as string;
+    const v = mine(owner, c.req.param("id"));
+    if (!v) return c.json({ error: "not found" }, 404);
+    const parsed = ExitBody.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Name the asset to sell." }, 400);
+    note(owner, `asked to top up and sell all of ${parsed.data.asset}`, v.id);
+    return c.json(await exitPosition(deps, v.id, parsed.data.asset, "Owner, from the dashboard: top up and sell all of a position too small to sell."));
   });
 
   app.get("/owner/v1/vaults/:id/pending", async (c) => {

@@ -1,8 +1,10 @@
 import { APPROVAL_TTL_HOURS, approvalInfo } from "./about";
 import {
+  checkBoughtPosition,
+  checkPositionSize,
   checkPriceSanity,
-  dustWarning,
   impliedPriceUsd,
+  type MinSellBlock,
   isBlock,
   lossToday,
   noLiquidityMessage,
@@ -113,14 +115,44 @@ const blocked = (code: Extract<Decision, { status: "blocked" }>["code"], message
 const failed = (message: string): Decision => ({ status: "failed", message });
 
 /**
- * Options for operator tooling (the live runner); not reachable from the agent API.
- * sellAll sells the vault's whole balance of the asset instead of a USD-sized amount, so no dust is left.
- * The request's amountUsd then acts as a ceiling: a holding worth more than it is refused, so the
- * per-trade policy check cannot be sidestepped.
+ * sellAll sells the vault's whole balance of the asset instead of a USD-sized amount, so no dust is left. Agents ask for
+ * it with the request's own sellAll field; the live runner passes it here. The request's amountUsd then acts as a
+ * ceiling: a holding worth more than it is refused, so the per-trade policy check cannot be sidestepped.
  */
 export interface TradeOptions {
   sellAll?: boolean;
 }
+
+/** A refusal for a stock position below its minimum sell size, with the ways out. */
+const minSellDecision = (b: MinSellBlock): Decision => ({ status: "blocked", code: b.code, message: b.message, ...(b.exits.length ? { exits: b.exits } : {}), ...(b.suggestedUsd !== undefined ? { suggestedUsd: b.suggestedUsd } : {}) });
+
+export interface Position {
+  candidate: RegistryEntry;
+  venue: Venue;
+  units: string;
+  usd: number;
+}
+
+/**
+ * What the vault holds of an asset where a trade would use it: the first layer, in the order trades try them, that holds
+ * any of the candidates (issuers), and in it the largest holding. Null when it holds none, or none could be read.
+ */
+export function positionOf(layers: Layers, candidates: RegistryEntry[], order: Venue[]): Position | null {
+  for (const venue of order) {
+    let best: Position | null = null;
+    for (const c of candidates) {
+      const units = layers[venue]?.[c.id];
+      if (!units || BigInt(units) <= 0n || c.priceUsd === null) continue;
+      const usd = unitsToNumber(units, c.decimals) * c.priceUsd;
+      if (!best || usd > best.usd) best = { candidate: c, venue, units, usd };
+    }
+    if (best) return best;
+  }
+  return null;
+}
+
+/** The layers a vault's trades use, in the order they are tried. */
+export const venueOrder = (mode: Vault["policy"]["privacy"]): Venue[] => (mode === "public" ? ["public"] : mode === "require" ? ["confidential"] : ["confidential", "public"]);
 
 /** What a vault holds in each layer, where it could be read. */
 export interface Layers {
@@ -192,7 +224,16 @@ export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeReq
   const buy = request.side === "buy";
   const cash = deps.quoteAsset;
   const mode = vault.policy.privacy;
-  const order: Venue[] = mode === "public" ? ["public"] : mode === "require" ? ["confidential"] : ["confidential", "public"];
+  const order = venueOrder(mode);
+  const sellAllRequested = (opts.sellAll === true || request.sellAll === true) && !buy;
+
+  // A stock position must never end up too small to sell (solvers do not quote below the ticker's minimum). Checked
+  // before any quote, so the answer gives the real reason and the ways out, not "no liquidity".
+  if (pre.class === "equity" && order.some((v) => layers[v] !== undefined)) {
+    const pos = positionOf(layers, pre.candidates, order);
+    const b = checkPositionSize({ side: request.side, ticker: pre.ticker, symbol: pos?.candidate.symbol ?? pre.candidates[0]?.symbol ?? pre.ticker, amountUsd: request.amountUsd, heldUsd: pos?.usd ?? 0, sellAll: sellAllRequested, maxTradeUsd: vault.policy.maxTradeUsd });
+    if (b) return { decision: minSellDecision(b), shieldBypassed };
+  }
 
   interface Option { candidate: RegistryEntry; tokenIn: string; tokenOut: string; amountIn: string; quote: Quote; venue: Venue }
   interface Attempt {
@@ -221,7 +262,7 @@ export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeReq
             if (c.priceUsd === null) return null;
             const tokenIn = buy ? cash.id : c.id;
             const tokenOut = buy ? c.id : cash.id;
-            const sellAll = opts.sellAll === true && !buy;
+            const sellAll = sellAllRequested;
             const amountIn = sellAll ? (holdings?.[tokenIn] ?? "0") : buy ? usdToUnits(usd, cash.priceUsd ?? 1, cash.decimals) : usdToUnits(usd, c.priceUsd, c.decimals);
             if (sellAll) {
               const heldValue = unitsToNumber(amountIn, c.decimals) * c.priceUsd;
@@ -259,6 +300,18 @@ export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeReq
   const chosen = first.chosen;
   if (!chosen) {
     const { quoteFault, shortfall, attempted, unreadable } = first;
+    // The smallest larger stock size that quotes right now, where this vault may trade (free dry quotes).
+    const probe = async (): Promise<number | undefined> => {
+      for (const usd of probeSizes(request.amountUsd, vault.policy.maxTradeUsd)) if ((await attempt(usd, false)).chosen) return usd;
+      return undefined;
+    };
+    // A stock order that was quoted and found nothing, where a larger size does quote confidentially, is a size
+    // question (solvers' minimums), even when only the confidential layer may be used: answer it with the size, not
+    // "no confidential liquidity". Only when no size quotes there is it a privacy answer.
+    const stockProbe = pre.class === "equity" && attempted && !quoteFault && !unreadable ? await probe() : undefined;
+    if (mode === "require" && stockProbe !== undefined) {
+      return { decision: { status: "blocked", code: "NO_LIQUIDITY", message: noLiquidityMessage(pre.ticker, request.amountUsd, stockProbe, vault.policy.maxTradeUsd), suggestedUsd: stockProbe }, shieldBypassed };
+    }
     if (mode === "require") {
       const why = unreadable
         ? "Norr could not read the vault's confidential balance."
@@ -279,17 +332,10 @@ export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeReq
     }
     if (shortfall && !attempted) return { decision: failed(`The vault does not hold enough for this trade: ${shortfall}. Check get_portfolio.`), shieldBypassed };
 
-    // No liquidity. For a stock, find the smallest larger size that quotes right now (free dry quotes).
+    // No liquidity. For a stock, say the smallest larger size that quotes right now (probed above).
     if (pre.class === "equity") {
-      const ceiling = vault.policy.maxTradeUsd;
-      let smallest: number | undefined;
-      for (const usd of probeSizes(request.amountUsd, ceiling)) {
-        if ((await attempt(usd, false)).chosen) {
-          smallest = usd;
-          break;
-        }
-      }
-      const d: Decision = { status: "blocked", code: "NO_LIQUIDITY", message: noLiquidityMessage(pre.ticker, request.amountUsd, smallest, ceiling), ...(smallest !== undefined ? { suggestedUsd: smallest } : {}) };
+      const smallest = stockProbe;
+      const d: Decision = { status: "blocked", code: "NO_LIQUIDITY", message: noLiquidityMessage(pre.ticker, request.amountUsd, smallest, vault.policy.maxTradeUsd), ...(smallest !== undefined ? { suggestedUsd: smallest } : {}) };
       return { decision: d, shieldBypassed };
     }
     const nl = noLiquidity();
@@ -313,15 +359,19 @@ export async function planTrade(deps: TradeDeps, vault: Vault, request: TradeReq
     return { decision: failed("The quote had no usable minimum output, so the swap was not sent."), shieldBypassed };
   }
 
-  // A sell that leaves a remainder too small to sell later gets a warning, not a block.
+  // The same rule against the issuer and layer the quote actually chose (the pre-check looked at the first layer that
+  // holds the stock; a fallback to the other layer changes what is held there). Refused, not warned: a warning let
+  // the trade run and left the remainder stuck.
   const warnings: string[] = [];
-  if (!buy && candidate.class === "equity" && candidate.priceUsd !== null) {
-    const held = layers[venue]?.[tokenIn];
-    if (held !== undefined) {
-      const remaining = unitsToNumber((BigInt(held) - BigInt(amountIn)).toString(), candidate.decimals) * candidate.priceUsd;
-      const w = dustWarning(remaining, unitsToNumber(held, candidate.decimals) * candidate.priceUsd, candidate.symbol);
-      if (w) warnings.push(w);
-    }
+  if (candidate.class === "equity" && candidate.priceUsd !== null) {
+    const heldUnits = layers[venue]?.[candidate.id];
+    const heldUsd = heldUnits !== undefined ? unitsToNumber(heldUnits, candidate.decimals) * candidate.priceUsd : undefined;
+    const b = buy
+      ? checkBoughtPosition({ ticker: candidate.ticker, amountUsd: request.amountUsd, heldUsd: heldUsd ?? 0, receivedUsd: unitsToNumber(quote.amountOut, candidate.decimals) * candidate.priceUsd })
+      : heldUsd !== undefined
+        ? checkPositionSize({ side: "sell", ticker: candidate.ticker, symbol: candidate.symbol, amountUsd: unitsToNumber(amountIn, candidate.decimals) * candidate.priceUsd, heldUsd, sellAll: sellAllRequested, maxTradeUsd: vault.policy.maxTradeUsd })
+        : null;
+    if (b) return { decision: minSellDecision(b), shieldBypassed };
   }
 
   return {

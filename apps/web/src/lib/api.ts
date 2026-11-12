@@ -26,7 +26,9 @@ export interface VaultSummary {
   paused: boolean;
   state: { spentTodayUsd: number; realizedLossTodayUsd: number; lastTradeAt: string | null };
 }
-export interface Holding { assetId?: string; symbol: string; class: "crypto" | "equity"; amount: number; valueUsd: number; layer?: "public" | "confidential" }
+export interface Holding { assetId?: string; symbol: string; class: "crypto" | "equity"; amount: number; valueUsd: number; layer?: "public" | "confidential"; ticker?: string; minSellUsd?: number; belowMinSell?: boolean }
+/** Top up and sell all, for a stock position too small to sell: each step is an ordinary trade decision. */
+export interface ExitResult { status: "done" | "waiting" | "stopped"; steps: { step: "top_up" | "sell_all"; usd: number; decision: Decision }[]; message: string }
 export interface Portfolio { holdings: Holding[]; totalUsd: number; byClass: { crypto: number; equity: number } }
 export interface ActivityItem { id: string; executed: { usd: number; realizedUsd: number | null } | null; at: string; side: "buy" | "sell"; asset: string; amountUsd: number; sealedReason: SealedReason | null; decision: Decision; note: string | null; pending: boolean }
 /** What a withdrawal would do, from the dry run. The destination is always the vault's owner. */
@@ -182,6 +184,7 @@ export function createApi(o: ApiOptions) {
     createVault: (b: { name?: string; acceptTerms: string; nonUsConfirmed?: boolean }) => call<SetupVault>("/owner/v1/vaults", { body: b }),
     shield: (id: string) => call<{ status: "done" | "pending_approval"; amountUsdc: number; requestId?: string; message?: string }>(`/owner/v1/vaults/${encodeURIComponent(id)}/shield`, { body: {} }),
     withdraw: (id: string, b: { asset?: string; amount?: string; max?: boolean; dryRun?: boolean }) => call<WithdrawResult>(`/owner/v1/vaults/${encodeURIComponent(id)}/withdraw`, { body: b }),
+    exitPosition: (id: string, asset: string) => call<ExitResult>(`/owner/v1/vaults/${encodeURIComponent(id)}/exit`, { body: { asset } }),
     renameVault: (id: string, name: string) => call<{ id: string; name: string }>(`/owner/v1/vaults/${encodeURIComponent(id)}/name`, { method: "PUT", body: { name } }),
     setupVault: (id: string) => call<SetupVault>(`/owner/v1/vaults/${encodeURIComponent(id)}/setup`),
     prepareCustody: (id: string, autonomous: boolean) => call<PreparedPolicy>(`/owner/v1/vaults/${encodeURIComponent(id)}/custody-policy`, { body: { autonomous, ...(autonomous ? { confirmAutonomous: true } : {}) } }),

@@ -155,14 +155,14 @@ describe("scenarios", () => {
 });
 
 describe("the real stack, with a scripted model standing in for the real one", () => {
-  it("connects over MCP with the agent's token, sees the ten Norr tools, and a scripted agent passes the buy and over-limit scenarios", async () => {
+  it("connects over MCP with the agent's token, sees the eleven Norr tools, and a scripted agent passes the buy and over-limit scenarios", async () => {
     const m = createMockEnclave();
     const enclave = await listen(m.app);
     const http = createHttpServer({ apiUrl: enclave.url });
     await new Promise<void>((r) => http.listen(0, "127.0.0.1", r));
     const conn = await connectNorr({ url: `http://127.0.0.1:${(http.address() as AddressInfo).port}/mcp`, token: m.agentToken });
     try {
-      expect(conn.tools.map((t) => t.name).sort()).toEqual(["about_norr", "check_asset", "get_activity", "get_market_data", "get_pnl", "get_policy", "get_portfolio", "get_quote", "list_assets", "trade"]);
+      expect(conn.tools.map((t) => t.name).sort()).toEqual(["about_norr", "check_asset", "exit_position", "get_activity", "get_market_data", "get_pnl", "get_policy", "get_portfolio", "get_quote", "list_assets", "trade"]);
       const outcomes = (): Outcome[] => m.deps.ledger.list(m.vaultId).map((e) => ({ side: e.request.side, asset: e.request.asset, amountUsd: e.request.amountUsd, status: e.decision.status, ...(e.decision.status === "blocked" ? { code: e.decision.code } : {}) }));
 
       const buy = SCENARIOS.find((s) => s.id === "buy-nvda")!;

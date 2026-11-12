@@ -8,10 +8,12 @@ import { vaultHref } from "../lib/route";
  * Two steps: a dry run that moves nothing and states what becomes public, then the request, which waits for the owner's
  * approval in the Approvals tab, where the browser checks the provider's hash and operation.
  */
-export function WithdrawPanel({ api, vaultId, owner, holdings, onRequested }: { api: Api; vaultId: string; owner: string; holdings: Holding[]; onRequested?: () => void }) {
-  const [assetId, setAssetId] = useState(holdings[0]?.assetId ?? "");
+export function WithdrawPanel({ api, vaultId, owner, holdings, initialAsset, onRequested }: { api: Api; vaultId: string; owner: string; holdings: Holding[]; initialAsset?: string; onRequested?: () => void }) {
+  // Opened from "Withdraw to my wallet" on a position too small to sell: that token, all of it.
+  const preset = initialAsset !== undefined && holdings.some((h) => h.assetId === initialAsset) ? initialAsset : undefined;
+  const [assetId, setAssetId] = useState(preset ?? holdings[0]?.assetId ?? "");
   const [amount, setAmount] = useState("");
-  const [max, setMax] = useState(false);
+  const [max, setMax] = useState(preset !== undefined);
   const [plan, setPlan] = useState<WithdrawPlan | null>(null);
   const [busy, setBusy] = useState<"check" | "send" | null>(null);
   const [error, setError] = useState<string | null>(null);

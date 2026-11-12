@@ -107,10 +107,33 @@ export function createNorrServer(client: EnclaveClient): McpServer {
         "Norr checks your rules, the asset's risk and a daily spending cap first, and verifies the result afterwards. Trades run in the vault's confidential layer whenever it holds the funds there (the answer's 'venue' says which layer was used), so the trade stays off the public chain. You cannot choose where funds go: they always stay in your vault. " +
         "Norr's rules are authoritative: if you are unsure whether a trade is allowed, ask Norr instead of guessing or refusing in advance. Request it (or use get_quote) and read the answer, which names the rule and says what would fit. " +
         "'reason' is your private note to the vault owner explaining why you are making this trade; it is never shown to anyone else.",
-      inputSchema: { side, asset, chain, contract, amountUsd, reason: z.string().max(2000).optional().describe("Why you want this trade. Private to the vault owner.") },
+      inputSchema: {
+        side,
+        asset,
+        chain,
+        contract,
+        amountUsd,
+        reason: z.string().max(2000).optional().describe("Why you want this trade. Private to the vault owner."),
+        sellAll: z.boolean().optional().describe("Sell only: sell the whole position, leaving nothing behind. amountUsd is then a ceiling (a little above what the position is worth); a position worth more is refused."),
+      },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    (p) => (target(p) ? run(() => client.post("/v1/trade", { side: p.side, asset: target(p), amountUsd: p.amountUsd, reason: p.reason ?? "" })) : Promise.resolve(fail(NEED_ASSET))),
+    (p) => (target(p) ? run(() => client.post("/v1/trade", { side: p.side, asset: target(p), amountUsd: p.amountUsd, reason: p.reason ?? "", ...(p.sellAll ? { sellAll: true } : {}) })) : Promise.resolve(fail(NEED_ASSET))),
+  );
+
+  server.registerTool(
+    "exit_position",
+    {
+      title: "Top up and sell all",
+      description:
+        "The way out of a tokenized-stock position too small to sell (NEAR Intents solvers do not quote stock orders below about $5.10, or $26 for less liquid tickers, so after a price drop a position can get stuck; get_portfolio marks it belowMinSell). " +
+        "Buys just enough of the same token to pass the minimum, then sells the whole position. Both are ordinary trades: the vault's rules and the owner's approvals apply to each. " +
+        "The answer's status is done, waiting (a step waits for the owner's approval or the cooldown: call this again once it has run) or stopped (the message says why). " +
+        "The other way out, withdrawing the tokens to the owner's wallet, only the owner can do in the dashboard; offer it to them.",
+      inputSchema: { asset: z.string().min(1).max(200).describe("The stock's ticker (NVDA) or the asset id from get_portfolio."), reason: z.string().max(2000).optional().describe("Why. Private to the vault owner.") },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    },
+    (p) => run(() => client.post("/v1/exit", { asset: p.asset, reason: p.reason ?? "" })),
   );
 
   server.registerTool(

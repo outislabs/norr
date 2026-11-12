@@ -42,6 +42,8 @@ export const TradeRequest = z.object({
   asset: z.string().min(1), // symbol or asset id
   amountUsd: z.number().positive(),
   reason: z.string(), // agent's stated reasoning (kept private)
+  /** Sell the vault's whole balance of the asset; amountUsd is then a ceiling (a holding worth more is refused). */
+  sellAll: z.boolean().optional(),
 });
 export type TradeRequest = z.infer<typeof TradeRequest>;
 
@@ -51,6 +53,8 @@ export const TradeInput = z.object({
   asset: z.string().min(1).max(200),
   amountUsd: z.number().positive().max(1_000_000),
   reason: z.string().max(2000).default(""),
+  /** Sell the whole position (no remainder left behind); amountUsd is then the most it may be worth. */
+  sellAll: z.boolean().optional(),
 });
 export type TradeInput = z.infer<typeof TradeInput>;
 
@@ -72,8 +76,23 @@ export const BlockCode = z.enum([
   "PRICING_UNAVAILABLE",
   "VAULT_CAP",
   "AMBIGUOUS_ASSET",
+  "BELOW_MIN_SELL",
 ]);
 export type BlockCode = z.infer<typeof BlockCode>;
+
+/**
+ * A way out offered with BELOW_MIN_SELL: sell the whole position, top it up and then sell all of it, or (owner only)
+ * withdraw the tokens to the owner's own wallet.
+ */
+export const ExitOption = z.object({
+  kind: z.enum(["sell_all", "top_up_and_sell_all", "withdraw"]),
+  /** sell_all: what the position is worth; top_up_and_sell_all: the buy needed first. */
+  usd: z.number().optional(),
+  /** Only the vault's owner can do it (the agent has no withdraw tool). */
+  ownerOnly: z.boolean().optional(),
+  how: z.string(),
+});
+export type ExitOption = z.infer<typeof ExitOption>;
 
 export const Decision = z.discriminatedUnion("status", [
   z.object({
@@ -93,6 +112,8 @@ export const Decision = z.discriminatedUnion("status", [
     message: z.string(),
     /** For NO_LIQUIDITY on a stock: the smallest USD size that quotes right now, if one was found. */
     suggestedUsd: z.number().optional(),
+    /** For BELOW_MIN_SELL: the ways out of (or around) a position too small to sell. */
+    exits: z.array(ExitOption).optional(),
   }),
   z.object({
     status: z.literal("pending_approval"),

@@ -30,7 +30,7 @@ describe("tool surface", () => {
   it("exposes exactly the ten Norr tools, each with a description", async () => {
     const { mcp } = await connect();
     const { tools } = await mcp.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["about_norr", "check_asset", "get_activity", "get_market_data", "get_pnl", "get_policy", "get_portfolio", "get_quote", "list_assets", "trade"]);
+    expect(tools.map((t) => t.name).sort()).toEqual(["about_norr", "check_asset", "exit_position", "get_activity", "get_market_data", "get_pnl", "get_policy", "get_portfolio", "get_quote", "list_assets", "trade"]);
     for (const t of tools) expect(t.description!.length).toBeGreaterThan(40);
   });
 

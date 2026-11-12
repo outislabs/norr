@@ -5,7 +5,7 @@ import { setFlag } from "../lib/flags";
 import { mcpSnippets, type Client } from "../lib/mcp";
 import { CopyBlock } from "./CopyBlock";
 
-const TOOLS = ["list_assets", "check_asset", "get_market_data", "get_quote", "trade", "get_portfolio", "get_pnl", "get_policy", "get_activity"];
+const TOOLS = ["list_assets", "check_asset", "get_market_data", "get_quote", "trade", "exit_position", "get_portfolio", "get_pnl", "get_policy", "get_activity"];
 
 /** Create (or revoke) the token the agent uses, and hand the owner a ready-to-paste connection for whatever agent they run. */
 export function ConnectAgent({ api, vaultId, mcpUrl, apiUrl, onIssued }: { api: Api; vaultId: string; mcpUrl: string; apiUrl?: string; onIssued?: () => void }) {

@@ -182,7 +182,7 @@ scripts/           live trade runner, verify-attestation, research probes (live 
 - **Funding from other chains is quoted, not yet proven.** USDC on NEAR into the confidential balance is proven on mainnet (2026-10-31); routes from Ethereum, Base, Arbitrum, Optimism, Polygon, BNB Chain and Solana were quoted live on 2026-11-03 but not run with real funds.
 - **Owning a vault needs a NEAR account.** EVM and Solana users can fund a vault from their own chain (the Fund tab), but cannot sign in or approve swaps yet: NEAR's Ethereum-wallets module does not implement `signMessage`/NEP-413 (`docs/FINDINGS.md`, "Aurora widget"). The sign-in page points them to HOT Wallet, which gives a NEAR account alongside EVM and Solana ones.
 - **Limit orders are out of v1**: two test limit orders never filled.
-- **Small orders**: the stock minimum is a quote-time floor that moves (about $5 on liquid tickers at US market open, higher at other times and for other tickers).
+- **Small orders**: the stock minimum is a quote-time floor that moves (about $5 on liquid tickers at US market open, higher at other times and for other tickers). Norr never leaves a stock position below that minimum: it refuses buys and partial sells that would (`BELOW_MIN_SELL`, with the real reason and "sell all" instead), and a position that falls below it later (a price drop) gets two ways out: **top up and sell all** (`exit_position`, or the dashboard; ordinary trades within the vault's rules and approvals) and **withdraw to the owner's wallet** (owner only, the existing withdraw flow). The minimums are observed values, so a floor that moves above them can still strand a position until it falls back.
 - **Stock eligibility**: per third-party sources (NEAR Intents' docs are silent), Ondo's tokens are for non-US persons only. The owner confirms non-US status before equities are enabled, and the dashboard shows a disclaimer. This is not legal advice and has not been reviewed by counsel.
 - **Scam Shield is a set of heuristics**, not a guarantee. It fails closed on tokens it cannot score (some legitimate tokens are blocked). GoPlus does not cover NEAR-native tokens, so for those only market data is scored, and the reasons say so. GoPlus is used without a key; it documents no free-tier rate limits or terms we could find, so lookups are cached for 10 minutes.
 - **Not audited**, tiny balances, and the live deployment runs only when needed.
@@ -197,7 +197,7 @@ Planned, not built:
 
 Researched, not built (details in `docs/`):
 - **Owning a vault from an EVM or Solana wallet**: needs an owner identity that is not a NEAR account and a way to approve custody requests; not possible with NEAR's Ethereum-wallets module as it stands.
-- **Norr as a NEAR Intents solver** for orders under $5 (`docs/SOLVER-FEASIBILITY.md`); gated by KYC/KYB of an operating entity.
+- **Norr as a NEAR Intents solver** for orders under $5 (`docs/SOLVER-FEASIBILITY.md`); gated by KYC/KYB of an operating entity. Its first job would be **buying back small stock positions of any size**, so a position below the minimum could always be sold without a top-up or a withdrawal.
 - **Order pooling** for $1 to $5 stock orders (`docs/ROADMAP-POOLING.md`); changes the custody model and needs legal review.
 - Smaller minimums if NEAR Intents or Ondo confirm the floor is configurable (`docs/EQUITY-MINIMUMS.md`).
 

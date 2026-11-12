@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { NVDA_ON, NVDA_X, RUG, USDC_FAKE, USDC_NEAR, policy, registry, request, riskProvider, state } from "./fixtures";
 import { ambiguousAsset, isBlock, noLiquidity, preTradeChecks, pricingUnavailable, privacyUnavailable, vaultCapReached, type PreTradeInput } from "./pipeline";
 import { checkPriceSanity } from "./risk";
+import { checkPositionSize } from "./equity-minimums";
 
 const base = (over: Partial<PreTradeInput> = {}): PreTradeInput => ({
   request: request(), policy: policy(), state: state(), registry: registry(), risk: riskProvider(),
@@ -107,6 +108,7 @@ const cases: [string, () => Promise<unknown>][] = [
   ["SHIELD_INCIDENT", () => preTradeChecks(base({ shield: null }))],
   ["PRICING_UNAVAILABLE", async () => pricingUnavailable()],
   ["VAULT_CAP", async () => vaultCapReached(120, 100)],
+  ["BELOW_MIN_SELL", async () => checkPositionSize({ side: "sell", ticker: "NVDA", symbol: "NVDAon", amountUsd: 3, heldUsd: 3.2, sellAll: true })],
   ["AMBIGUOUS_ASSET", async () => ambiguousAsset("kat", [{ chain: "near", contractAddress: "kat.token0.near", id: "a" }, { chain: "sol", contractAddress: "6UtY9iTZ", id: "b" }])],
 ];
 

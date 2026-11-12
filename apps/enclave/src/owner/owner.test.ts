@@ -624,6 +624,16 @@ describe("in-dashboard approvals (mock stand-in for the custody provider)", () =
     expect(await m.rails.custody.confidentialHoldings()).toEqual(before);
   });
 
+  it("top up and sell all from the dashboard: the owner's own vault only, and the top-up waits for the owner's approval like any swap", async () => {
+    const { req, token, m } = await bootWithApprovals();
+    const nvda = m.deps.registry.resolve("NVDA")!.candidates[0]!;
+    expect((await req("/owner/v1/vaults/demo/exit", { body: { asset: "NVDA" } })).status).toBe(401); // signed in only
+    expect((await req("/owner/v1/vaults/someone-else/exit", { token, body: { asset: "NVDA" } })).status).toBe(404);
+    expect((await req("/owner/v1/vaults/demo/exit", { token, body: {} })).status).toBe(400);
+    // Nothing held yet.
+    expect(await (await req("/owner/v1/vaults/demo/exit", { token, body: { asset: nvda.id } })).json()).toMatchObject({ status: "stopped", steps: [] });
+  });
+
   it("withdraw: the destination is the owner, a dry run moves nothing, and the owner's signed approval releases it", async () => {
     const { req, token, vote, m } = await bootWithApprovals();
     const usdc = m.deps.quoteAsset.id;

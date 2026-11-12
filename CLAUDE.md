@@ -156,7 +156,8 @@ type BlockCode =
   | "PAUSED" | "OVER_TRADE_LIMIT" | "DAILY_LOSS_CAP" | "COOLDOWN"
   | "ASSET_NOT_ALLOWED" | "EQUITY_LIMIT" | "SCAM_RISK" | "INELIGIBLE"
   | "PRICE_SANITY" | "UNKNOWN_ASSET" | "NO_LIQUIDITY" | "SHIELD_INCIDENT"
-  | "DAILY_SPEND_CAP" | "PRIVACY_UNAVAILABLE" | "PRICING_UNAVAILABLE";
+  | "DAILY_SPEND_CAP" | "PRIVACY_UNAVAILABLE" | "PRICING_UNAVAILABLE"
+  | "BELOW_MIN_SELL";             // a stock trade would leave (or tries to sell) a position below its minimum sell size; carries `exits`
 ```
 
 Tokenized markets trade 24/7, so there is no market-closed code. A quote failing with "No liquidity" maps to `NO_LIQUIDITY`.
@@ -204,6 +205,7 @@ The tools are thin wrappers over the enclave API. Their descriptions are written
 | `check_asset` | Risk or eligibility verdict for an asset, with reasons |
 | `get_quote` | Dry-run price for a trade (no funds move) |
 | `trade` | Request a trade; returns executed / blocked (with reason) / failed |
+| `exit_position` | Top up and sell all: the way out of a stock position below its minimum sell size (ordinary trades, within rules and approvals) |
 | `get_portfolio` | The vault's holdings and value, split by asset class |
 | `get_policy` | The rules the agent must stay within (so it can plan) |
 | `get_activity` | The vault's recent decisions |

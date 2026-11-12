@@ -1,4 +1,4 @@
-import { unitsToNumber, type Registry } from "@norr/core";
+import { minSellUsd, NEGLIGIBLE_USD, unitsToNumber, type Registry } from "@norr/core";
 
 export type Layer = "public" | "confidential";
 
@@ -10,6 +10,12 @@ export interface Holding {
   valueUsd: number;
   /** Which layer holds it. */
   layer?: Layer;
+  /** Stocks: the smallest size solvers quote, so the smallest position that can be sold. */
+  minSellUsd?: number;
+  /** Stocks: worth less than minSellUsd, so it cannot be sold as it is (top up and sell all, or withdraw). */
+  belowMinSell?: boolean;
+  /** Stocks: the ticker, for exit_position. */
+  ticker?: string;
 }
 
 export interface Portfolio {
@@ -31,7 +37,10 @@ export function valuePortfolio(units: Record<string, string>, registry: Registry
     const e = registry.byId(assetId);
     if (!e || e.priceUsd === null) continue;
     const amount = unitsToNumber(raw, e.decimals);
-    holdings.push({ assetId, symbol: e.symbol, class: e.class, amount, valueUsd: amount * (pegged.includes(assetId) ? CASH_USD : e.priceUsd), ...(layer ? { layer } : {}) });
+    const valueUsd = amount * (pegged.includes(assetId) ? CASH_USD : e.priceUsd);
+    const min = e.class === "equity" ? minSellUsd(e.ticker) : undefined;
+    const sizing = min !== undefined ? { ticker: e.ticker, minSellUsd: min, ...(valueUsd >= NEGLIGIBLE_USD && valueUsd < min ? { belowMinSell: true } : {}) } : {};
+    holdings.push({ assetId, symbol: e.symbol, class: e.class, amount, valueUsd, ...(layer ? { layer } : {}), ...sizing });
   }
   holdings.sort((a, b) => b.valueUsd - a.valueUsd);
   const byClass = { crypto: 0, equity: 0 };

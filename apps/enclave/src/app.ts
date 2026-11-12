@@ -1,4 +1,5 @@
-import { EQUITY_DISCLAIMER, equityMinimum, MINIMUMS_NOTE, sumToday, unitsToNumber, type IncidentFeedStatus } from "@norr/core";
+import { dustExits, EQUITY_DISCLAIMER, equityMinimum, MINIMUMS_NOTE, sumToday, unitsToNumber, type IncidentFeedStatus } from "@norr/core";
+import { exitPosition } from "./exit";
 import { TradeInput, type Decision, type TradeRequest } from "@norr/shared";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -216,10 +217,21 @@ export function createApp({ deps, tokens, mock, adminToken, owner, build, seal, 
         public: deps.balances ? await deps.balances.holdings(vault.walletAccount) : undefined,
         confidential: await vault.custody.confidentialHoldings(),
       };
-      return c.json(valueLayers(layers, deps.registry, [deps.quoteAsset.id]));
+      const p = valueLayers(layers, deps.registry, [deps.quoteAsset.id]);
+      // A stock position too small to sell says so, with the ways out, so the agent can offer them before trying.
+      const holdings = p.holdings.map((h) => (h.belowMinSell && h.ticker && h.minSellUsd ? { ...h, exits: dustExits({ ticker: h.ticker, symbol: h.symbol, heldUsd: h.valueUsd, minUsd: h.minSellUsd, maxTradeUsd: vault.policy.maxTradeUsd }) } : h));
+      return c.json({ ...p, holdings });
     } catch {
       return c.json({ error: "balances unavailable" }, 503);
     }
+  });
+
+  // Top up and sell all: the way out of a stock position too small to sell (exit.ts). Ordinary trades, within the rules.
+  app.post("/v1/exit", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { asset?: unknown; reason?: unknown } | null;
+    if (typeof body?.asset !== "string" || !body.asset.trim() || body.asset.length > 200) return c.json({ error: "invalid request" }, 400);
+    const reason = typeof body.reason === "string" ? body.reason.slice(0, 2000) : "";
+    return c.json(await exitPosition(deps, c.get("vaultId"), body.asset.trim(), reason));
   });
 
   app.get("/v1/policy", (c) => {
