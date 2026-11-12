@@ -65,17 +65,3 @@ body { background: var(--color-bg); color: var(--color-fg); font-family: var(--f
   .menu-sheet a:not([aria-current="page"]), .menu-sheet button { @apply text-mute; }
   .menu-sheet > nav > :last-child { @apply border-b-0; }
 }
-
-/* The NEAR wallet picker (modal-ui), in Norr's black and white. Its own variables are the supported hooks. */
-#near-wallet-selector-modal .nws-modal-wrapper {
-  font-family: var(--font-sans);
-  --wallet-selector-backdrop-bg: rgb(0 0 0 / 0.7);
-  --wallet-selector-content-bg: #000000;
-  --wallet-selector-heading-color: #ffffff;
-  --wallet-selector-text-color: #a1a1a1;
-  --wallet-selector-selected-wallet-bg: #1f1f1f;
-  --wallet-selector-wallet-option-bg-hover: #0f0f0f;
-  --wallet-selector-home-button-bg: #1f1f1f;
-  --wallet-selector-mobile-bottom-section: #0a0a0a;
-  --wallet-selector-close-button-fill-icon-color: #a1a1a1;
-}

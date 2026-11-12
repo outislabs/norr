@@ -225,7 +225,7 @@ Organizers confirmed pre-window work is permitted. The hackathon rules count cod
 
 - **Credits:** Built by Kelvin Alkorogie, with Claude Code as a coding assistant.
 - **Agent model:** the reference agent runs its model on NEAR AI Cloud.
-- **Libraries:** TypeScript, Node.js, pnpm, vitest, zod, Hono (`@hono/node-server`), the MCP TypeScript SDK (`@modelcontextprotocol/sdk`), `@phala/dstack-sdk`, `@phala/dcap-qvl-web`, `near-api-js`, NEAR Wallet Selector (core, modal UI, HOT, Meteor, MyNearWallet), React, Vite, Tailwind CSS, `@noble/curves` and `@noble/hashes`, `marked`, `qrcode-generator`, Geist fonts (`@fontsource`), and Phala's `dstack-ingress` container.
+- **Libraries:** TypeScript, Node.js, pnpm, vitest, zod, Hono (`@hono/node-server`), the MCP TypeScript SDK (`@modelcontextprotocol/sdk`), `@phala/dstack-sdk`, `@phala/dcap-qvl-web`, `@hot-labs/near-connect`, NEAR Wallet Selector (core, modal UI, HOT, Meteor, MyNearWallet), React, Vite, Tailwind CSS, `@noble/curves` and `@noble/hashes`, `marked`, `qrcode-generator`, Geist fonts (`@fontsource`), and Phala's `dstack-ingress` container.
 - **Services:** NEAR Intents (1Click API, Confidential Intents, Shield feed), OutLayer Agent Custody, Phala Cloud (dstack, TDX), NEAR AI Cloud, DexScreener (read-only market data), GoPlus Security (read-only token contract checks), Cloudflare Pages, GitHub Actions and GHCR.
 - **Own earlier code:** none; everything is in this repository's history.
 

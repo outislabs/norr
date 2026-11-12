@@ -9,11 +9,32 @@ import { ApiError } from "./api";
  * These helpers retry such failures, after the page is visible again, and only where a retry cannot double anything.
  */
 
+const NETWORK_TEXT = /load failed|failed to fetch|networkerror|network connection was lost|network request failed|cancelled|internet connection appears to be offline/i;
+
 /** A request that never got an HTTP answer (dropped, killed while suspended), as opposed to an answer saying no. */
 export function isNetworkError(e: unknown): boolean {
   if (e instanceof ApiError) return e.status === 0;
   if (!(e instanceof TypeError)) return false;
-  return /load failed|failed to fetch|networkerror|network connection was lost|network request failed|cancelled|internet connection appears to be offline/i.test(e.message);
+  return NETWORK_TEXT.test(e.message);
+}
+
+/**
+ * The same, for a failure that crossed a wallet's sandbox. NEAR Connect runs each wallet in an iframe and hands its errors
+ * back through postMessage, where a dropped fetch can arrive as a plain Error, an object with a message, or a string
+ * instead of a TypeError. Only the browser's own network phrases count, so a wallet refusing ("User rejected") never does.
+ */
+export function isWalletNetworkError(e: unknown): boolean {
+  if (isNetworkError(e)) return true;
+  if (e instanceof ApiError) return false;
+  const text = typeof e === "string" ? e : e && typeof e === "object" && "message" in e ? String((e as { message: unknown }).message) : "";
+  return NETWORK_TEXT.test(text);
+}
+
+/** The text of whatever a wallet rejected with. */
+export function failureText(e: unknown): string {
+  if (typeof e === "string") return e;
+  if (e && typeof e === "object" && "message" in e) return String((e as { message: unknown }).message);
+  return "the wallet did not say why";
 }
 
 /** Resolves when the page is visible (at once if it already is): iOS does not run a suspended page's requests. */
@@ -61,7 +82,7 @@ export async function withRetry<T>(fn: () => Promise<T>, o: RetryOptions = {}): 
 
 /** The sign-in steps, named the way the error message names them. */
 export const SIGN_IN_STEPS = {
-  connect: "connecting to HOT Wallet (its relay, h4n.app)",
+  connect: "connecting to your wallet",
   challenge: "getting a sign-in challenge from Norr (api.norr.finance)",
   sign: "signing the challenge in your wallet",
   verify: "checking the signature with Norr (api.norr.finance)",
@@ -82,11 +103,11 @@ export class SignInError extends Error {
 
 /** The plain-language reason for a failed step. */
 export function describeFailure(e: unknown, retried: boolean): string {
-  if (isNetworkError(e)) {
-    const raw = e instanceof ApiError ? "no answer" : (e as Error).message;
+  if (isWalletNetworkError(e)) {
+    const raw = e instanceof ApiError ? "no answer" : failureText(e);
     return `the connection dropped (${raw})${retried ? " and retrying did not help" : ""}. Check your connection and try again.`;
   }
-  return e instanceof Error ? e.message : String(e);
+  return e instanceof Error ? e.message : failureText(e);
 }
 
 /**
