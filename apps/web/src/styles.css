@@ -26,7 +26,14 @@
 }
 
 :root { color-scheme: dark; }
-html { -webkit-text-size-adjust: 100%; background: var(--color-bg); }
+/* No text inflation when an iPhone rotates. Pinch-zoom stays on: the viewport meta never sets maximum-scale or user-scalable. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; background: var(--color-bg); }
+/* iPhone Safari zooms the page into any focused field under 16px. On touch screens every text field is 16px (outside the
+   Tailwind layers, so it outranks .field's 15px and any text size a field is given); with a mouse they keep the 15px design.
+   .field's fixed 44px minimum height keeps the layout unchanged. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea { font-size: 16px; }
+}
 body { background: var(--color-bg); color: var(--color-fg); font-family: var(--font-sans); font-size: 16px; line-height: 1.55; margin: 0; -webkit-font-smoothing: antialiased; }
 ::selection { background: var(--color-fg); color: var(--color-bg); }
 :focus-visible { outline: 2px solid var(--color-fg); outline-offset: 3px; border-radius: 4px; }
