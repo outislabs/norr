@@ -4,27 +4,77 @@ import { verifyNep413 } from "./nep413";
 /** Does this public key belong to this NEAR account? (Live: an access-key lookup. Mock: always true.) */
 export interface AccessKeyChecker {
   hasKey(accountId: string, publicKey: string): Promise<boolean>;
+  /**
+   * The same question with a third answer: "unavailable" when NEAR could not be asked (a timeout, a rate limit, a node
+   * error). Sign-in must not report that as "your key is not on your account".
+   */
+  keyStatus?(accountId: string, publicKey: string): Promise<"yes" | "no" | "unavailable">;
 }
 
-/** Live check against a NEAR RPC node (`view_access_key`). Any error counts as "no". */
+/** NEAR RPC nodes asked in turn, until one gives a definite answer. */
+export const ACCESS_KEY_RPCS = ["https://rpc.mainnet.fastnear.com", "https://free.rpc.fastnear.com"];
+
+/**
+ * Live check against NEAR RPC (`view_access_key`). A definite "no" is the node saying the key or the account does not
+ * exist; anything else (no answer, HTTP 429/5xx, a node error) is "unavailable", and the next node is asked.
+ */
 export class RpcAccessKeyChecker implements AccessKeyChecker {
+  private readonly rpcUrls: string[];
   constructor(
-    private readonly rpcUrl = "https://rpc.mainnet.fastnear.com",
+    rpcUrl: string | string[] = ACCESS_KEY_RPCS,
     private readonly f: (url: string, init?: RequestInit) => Promise<Response> = (u, i) => fetch(u, i),
-  ) {}
+  ) {
+    this.rpcUrls = Array.isArray(rpcUrl) ? rpcUrl : [rpcUrl];
+  }
 
   async hasKey(accountId: string, publicKey: string): Promise<boolean> {
-    try {
-      const res = await this.f(this.rpcUrl, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "query", params: { request_type: "view_access_key", finality: "final", account_id: accountId, public_key: publicKey } }),
-      });
-      const body = (await res.json()) as { result?: { permission?: unknown }; error?: unknown };
-      return Boolean(body.result?.permission);
-    } catch {
-      return false;
+    return (await this.keyStatus(accountId, publicKey)) === "yes";
+  }
+
+  async keyStatus(accountId: string, publicKey: string): Promise<"yes" | "no" | "unavailable"> {
+    for (const url of this.rpcUrls) {
+      try {
+        const res = await this.f(url, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "query", params: { request_type: "view_access_key", finality: "final", account_id: accountId, public_key: publicKey } }),
+          signal: AbortSignal.timeout(6000),
+        });
+        if (!res.ok) continue;
+        const body = (await res.json()) as { result?: { permission?: unknown; error?: unknown }; error?: { cause?: { name?: string }; name?: string } };
+        if (body.result?.permission) return "yes";
+        const cause = body.error?.cause?.name ?? "";
+        // A definite answer: this key, or this account, is not on chain.
+        if (/UNKNOWN_ACCESS_KEY|UNKNOWN_ACCOUNT|INVALID_ACCOUNT/.test(cause)) return "no";
+        // Older nodes answer a missing key inside `result` as an error string.
+        if (typeof body.result?.error === "string" && /does not exist/i.test(body.result.error)) return "no";
+      } catch {
+        /* no answer from this node: ask the next */
+      }
     }
+    return "unavailable";
+  }
+}
+
+/** Why a sign-in was refused, by the check that refused it. */
+export type LoginFailure = "challenge_unknown" | "challenge_expired" | "origin_mismatch" | "bad_signature" | "key_not_on_account" | "key_check_unavailable";
+
+/** The plain sentence for each failure: which check failed, and what to do. Nothing in it is secret. */
+export function loginFailureText(code: LoginFailure, accountId: string, publicKey: string, ttlMinutes: number): string {
+  const key = publicKey.length > 24 ? `${publicKey.slice(0, 16)}…` : publicKey;
+  switch (code) {
+    case "challenge_unknown":
+      return "Norr does not know this sign-in challenge: it was already used, or the service restarted after issuing it. Sign in again (one more signature).";
+    case "challenge_expired":
+      return `The sign-in challenge expired (each one lasts ${ttlMinutes} minutes). Sign in again (one more signature).`;
+    case "origin_mismatch":
+      return "This sign-in was started on a different site than the one finishing it. Open app.norr.finance directly and sign in there.";
+    case "bad_signature":
+      return "The signature does not match Norr's challenge for the key your wallet reported: the wallet signed something else. Sign in again; if it keeps happening, try another wallet and tell us which one failed.";
+    case "key_not_on_account":
+      return `The key that signed (${key}) is not an access key of ${accountId} on NEAR. Check that your wallet is signing as ${accountId}.`;
+    case "key_check_unavailable":
+      return "Norr could not reach NEAR to check that your key belongs to your account (the NEAR RPC did not answer). Nothing is wrong with your signature: try again in a moment.";
   }
 }
 
@@ -35,6 +85,14 @@ export interface Challenge {
   expiresAt: number;
   /** The dashboard origin this challenge was issued to and is signed for. Absent when the service is not configured with origins. */
   origin?: string;
+}
+
+export interface LoginRequest {
+  accountId: string;
+  publicKey: string;
+  signature: string;
+  nonce: string;
+  callbackUrl?: string;
 }
 
 export interface Session {
@@ -69,7 +127,8 @@ export class OwnerAuth {
   constructor(private readonly o: OwnerAuthOptions) {
     this.now = o.now ?? Date.now;
     this.recipient = o.recipient ?? "norr";
-    this.challengeTtl = o.challengeTtlMs ?? 5 * 60_000;
+    // Ten minutes: on a phone, choosing a wallet, switching to its app and back can take a while. Still single-use and bound to the site.
+    this.challengeTtl = o.challengeTtlMs ?? 10 * 60_000;
     this.sessionTtl = o.sessionTtlMs ?? 12 * 3_600_000;
   }
 
@@ -88,20 +147,46 @@ export class OwnerAuth {
     return c;
   }
 
-  /** Returns a session token, or null for any failure (no detail is leaked). Challenges are single-use. */
-  async login(req: { accountId: string; publicKey: string; signature: string; nonce: string; callbackUrl?: string }, origin?: string): Promise<{ token: string; accountId: string; expiresAt: number } | null> {
+  /** Returns a session token, or null for any failure. Challenges are single-use. */
+  async login(req: LoginRequest, origin?: string): Promise<{ token: string; accountId: string; expiresAt: number } | null> {
+    const r = await this.attempt(req, origin);
+    return r.ok ? r.session : null;
+  }
+
+  /**
+   * Sign-in, saying which check refused it. A challenge is used up by any attempt the owner's side got wrong, so a
+   * signature cannot be tried twice; but when Norr itself could not finish the check (NEAR RPC unreachable), the
+   * challenge stays valid, so the same signature can be sent again without a new wallet prompt.
+   */
+  async attempt(req: LoginRequest, origin?: string): Promise<{ ok: true; session: { token: string; accountId: string; expiresAt: number } } | { ok: false; code: LoginFailure; message: string }> {
+    const fail = (code: LoginFailure) => ({ ok: false as const, code, message: loginFailureText(code, req.accountId, req.publicKey, Math.round(this.challengeTtl / 60_000)) });
     const c = this.challenges.get(req.nonce);
-    this.challenges.delete(req.nonce); // single-use even if the rest fails
-    if (!c || c.expiresAt < this.now()) return null;
-    if (c.origin !== undefined && c.origin !== origin) return null; // issued to one site, presented by another
+    if (!c) return fail("challenge_unknown");
+    if (c.expiresAt < this.now()) {
+      this.challenges.delete(req.nonce);
+      return fail("challenge_expired");
+    }
+    if (c.origin !== undefined && c.origin !== origin) {
+      this.challenges.delete(req.nonce);
+      return fail("origin_mismatch"); // issued to one site, presented by another
+    }
     const nonce = Buffer.from(c.nonce, "base64");
-    const valid = verifyNep413({ message: c.message, nonce, recipient: c.recipient, callbackUrl: req.callbackUrl }, req.publicKey, req.signature);
-    if (!valid) return null;
-    if (!(await this.o.keys.hasKey(req.accountId, req.publicKey))) return null;
+    // Some wallets include a callback URL in what they sign (NEP-413 allows it); the signature is checked with the one
+    // the wallet reported, and without one.
+    const payload = { message: c.message, nonce, recipient: c.recipient };
+    const valid = verifyNep413({ ...payload, callbackUrl: req.callbackUrl }, req.publicKey, req.signature) || (req.callbackUrl !== undefined && verifyNep413(payload, req.publicKey, req.signature));
+    if (!valid) {
+      this.challenges.delete(req.nonce);
+      return fail("bad_signature");
+    }
+    const status = this.o.keys.keyStatus ? await this.o.keys.keyStatus(req.accountId, req.publicKey) : (await this.o.keys.hasKey(req.accountId, req.publicKey)) ? "yes" : "no";
+    if (status === "unavailable") return fail("key_check_unavailable"); // Norr's side: the challenge stays usable
+    this.challenges.delete(req.nonce);
+    if (status === "no") return fail("key_not_on_account");
     const token = `norr_owner_${randomBytes(24).toString("base64url")}`;
     const expiresAt = this.now() + this.sessionTtl;
     this.sessions.set(sha256(token), { accountId: req.accountId, expiresAt });
-    return { token, accountId: req.accountId, expiresAt };
+    return { ok: true, session: { token, accountId: req.accountId, expiresAt } };
   }
 
   session(token: string): Session | null {

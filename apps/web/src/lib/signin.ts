@@ -1,6 +1,7 @@
 import type { Api, Challenge, DirectDeposit, PolicyStoreCall, SessionInfo } from "./api";
 import { hasRememberedWallet, loadKit, type Kit, type SignedMessage, type WalletHandle } from "./nearconnect";
 import { base64ToBytes, generateDemoKey, type DemoKey } from "./nep413";
+import { ApiError } from "./api";
 import { describeFailure, failureText, isWalletNetworkError, SignInError, watchCspViolations, withRetry, type RetryOptions, type SignInStep } from "./resilience";
 import { UNLOCK_MESSAGE, UNLOCK_NONCE, UNLOCK_RECIPIENT } from "./seal";
 import { normalizeSignature } from "./signature";
@@ -146,13 +147,18 @@ async function signInSteps(api: Api, o: { onNotice?: (message: string) => void; 
           throw e;
         }
       },
-      o.retry,
+      // Also when Norr could not reach NEAR to check the key: the challenge is still valid then, so the same signature
+      // is sent again without another wallet prompt.
+      { ...o.retry, retryable: (e) => isWalletNetworkError(e) || isKeyCheckUnavailable(e) },
     );
   } catch (e) {
     if (dropped && !isWalletNetworkError(e)) throw new SignInError("verify", "the connection dropped, and Norr had already used this sign-in challenge. Sign in again (one more signature).", e);
     throw new SignInError("verify", describeFailure(e, dropped), e);
   }
 }
+
+/** Norr's answer when it could not reach NEAR to look up the signing key (the challenge stays usable). */
+const isKeyCheckUnavailable = (e: unknown): boolean => e instanceof ApiError && e.status === 503 && (e.body as { code?: unknown } | null)?.code === "key_check_unavailable";
 
 /**
  * Sign the fixed unlock message, from which the key for the private reasoning is derived. In mock mode the
@@ -191,7 +197,31 @@ export async function sendPolicyStore(api: Api, call: PolicyStoreCall, owner: st
   if (!accounts.some((a) => a.accountId === owner)) {
     throw new Error(`Your wallet is connected as ${accounts[0]?.accountId ?? "nobody"}, but this vault belongs to ${owner}. Switch accounts in your wallet and try again.`);
   }
-  await sendTransaction(wallet, owner, call.contractId, call.methodName, call.args, call.gas, call.deposit);
+  try {
+    await sendTransaction(wallet, owner, call.contractId, call.methodName, call.args, call.gas, call.deposit);
+  } catch (e) {
+    throw new Error(policyStoreFailure(e instanceof Error ? e.message : failureText(e)));
+  }
+}
+
+/**
+ * The policy contract's refusal in plain words, never the raw panic or JSON. When the contract panics nothing is stored
+ * and NEAR refunds the attached deposit (only the network fee is spent). Unknown refusals keep a short excerpt.
+ */
+export function policyStoreFailure(raw: string): string {
+  const done = " Nothing was stored, and the attached NEAR comes back to you (only the network fee is spent).";
+  if (/Failed to deserialize input|missing field|invalid type/i.test(raw)) return `OutLayer's policy contract did not accept the transaction's format: it has changed since Norr prepared it.${done} This is on Norr's side, not your wallet's. Prepare the policy again; if it fails the same way, wait for a Norr update.`;
+  if (/policy version is \d+/i.test(raw)) return `The vault's policy changed on chain after this was prepared, so the signature no longer fits.${done} Prepare the policy again, then sign.`;
+  if (/signature expired/i.test(raw)) return `This prepared policy expired (a prepared policy is good for seven days).${done} Prepare the policy again, then sign.`;
+  if (/Only the original controller \(([^)]+)\)/i.test(raw)) return `This wallet's policy is controlled by ${/Only the original controller \(([^)]+)\)/i.exec(raw)![1]}, so only that account can change it.${done}`;
+  if (/Invalid .*signature/i.test(raw)) return `The policy was prepared for a different account than the one that sent it.${done} Sign with the account you signed in to Norr with.`;
+  if (/Insufficient (storage )?deposit/i.test(raw)) return `The transaction did not attach enough NEAR for the policy's storage.${done} Prepare the policy again (it recalculates the deposit), then sign.`;
+  if (/paused/i.test(raw) && /contract|panicked/i.test(raw)) return `OutLayer's policy contract is paused right now.${done} Try again later.`;
+  if (/panicked|ExecutionError|FunctionCallError/i.test(raw)) {
+    const said = (/panicked:\s*([^"{}\\]{1,160})/i.exec(raw)?.[1] ?? "").trim();
+    return `OutLayer's policy contract refused the policy${said ? ` ("${said}")` : ""}.${done}`;
+  }
+  return raw;
 }
 
 /**

@@ -99,7 +99,7 @@ describe("OwnerAuth", () => {
 
   it("rejects an expired challenge, an unknown nonce, and a key that does not belong to the account", async () => {
     const expired = await setup();
-    expired.t.now += 6 * 60_000;
+    expired.t.now += 11 * 60_000; // challenges last 10 minutes
     expect(await expired.auth.login(expired.signed)).toBeNull();
     const unknown = await setup();
     expect(await unknown.auth.login({ ...unknown.signed, nonce: Buffer.alloc(32, 9).toString("base64") })).toBeNull();
@@ -126,6 +126,64 @@ describe("OwnerAuth", () => {
     expect(await mk(async () => new Response(JSON.stringify({ result: { permission: "FullAccess" } }))).hasKey("a", "ed25519:x")).toBe(true);
     expect(await mk(async () => new Response(JSON.stringify({ error: { cause: { name: "UNKNOWN_ACCESS_KEY" } } }))).hasKey("a", "ed25519:x")).toBe(false);
     expect(await mk(async () => { throw new Error("down"); }).hasKey("a", "ed25519:x")).toBe(false);
+  });
+});
+
+describe("sign-in says which check refused it (2026-11-15: HOT on iPhone failing on the first tries)", () => {
+  const owner = "legalalienx.near";
+  const key = newKey();
+  async function setup(keys: AccessKeyChecker, t = { now: 1_000 }, origin?: string) {
+    const auth = new OwnerAuth({ keys, now: () => t.now });
+    const c = auth.challenge(origin);
+    const sign = (k = key) => ({ accountId: owner, publicKey: k.publicKey, signature: signNep413(k.privateKey, { message: c.message, nonce: Buffer.from(c.nonce, "base64"), recipient: c.recipient }), nonce: c.nonce });
+    return { auth, c, t, sign };
+  }
+  const yes: AccessKeyChecker = { hasKey: async () => true };
+
+  it("expired, unknown, wrong site, bad signature and a key that is not the account's each have their own code", async () => {
+    const exp = await setup(yes);
+    exp.t.now += 11 * 60_000;
+    expect(await exp.auth.attempt(exp.sign())).toMatchObject({ ok: false, code: "challenge_expired", message: expect.stringMatching(/expired \(each one lasts 10 minutes\)/) });
+    const site = await setup(yes, { now: 1 }, "https://app.norr.finance");
+    expect(await site.auth.attempt(site.sign(), "https://evil.example")).toMatchObject({ ok: false, code: "origin_mismatch" });
+    const sig = await setup(yes);
+    expect(await sig.auth.attempt({ ...sig.sign(), signature: Buffer.alloc(64, 1).toString("base64") })).toMatchObject({ ok: false, code: "bad_signature" });
+    expect(await sig.auth.attempt(sig.sign())).toMatchObject({ ok: false, code: "challenge_unknown" }); // a bad signature used it up
+    const nokey = await setup({ hasKey: async () => true, keyStatus: async () => "no" });
+    expect(await nokey.auth.attempt(nokey.sign())).toMatchObject({ ok: false, code: "key_not_on_account", message: expect.stringContaining(`not an access key of ${owner}`) });
+  });
+
+  it("when NEAR cannot be asked about the key, the challenge stays valid and the same signature works on the next try", async () => {
+    let up = false;
+    const s = await setup({ hasKey: async () => up, keyStatus: async () => (up ? "yes" : "unavailable") });
+    const signed = s.sign();
+    expect(await s.auth.attempt(signed)).toMatchObject({ ok: false, code: "key_check_unavailable", message: expect.stringMatching(/could not reach NEAR/) });
+    up = true;
+    expect(await s.auth.attempt(signed)).toMatchObject({ ok: true, session: { accountId: owner } });
+    expect(await s.auth.attempt(signed)).toMatchObject({ ok: false, code: "challenge_unknown" }); // and then it is used up
+  });
+
+  it("the RPC checker tells a missing key apart from a node that did not answer, and asks the next node", async () => {
+    const seen: string[] = [];
+    const mk = (answers: (() => Response)[]) => new RpcAccessKeyChecker(["https://a", "https://b"], async (url) => { seen.push(url); const next = answers.shift(); if (!next) throw new Error("no more"); return next(); });
+    const json = (b: unknown, status = 200) => () => new Response(JSON.stringify(b), { status });
+    expect(await mk([json({ result: { permission: "FullAccess" } })]).keyStatus(owner, key.publicKey)).toBe("yes");
+    expect(await mk([json({ error: { cause: { name: "UNKNOWN_ACCESS_KEY" } } })]).keyStatus(owner, key.publicKey)).toBe("no");
+    seen.length = 0;
+    expect(await mk([json({ error: "rate limited" }, 429), json({ result: { permission: "FullAccess" } })]).keyStatus(owner, key.publicKey)).toBe("yes");
+    expect(seen).toEqual(["https://a", "https://b"]); // the 429 did not count as "no"
+    expect(await mk([() => { throw new Error("timeout"); }, json({ error: { cause: { name: "INTERNAL_ERROR" } } })]).keyStatus(owner, key.publicKey)).toBe("unavailable");
+    expect(await mk([json({ error: { cause: { name: "INTERNAL_ERROR" } } }), json({ error: { cause: { name: "INTERNAL_ERROR" } } })]).hasKey(owner, key.publicKey)).toBe(false);
+  });
+
+  it("the route answers 503 for a key check Norr could not do, 401 for the rest, with the code", async () => {
+    const m = createMockEnclave({ keys: { hasKey: async () => false, keyStatus: async () => "unavailable" } });
+    const k = newKey();
+    const ch = await (await m.app.request("/owner/v1/challenge")).json();
+    const body = { accountId: owner, publicKey: k.publicKey, signature: signNep413(k.privateKey, { message: ch.message, nonce: Buffer.from(ch.nonce, "base64"), recipient: ch.recipient }), nonce: ch.nonce };
+    const r = await m.app.request("/owner/v1/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    expect(r.status).toBe(503);
+    expect(await r.json()).toMatchObject({ code: "key_check_unavailable" });
   });
 });
 
@@ -183,12 +241,15 @@ describe("owner routes", () => {
     expect((await req("/owner/v1/vaults/demo/history", { token: other.token })).status).toBe(404);
   });
 
-  it("rejects bad logins with no detail, and every route needs a session", async () => {
+  it("rejects bad logins naming the check that failed, and every route needs a session", async () => {
     const { req } = await boot();
     const bad = await req("/owner/v1/login", { body: { accountId: "x.near", publicKey: "ed25519:abc", signature: "AAAA", nonce: "AAAA" } });
-    expect(bad.status).toBe(401);
-    expect(await bad.json()).toEqual({ error: "sign-in failed" });
-    expect((await req("/owner/v1/login", { body: {} })).status).toBe(401);
+    expect(bad.status).toBe(400);
+    expect(await bad.json()).toMatchObject({ code: "bad_request", error: expect.stringMatching(/malformed \(signature\)/) });
+    const unknown = await req("/owner/v1/login", { body: { accountId: "x.near", publicKey: "ed25519:" + "1".repeat(44), signature: "A".repeat(88), nonce: Buffer.alloc(32, 7).toString("base64") } });
+    expect(unknown.status).toBe(401);
+    expect(await unknown.json()).toMatchObject({ code: "challenge_unknown", error: expect.stringMatching(/does not know this sign-in challenge/) });
+    expect((await req("/owner/v1/login", { body: {} })).status).toBe(400);
     for (const path of ["/owner/v1/me", "/owner/v1/vaults", "/owner/v1/audit", "/owner/v1/verify", "/owner/v1/status", "/owner/v1/vaults/demo", "/owner/v1/vaults/demo/history"]) {
       expect((await req(path)).status).toBe(401);
       expect((await req(path, { token: "norr_owner_forged" })).status).toBe(401);

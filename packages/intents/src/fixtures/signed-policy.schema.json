@@ -1,0 +1,34 @@
+{
+ "_source": "api.outlayer.ai/openapi.json components.schemas.SignedPolicy, read 2026-11-15",
+ "required": [
+  "signature_hex",
+  "public_key_hex",
+  "version",
+  "locked",
+  "valid_until",
+  "policy_hash"
+ ],
+ "properties": {
+  "signature_hex": {
+   "type": "string"
+  },
+  "public_key_hex": {
+   "type": "string"
+  },
+  "version": {
+   "type": "integer"
+  },
+  "locked": {
+   "type": "boolean"
+  },
+  "valid_until": {
+   "type": "integer"
+  },
+  "policy_hash": {
+   "type": "string"
+  },
+  "request_hash": {
+   "type": "string"
+  }
+ }
+}

@@ -106,17 +106,17 @@ export class Onboarding {
 
   /** Status and creation time of every self-serve vault, with no owner or id: for the operator's aggregate overview. */
   summaries(): { status: TenantRecord["status"]; createdAt: string }[] {
-    return this.d.tenants.list().map((r) => ({ status: r.status, createdAt: r.createdAt }));
+    return this.d.tenants.list().filter((r) => r.status !== "removed").map((r) => ({ status: r.status, createdAt: r.createdAt }));
   }
 
   mine(owner: string): TenantRecord[] {
-    return this.d.tenants.list().filter((r) => r.owner === owner);
+    return this.d.tenants.list().filter((r) => r.owner === owner && r.status !== "removed");
   }
 
   /** A setup record the owner holds, or a 404 (no hint that it exists for someone else). */
   private owned(owner: string, id: string): TenantRecord {
     const r = this.d.tenants.get(id);
-    if (!r || r.owner !== owner) throw new OnboardingError(404, "not found");
+    if (!r || r.owner !== owner || r.status === "removed") throw new OnboardingError(404, "not found");
     return r;
   }
 
@@ -124,7 +124,7 @@ export class Onboarding {
     const beta = this.d.beta.get();
     if (!beta.signupsOpen && !(beta.allowlist ?? []).includes(owner)) throw new OnboardingError(403, "New vaults are paused for now. Existing vaults keep working.");
     if (input.acceptTerms !== beta.termsVersion) throw new OnboardingError(400, `Read and accept the terms and risk disclosure (version ${beta.termsVersion}) first.`);
-    const all = this.d.tenants.list();
+    const all = this.d.tenants.list().filter((r) => r.status !== "removed");
     if (all.filter((r) => r.owner === owner).length >= beta.maxVaultsPerOwner) throw new OnboardingError(409, `The beta allows ${beta.maxVaultsPerOwner} vault per account.`);
     if (all.length >= beta.maxVaults) throw new OnboardingError(403, "The beta is full for now. Try again later.");
     const name = input.name === undefined ? null : cleanVaultName(input.name);
@@ -267,6 +267,25 @@ export class Onboarding {
     this.d.tenants.put(active);
     this.d.vaults.add(this.vaultOf(active, key));
     return { status: "active" };
+  }
+
+  /**
+   * Give up a vault still in setup, so the owner can create another (one vault per account). Only while its custody
+   * policy is not on chain: once the owner is the wallet's controller, the vault is finished with "Check again" instead.
+   * The record and its sealed key are kept (marked removed), never deleted, in case anything was sent to its address.
+   */
+  async remove(owner: string, id: string): Promise<void> {
+    const rec = this.owned(owner, id);
+    if (rec.status !== "setup") throw new OnboardingError(409, "Only a vault still in setup can be removed. An active vault is paused from its page instead, and its money withdrawn.");
+    const walletPubkey = rec.custody?.walletPubkey ?? `ed25519:${rec.walletAccount}`;
+    let chain;
+    try {
+      chain = await this.d.provisioner.onChainPolicy(walletPubkey);
+    } catch (e) {
+      throw new OnboardingError(503, `Could not check the policy contract on chain, so the vault was not removed. ${upstreamReason(e, "NEAR RPC")}`);
+    }
+    if (chain) throw new OnboardingError(409, `This vault's custody policy is already on chain${chain.owner === owner ? " with you as its controller" : ` (controlled by ${chain.owner})`}, so it is not removed. ${chain.owner === owner ? "Open its setup and choose Check again to finish it." : ""}`.trim());
+    this.d.tenants.put({ ...rec, status: "removed", removedAt: new Date(this.d.now()).toISOString() });
   }
 
   /** Rename a vault still in setup (an active vault is renamed in the vault store). */

@@ -1,5 +1,5 @@
 import { createHash, createHmac, randomBytes } from "node:crypto";
-import { POLICY_CONTRACT, policyStorageDeposit, type CustodyProvisioner, type OnChainPolicy, type PolicyStoreCall, type RegisteredWallet } from "./outlayer-provision";
+import { policyStoreCall, policyStorageDeposit, STORE_WALLET_POLICY_ARGS, type CustodyProvisioner, type OnChainPolicy, type PolicyStoreCall, type RegisteredWallet } from "./outlayer-provision";
 
 interface MockWallet extends RegisteredWallet {
   walletPubkey: string;
@@ -14,6 +14,10 @@ interface MockWallet extends RegisteredWallet {
 export class MockProvisioner implements CustodyProvisioner {
   private readonly wallets = new Map<string, MockWallet>();
   private readonly chain = new Map<string, { owner: string; data: string; frozen: boolean; deposit: bigint }>();
+  /** The contract's `PolicyMeta`: writes so far under each key (survives nothing else; mock only). */
+  private readonly versions = new Map<string, number>();
+  /** Unix seconds, for the signature's `valid_until` (tests move it). */
+  nowSec = () => Math.floor(Date.now() / 1000);
   private readonly secret = randomBytes(32);
   registrations = 0;
   failRegister = false;
@@ -33,8 +37,9 @@ export class MockProvisioner implements CustodyProvisioner {
     return w;
   }
 
-  private sign(walletPubkey: string, data: string, caller: string): string {
-    const msg = `store_wallet_policy:v1:${walletPubkey}:${data.length}:${data}:${caller}`;
+  /** The message the contract rebuilds (`policy_store_message`, v2): key, version, lock, deadline, data, caller. */
+  private sign(walletPubkey: string, version: number, locked: boolean, validUntil: number, data: string, caller: string): string {
+    const msg = `store_wallet_policy:v2:${walletPubkey}:${version}:${locked ? 1 : 0}:${validUntil}:${data.length}:${data}:${caller}`;
     return createHmac("sha512", this.secret).update(createHash("sha256").update(msg).digest()).digest("hex");
   }
 
@@ -42,21 +47,39 @@ export class MockProvisioner implements CustodyProvisioner {
     const w = this.byKey(wallet.apiKey);
     if (w.walletId !== wallet.walletId) throw new Error("mock: wallet id does not match the key");
     const data = Buffer.from(JSON.stringify(policy)).toString("base64");
-    return {
-      contractId: POLICY_CONTRACT,
-      methodName: "store_wallet_policy",
-      args: { wallet_pubkey: w.walletPubkey, encrypted_data: data, wallet_signature: this.sign(w.walletPubkey, data, caller) },
-      gas: "100000000000000",
-      deposit: policyStorageDeposit(w.walletPubkey, data, existingDeposit).toString(),
-    };
+    // What the keystore's sign-policy answers (SignedPolicy): the chain's version plus one, the lock, seven days to file it.
+    const version = (this.versions.get(w.walletPubkey) ?? 0) + 1;
+    const locked = Boolean((policy as { approval?: { locked?: unknown } }).approval?.locked);
+    const validUntil = this.nowSec() + 7 * 86_400;
+    return policyStoreCall(
+      { signature_hex: this.sign(w.walletPubkey, version, locked, validUntil, data, caller), public_key_hex: w.walletPubkey.slice("ed25519:".length), version, locked, valid_until: validUntil, policy_hash: createHash("sha256").update(JSON.stringify(policy)).digest("hex") },
+      data,
+      existingDeposit,
+    );
   }
 
-  /** The contract call, as `caller` sending it from their own wallet. Throws what the contract would panic with. */
-  storeWalletPolicy(caller: string, args: { wallet_pubkey: string; encrypted_data: string; wallet_signature: string }): void {
-    if (args.wallet_signature !== this.sign(args.wallet_pubkey, args.encrypted_data, caller)) throw new Error("Invalid Ed25519 wallet signature");
-    const existing = this.chain.get(args.wallet_pubkey);
-    if (existing && existing.owner !== caller) throw new Error(`Only the original controller (${existing.owner}) can update this wallet policy`);
-    this.chain.set(args.wallet_pubkey, { owner: caller, data: args.encrypted_data, frozen: existing?.frozen ?? false, deposit: policyStorageDeposit(args.wallet_pubkey, args.encrypted_data) });
+  /**
+   * The contract call, as `caller` sending it from their own wallet. Throws what the contract would panic with: first the
+   * JSON arguments as near-sdk reads them (a missing field is the panic seen live on 2026-11-15), then the version, the
+   * deadline and the signature, in the contract's order.
+   */
+  storeWalletPolicy(caller: string, raw: unknown): void {
+    const args = (raw ?? {}) as Record<string, unknown>;
+    for (const [field, type] of STORE_WALLET_POLICY_ARGS) {
+      const v = args[field];
+      if (v === undefined) throw new Error(`Smart contract panicked: Failed to deserialize input from JSON. Error: missing field \`${field}\``);
+      const ok = type === "string" ? typeof v === "string" : type === "bool" ? typeof v === "boolean" : typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
+      if (!ok) throw new Error(`Smart contract panicked: Failed to deserialize input from JSON. Error: invalid type for \`${field}\`, expected ${type}`);
+    }
+    const a = args as { wallet_pubkey: string; encrypted_data: string; wallet_signature: string; version: number; locked: boolean; valid_until: number };
+    const current = this.versions.get(a.wallet_pubkey) ?? 0;
+    if (a.version !== current + 1) throw new Error(`Smart contract panicked: policy version is ${current}, this signature was made for ${a.version}: sign the policy again`);
+    if (this.nowSec() > a.valid_until) throw new Error(`Smart contract panicked: this policy signature expired at ${a.valid_until} (unix seconds; now ${this.nowSec()}): sign the policy again`);
+    if (a.wallet_signature !== this.sign(a.wallet_pubkey, a.version, a.locked, a.valid_until, a.encrypted_data, caller)) throw new Error("Smart contract panicked: Invalid Ed25519 wallet signature");
+    const existing = this.chain.get(a.wallet_pubkey);
+    if (existing && existing.owner !== caller) throw new Error(`Smart contract panicked: Only the original controller (${existing.owner}) can update this wallet policy`);
+    this.chain.set(a.wallet_pubkey, { owner: caller, data: a.encrypted_data, frozen: existing?.frozen ?? false, deposit: policyStorageDeposit(a.wallet_pubkey, a.encrypted_data) });
+    this.versions.set(a.wallet_pubkey, a.version);
   }
 
   freeze(walletPubkey: string): void {

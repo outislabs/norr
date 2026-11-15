@@ -41,7 +41,7 @@ describe("SetupPage", () => {
   const prepared: PreparedPolicy = {
     policy: { rules: { transaction_types: ["confidential"] } },
     summary: ["Only confidential operations are allowed.", "Every operation waits for your approval, signed by alice.near, in Norr's Approvals tab."],
-    call: { contractId: "outlayer.near", methodName: "store_wallet_policy", args: { wallet_pubkey: "ed25519:aa", encrypted_data: "x", wallet_signature: "y" }, gas: "100000000000000", deposit: "30890000000000000000000" },
+    call: { contractId: "outlayer.near", methodName: "store_wallet_policy", args: { wallet_pubkey: "ed25519:aa", encrypted_data: "x", wallet_signature: "y", version: 1, locked: false, valid_until: 1795000000 }, gas: "100000000000000", deposit: "30890000000000000000000" },
     controller: "alice.near",
   };
   const setupVault = vi.fn(async () => ({ id: "v_abc", status: "setup", walletAccount: "a".repeat(64), createdAt: "", terms: { version: "2026-11-04", acceptedAt: "" }, nonUsConfirmed: false, custody: { prepared: false } }));
@@ -80,6 +80,30 @@ describe("SetupPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Sign with your wallet" }));
     expect(await screen.findByText("The address whitelist differs.")).toBeTruthy();
     expect(activateVault).toHaveBeenCalledTimes(1); // only "not on chain yet" is worth waiting for
+  });
+
+  it("a vault whose policy never reached the chain can be removed, after a confirmation, to start again", async () => {
+    const removeSetupVault = vi.fn(async () => ({ removed: true }));
+    const navigate = vi.fn();
+    const onChanged = vi.fn();
+    const api = { setupVault, removeSetupVault } as unknown as Api;
+    render(<SetupPage api={api} account="alice.near" id="v_abc" navigate={navigate} onChanged={onChanged} sleep={async () => undefined} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Remove this vault and start again/ }));
+    expect(removeSetupVault).not.toHaveBeenCalled(); // asks first
+    fireEvent.click(screen.getByRole("button", { name: "Remove it" }));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("#/"));
+    expect(removeSetupVault).toHaveBeenCalledWith("v_abc");
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it("a refused removal (policy already on chain) shows the service's words and stays", async () => {
+    const removeSetupVault = vi.fn(async () => { throw new Error("This vault's custody policy is already on chain with you as its controller, so it is not removed. Open its setup and choose Check again to finish it."); });
+    const navigate = vi.fn();
+    render(<SetupPage api={{ setupVault, removeSetupVault } as unknown as Api} account="alice.near" id="v_abc" navigate={navigate} sleep={async () => undefined} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Remove this vault and start again/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove it" }));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/already on chain/);
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it("a wallet error is shown and nothing is checked", async () => {
@@ -145,7 +169,7 @@ describe("vault names in the dashboard", () => {
 
 
 describe("AutonomyPanel (Rules)", () => {
-  const call = { contractId: "outlayer.near", methodName: "store_wallet_policy" as const, args: { wallet_pubkey: "ed25519:aa", encrypted_data: "x", wallet_signature: "y" }, gas: "100000000000000", deposit: "1000000000000000000000" };
+  const call = { contractId: "outlayer.near", methodName: "store_wallet_policy" as const, args: { wallet_pubkey: "ed25519:aa", encrypted_data: "x", wallet_signature: "y", version: 1, locked: false, valid_until: 1795000000 }, gas: "100000000000000", deposit: "1000000000000000000000" };
   const prepared = { policy: {}, summary: ["Autonomous mode OFF: every swap waits for your approval in the Approvals tab.", "Only the approval exemption is removed from the stored policy; nothing else changes."], call, controller: "alice.near", autonomous: false };
 
   it("says ON in words, turns it off with one wallet signature, and reports it only after the service verified the change", async () => {

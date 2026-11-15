@@ -144,13 +144,19 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
 
   app.post("/owner/v1/login", async (c) => {
     const parsed = LoginBody.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) return c.json({ error: "sign-in failed" }, 401);
+    // Every refusal names the check that failed (none of them is secret), so a failing wallet can be told apart from a
+    // failing network or an expired challenge.
+    if (!parsed.success) return c.json({ error: `The sign-in request is malformed (${parsed.error.issues[0]?.path.join(".") || "body"}): the wallet's answer was not in the expected form. Sign in again.`, code: "bad_request" }, 400);
     const o = signInOrigin(c);
-    if (!o.ok) return c.json({ error: "sign-in failed" }, 401);
-    const session = await auth.login(parsed.data, o.origin);
-    if (!session) return c.json({ error: "sign-in failed" }, 401);
-    note(session.accountId, "signed in");
-    return c.json(session);
+    if (!o.ok) return c.json({ error: "This sign-in did not come from the Norr dashboard's own site, so it was refused. Open app.norr.finance directly and sign in there.", code: "origin_not_allowed" }, 401);
+    const r = await auth.attempt(parsed.data, o.origin);
+    if (!r.ok) {
+      // One line, the check only: no account, key or signature in the log.
+      console.warn(`owner sign-in refused: ${r.code}`);
+      return c.json({ error: r.message, code: r.code }, r.code === "key_check_unavailable" ? 503 : 401);
+    }
+    note(r.session.accountId, "signed in");
+    return c.json(r.session);
   });
 
   app.use("/owner/v1/*", async (c, next) => {
@@ -237,6 +243,20 @@ export function mountOwnerRoutes(app: Hono<any>, ctx: OwnerRouteContext): void {
       return c.json(onboarding.view(rec), 201);
     } catch (e) {
       return fail(c, e);
+    }
+  });
+
+  // Remove a vault still in setup whose policy never reached the chain (a failed signature), so the owner can start again.
+  app.delete("/owner/v1/vaults/:id", async (c) => {
+    const owner = c.get("owner") as string;
+    if (!onboarding) return c.json({ error: "not found" }, 404);
+    try {
+      await onboarding.remove(owner, c.req.param("id"));
+      note(owner, "removed a vault that was still in setup", c.req.param("id"));
+      return c.json({ removed: true });
+    } catch (e) {
+      if (e instanceof OnboardingError) return c.json({ error: e.message }, e.status);
+      throw e;
     }
   });
 

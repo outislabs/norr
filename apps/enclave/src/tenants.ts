@@ -19,7 +19,9 @@ export interface TenantRecord {
   /** The custody wallet's implicit account. */
   walletAccount: string;
   /** `setup` until the owner's policy is on chain and checked; then `active`. */
-  status: "setup" | "active";
+  /** "removed": a setup vault the owner gave up before its policy reached the chain. Kept (with its sealed key) but not counted or shown. */
+  status: "setup" | "active" | "removed";
+  removedAt?: string;
   createdAt: string;
   activatedAt?: string;
   terms: { version: string; acceptedAt: string };

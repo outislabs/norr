@@ -118,7 +118,7 @@ export type VaultListItem = VaultSummary | SetupVault;
 export const isSetup = (v: VaultListItem): v is SetupVault => v.status === "setup";
 export interface BetaInfo { selfServe: boolean; signupsOpen?: boolean; depositCapUsd?: number; maxVaultsPerOwner?: number; termsVersion?: string; termsUrl?: string }
 /** The contract call the owner's own wallet sends to store the custody policy (and become its controller). */
-export interface PolicyStoreCall { contractId: string; methodName: "store_wallet_policy"; args: { wallet_pubkey: string; encrypted_data: string; wallet_signature: string }; gas: string; deposit: string }
+export interface PolicyStoreCall { contractId: string; methodName: "store_wallet_policy"; args: { wallet_pubkey: string; encrypted_data: string; wallet_signature: string; version: number; locked: boolean; valid_until: number }; gas: string; deposit: string }
 export interface PreparedPolicy { policy: unknown; summary: string[]; call: PolicyStoreCall; controller: string }
 export interface TokenInfo { id: string; vaultId: string; label: string; kind: "token" | "oauth"; createdAt: string; clientId?: string; expiresAt?: string }
 /** Paying the vault directly on NEAR (when 1Click cannot quote): the call the owner's wallet makes on the token contract. */
@@ -189,6 +189,7 @@ export function createApi(o: ApiOptions) {
     withdraw: (id: string, b: { to?: string; asset?: string; amount?: string; max?: boolean; dryRun?: boolean }) => call<WithdrawResult>(`/owner/v1/vaults/${encodeURIComponent(id)}/withdraw`, { body: b }),
     exitPosition: (id: string, asset: string) => call<ExitResult>(`/owner/v1/vaults/${encodeURIComponent(id)}/exit`, { body: { asset } }),
     renameVault: (id: string, name: string) => call<{ id: string; name: string }>(`/owner/v1/vaults/${encodeURIComponent(id)}/name`, { method: "PUT", body: { name } }),
+    removeSetupVault: (id: string) => call<{ removed: boolean }>(`/owner/v1/vaults/${encodeURIComponent(id)}`, { method: "DELETE" }),
     setupVault: (id: string) => call<SetupVault>(`/owner/v1/vaults/${encodeURIComponent(id)}/setup`),
     prepareCustody: (id: string, autonomous: boolean) => call<PreparedPolicy>(`/owner/v1/vaults/${encodeURIComponent(id)}/custody-policy`, { body: { autonomous, ...(autonomous ? { confirmAutonomous: true } : {}) } }),
     /** Switch autonomous mode on an active vault: the update the owner's wallet signs. Turning it on carries the confirmation. */

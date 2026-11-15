@@ -16,7 +16,8 @@ export function SetupPage({ api, account, id, onChanged, send = sendPolicyStore,
   /** The second, deliberate step: autonomous mode is only prepared after the owner says they understand. */
   const [understood, setUnderstood] = useState(false);
   const [prepared, setPrepared] = useState<PreparedPolicy | null>(null);
-  const [busy, setBusy] = useState<null | "prepare" | "sign" | "check">(null);
+  const [busy, setBusy] = useState<null | "prepare" | "sign" | "check" | "remove">(null);
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [problems, setProblems] = useState<string[]>([]);
   const [signed, setSigned] = useState(false);
@@ -71,6 +72,22 @@ export function SetupPage({ api, account, id, onChanged, send = sendPolicyStore,
       return;
     }
     await activate(5);
+  }
+
+  /** Give up this vault (only while its policy is not on chain), so the account can create a new one. */
+  async function remove() {
+    setBusy("remove");
+    setError(null);
+    try {
+      await api.removeSetupVault(id);
+      onChanged?.();
+      navigate("#/");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "The vault was not removed.");
+    } finally {
+      setBusy(null);
+      setConfirmRemove(false);
+    }
   }
 
   if (setup.loading) return <p className="text-mute">Loading…</p>;
@@ -169,6 +186,22 @@ export function SetupPage({ api, account, id, onChanged, send = sendPolicyStore,
         </ul>
       )}
       {error && <p role="alert" className="border-l border-line-strong pl-3 text-sm text-fg">{error}</p>}
+
+      <div className="border-t border-line pt-4 text-sm text-mute" data-testid="remove-setup">
+        {!confirmRemove ? (
+          <button type="button" className="underline decoration-line-strong underline-offset-4" disabled={busy !== null} onClick={() => setConfirmRemove(true)}>
+            Remove this vault and start again
+          </button>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <p>Remove this vault? Only possible while its policy is not on chain; nothing is in it yet. You can then create a new one.</p>
+            <div className="flex gap-2">
+              <button type="button" className="btn btn-quiet" disabled={busy !== null} onClick={() => void remove()}>{busy === "remove" ? "Removing…" : "Remove it"}</button>
+              <button type="button" className="btn btn-quiet" disabled={busy !== null} onClick={() => setConfirmRemove(false)}>Keep it</button>
+            </div>
+          </div>
+        )}
+      </div>
     </section>
   );
 }

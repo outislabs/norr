@@ -12,7 +12,7 @@ import type { Kit, SignedMessage, WalletHandle } from "./nearconnect";
 import { base58Encode, base64ToBytes, bytesToBase64 } from "./nep413";
 import { SignInError } from "./resilience";
 import { UNLOCK_MESSAGE, UNLOCK_NONCE, UNLOCK_RECIPIENT } from "./seal";
-import { disconnectWallet, sendDirectDeposit, sendPolicyStore, signUnlock, signVote, walletSignIn } from "./signin";
+import { disconnectWallet, policyStoreFailure, sendDirectDeposit, sendPolicyStore, signUnlock, signVote, walletSignIn } from "./signin";
 
 const noWait = { sleep: async () => {} };
 const loadFailed = () => new TypeError("Load failed"); // Safari's text for a dropped fetch
@@ -205,6 +205,30 @@ describe("mobile Safari: the page is suspended while the owner is in the wallet 
   });
 });
 
+describe("Norr says which sign-in check failed (2026-11-15, HOT on iPhone)", () => {
+  it("Norr's own reason reaches the owner, under the verify step", async () => {
+    const { api } = scriptedApi([json(challenge), json({ error: "The sign-in challenge expired (each one lasts 10 minutes). Sign in again (one more signature).", code: "challenge_expired" }, 401)]);
+    const e = await walletSignIn(api, { load: fakeKit().load, retry: noWait }).catch((x: unknown) => x);
+    expect((e as Error).message).toBe("Sign-in failed while checking the signature with Norr (api.norr.finance): The sign-in challenge expired (each one lasts 10 minutes). Sign in again (one more signature).");
+  });
+
+  it("when Norr could not reach NEAR to check the key, the same signature is sent again (no second wallet prompt) and sign-in completes", async () => {
+    const f = fakeKit();
+    const { api, calls } = scriptedApi([json(challenge), json({ error: "Norr could not reach NEAR", code: "key_check_unavailable" }, 503), session]);
+    expect(await walletSignIn(api, { load: f.load, retry: noWait })).toMatchObject({ token: "t" });
+    const logins = calls.filter((c) => c.path === "/owner/v1/login");
+    expect(logins).toHaveLength(2);
+    expect(logins[1]!.body).toEqual(logins[0]!.body); // same nonce, same signature
+    expect(f.kit.signInAndSign).toHaveBeenCalledTimes(1);
+  });
+
+  it("any other refusal is not retried", async () => {
+    const { api, calls } = scriptedApi([json(challenge), json({ error: "bad", code: "bad_signature" }, 401)]);
+    await walletSignIn(api, { load: fakeKit().load, retry: noWait }).catch(() => undefined);
+    expect(calls).toHaveLength(2);
+  });
+});
+
 describe("each failure names its step", () => {
   it("Norr unreachable throughout: the challenge step", async () => {
     const e = await walletSignIn(scriptedApi([drop(), drop(), drop()]).api, { load: fakeKit().load, retry: noWait }).catch((x: unknown) => x);
@@ -299,7 +323,7 @@ describe("unlocking the private reasoning (a fixed message whose signature deriv
 });
 
 describe("the vault policy transaction (store_wallet_policy)", () => {
-  const call: PolicyStoreCall = { contractId: "outlayer.near", methodName: "store_wallet_policy", args: { wallet_pubkey: "ed25519:W", encrypted_data: "AAEC", wallet_signature: "SIG" }, gas: "100000000000000", deposit: "38490000000000000000000" };
+  const call: PolicyStoreCall = { contractId: "outlayer.near", methodName: "store_wallet_policy", args: { wallet_pubkey: "ed25519:W", encrypted_data: "AAEC", wallet_signature: "SIG", version: 1, locked: false, valid_until: 1795000000 }, gas: "100000000000000", deposit: "38490000000000000000000" };
   const api = {} as Api;
 
   it("sends one function call from the owner's account, in NEAR Connect's action format, with the shown deposit", async () => {
@@ -330,6 +354,25 @@ describe("the vault policy transaction (store_wallet_policy)", () => {
     const e = await sendPolicyStore(api, call, "owner.near", f.load).catch((x: unknown) => x);
     expect((e as Error).message).toBe("The connection dropped while HOT Wallet was working (Load failed). The transaction may already have gone through: check HOT Wallet's activity before trying again.");
     expect(f.wallet.signAndSendTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("the contract's panic is shown in plain words, never the raw JSON (the live 2026-11-15 failure)", async () => {
+    const live = 'Smart contract panicked: Failed to deserialize input from JSON. Error: missing field `version` at line 1 column 3842';
+    const f = fakeKit({ signAndSendTransaction: async () => Promise.reject(new Error(JSON.stringify({ type: "FunctionCallError", kind: { ExecutionError: live } }))) });
+    const e = (await sendPolicyStore(api, call, "owner.near", f.load).catch((x: unknown) => x)) as Error;
+    expect(e.message).toMatch(/^OutLayer's policy contract did not accept the transaction's format: it has changed since Norr prepared it\. Nothing was stored, and the attached NEAR comes back to you/);
+    expect(e.message).not.toMatch(/[{}]|deserialize|column/);
+  });
+
+  it.each([
+    ["Smart contract panicked: policy version is 1, this signature was made for 1: sign the policy again", /policy changed on chain after this was prepared/],
+    ["Smart contract panicked: this policy signature expired at 1 (unix seconds; now 2): sign the policy again", /expired \(a prepared policy is good for seven days\)/],
+    ["Smart contract panicked: Only the original controller (alice.near) can update this wallet policy", /controlled by alice\.near/],
+    ["Smart contract panicked: Invalid Ed25519 wallet signature", /prepared for a different account/],
+    ["Smart contract panicked: Insufficient storage deposit. Required: 5, attached: 1", /did not attach enough NEAR/],
+    ["Smart contract panicked: something new {\"x\":1}", /^OutLayer's policy contract refused the policy \("something new"\)\./],
+  ])("%s", (raw, want) => {
+    expect(policyStoreFailure(raw)).toMatch(want);
   });
 
   it("the owner declining in the wallet is shown in the wallet's words", async () => {

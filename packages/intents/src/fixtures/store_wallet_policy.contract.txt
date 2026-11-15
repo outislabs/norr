@@ -1,0 +1,12 @@
+// outlayer.near contract/src/wallet.rs (out-layer/outlayer, main), read 2026-11-15
+pub fn store_wallet_policy(
+    &mut self,
+        wallet_pubkey: String,
+        encrypted_data: String,
+        wallet_signature: String,
+        version: u64,
+        locked: bool,
+        valid_until: u64,
+        storage_refund_to: Option<AccountId>,
+    )
+// policy_store_message format: store_wallet_policy:v2:{}:{}:{}:{}:{}:{}:{}

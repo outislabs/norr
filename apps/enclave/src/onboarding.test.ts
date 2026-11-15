@@ -76,7 +76,7 @@ describe("self-serve vaults: create, policy signed by the owner's wallet, activa
     expect(await (await call(`/owner/v1/vaults/${v.id}/activate`, { token: alice.token, body: {} })).json()).toMatchObject({ status: "setup", problems: [expect.stringMatching(/not on chain yet/)] });
     // Someone else's wallet cannot store it: the keystore signed it for Alice only.
     const mallory = await signIn(m, call, "mallory.near");
-    expect(await (await call("/mock-outlayer/chain/store_wallet_policy", { token: mallory.token, body: { args: prep.call.args } })).json()).toMatchObject({ error: "Invalid Ed25519 wallet signature" });
+    expect(await (await call("/mock-outlayer/chain/store_wallet_policy", { token: mallory.token, body: { args: prep.call.args } })).json()).toMatchObject({ error: "Smart contract panicked: Invalid Ed25519 wallet signature" });
     expect((await call("/mock-outlayer/chain/store_wallet_policy", { token: alice.token, body: { args: prep.call.args } })).status).toBe(200);
     expect(await (await call(`/owner/v1/vaults/${v.id}/activate`, { token: alice.token, body: {} })).json()).toEqual({ status: "active" });
     expect(await m.provisioner.onChainPolicy(prep.call.args.wallet_pubkey)).toMatchObject({ owner: "alice.near", frozen: false });
@@ -493,3 +493,49 @@ describe("withdraw from a self-serve vault", () => {
     expect((await r.json()).error).toMatch(/autonomous mode/);
   });
 });
+
+describe("a vault whose policy signature failed (2026-11-15: the contract changed under Norr)", () => {
+  it("can prepare and sign again, and the new call carries version 1", async () => {
+    const { m, call } = boot();
+    const s = await signIn(m, call, "legalalienx.near");
+    const v = await (await call("/owner/v1/vaults", { token: s.token, body: { acceptTerms: TERMS_VERSION } })).json();
+    const first = await (await call(`/owner/v1/vaults/${v.id}/custody-policy`, { token: s.token, body: { autonomous: false } })).json();
+    // The old dashboard sent three arguments; the contract refuses that, and nothing is stored.
+    const { version: _v, locked: _l, valid_until: _u, ...old } = first.call.args;
+    expect(await (await call("/mock-outlayer/chain/store_wallet_policy", { token: s.token, body: { args: old } })).json()).toMatchObject({ error: expect.stringContaining("missing field `version`") });
+    expect(await m.provisioner.onChainPolicy(first.call.args.wallet_pubkey)).toBeNull();
+    // Retry: prepare again (still in setup), sign, activate.
+    const again = await (await call(`/owner/v1/vaults/${v.id}/custody-policy`, { token: s.token, body: { autonomous: false } })).json();
+    expect(again.call.args).toMatchObject({ version: 1, locked: false });
+    expect(again.call.args.valid_until).toBeGreaterThan(Date.now() / 1000);
+    expect((await call("/mock-outlayer/chain/store_wallet_policy", { token: s.token, body: { args: again.call.args } })).status).toBe(200);
+    expect(await (await call(`/owner/v1/vaults/${v.id}/activate`, { token: s.token, body: {} })).json()).toEqual({ status: "active" });
+  });
+
+  it("can be removed while its policy is not on chain, which frees the one-vault slot; not once it is on chain", async () => {
+    const { m, call } = boot();
+    const s = await signIn(m, call, "legalalienx.near");
+    const v = await (await call("/owner/v1/vaults", { token: s.token, body: { acceptTerms: TERMS_VERSION } })).json();
+    // One vault per account: a second is refused while the first exists.
+    expect((await call("/owner/v1/vaults", { token: s.token, body: { acceptTerms: TERMS_VERSION } })).status).toBe(409);
+    await call(`/owner/v1/vaults/${v.id}/custody-policy`, { token: s.token, body: { autonomous: false } });
+    const other = await signIn(m, call, "mallory.near");
+    expect((await call(`/owner/v1/vaults/${v.id}`, { token: other.token, method: "DELETE" })).status).toBe(404); // not hers
+    expect(await (await call(`/owner/v1/vaults/${v.id}`, { token: s.token, method: "DELETE" })).json()).toEqual({ removed: true });
+    expect((await (await call("/owner/v1/vaults", { token: s.token })).json()).vaults).toEqual([]);
+    expect((await call(`/owner/v1/vaults/${v.id}/setup`, { token: s.token })).status).toBe(404);
+    expect(m.tenants.get(v.id)?.status).toBe("removed"); // kept, with its sealed key, but not counted
+    expect(m.tenants.key(v.id)).toBeTruthy();
+    // The slot is free again, and the new vault goes all the way.
+    const w = await (await call("/owner/v1/vaults", { token: s.token, body: { acceptTerms: TERMS_VERSION } })).json();
+    const prep = await (await call(`/owner/v1/vaults/${w.id}/custody-policy`, { token: s.token, body: { autonomous: false } })).json();
+    expect((await call("/mock-outlayer/chain/store_wallet_policy", { token: s.token, body: { args: prep.call.args } })).status).toBe(200);
+    // On chain now: removal is refused, and the message says how to finish instead.
+    const refused = await call(`/owner/v1/vaults/${w.id}`, { token: s.token, method: "DELETE" });
+    expect(refused.status).toBe(409);
+    expect((await refused.json()).error).toMatch(/already on chain with you as its controller.*Check again/);
+    expect(await (await call(`/owner/v1/vaults/${w.id}/activate`, { token: s.token, body: {} })).json()).toEqual({ status: "active" });
+    expect((await call(`/owner/v1/vaults/${w.id}`, { token: s.token, method: "DELETE" })).status).toBe(409); // active: not removable
+  });
+});
+
